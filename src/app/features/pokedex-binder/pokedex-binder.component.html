@@ -1,29 +1,20 @@
 <div class="dex-page">
   <!-- Sticky Controls Header -->
   <section class="dex-controls">
-    <!-- Top Row: Generatie Pills + Pocket Format + View Toggle -->
-    <div class="dex-controls__top">
-      <div class="gen-pills" role="tablist" aria-label="Generatiefilter">
-        <button
-          type="button"
-          class="pb-pill pb-pill--interactive"
-          [class.is-active]="selectedGen() === 0"
-          (click)="selectGeneration(0)"
-        >
-          Alle ({{ store.pokedexStats().inBinder }}/{{ store.pokedexStats().total }})
-        </button>
-
-        @for (gen of generations; track gen.id) {
-          <button
-            type="button"
-            class="pb-pill pb-pill--interactive"
-            [class.is-active]="selectedGen() === gen.id"
-            (click)="selectGeneration(gen.id)"
-          >
-            {{ gen.shortLabel }}
-            <span class="gen-pills__cnt mono">
-              {{ generationCounts().get(gen.id)?.owned ?? 0 }}/{{ generationCounts().get(gen.id)?.total ?? 0 }}
-            </span>
+    <!-- Rij 1: Zoekbalk + Binder Formaat (2x2..4x4) + Weergave-schakelaar (nooit overlap met pills!) -->
+    <div class="dex-controls__bar">
+      <div class="dex-search">
+        <span class="material-symbols-outlined">search</span>
+        <input
+          type="text"
+          placeholder="Spring naar Pokémon of #nr…"
+          [ngModel]="searchQuery()"
+          (ngModelChange)="onSearchChange($event)"
+          aria-label="Zoek Pokémon in Pokédex Binder"
+        />
+        @if (searchQuery()) {
+          <button type="button" aria-label="Wissen" (click)="onSearchChange('')">
+            <span class="material-symbols-outlined">close</span>
           </button>
         }
       </div>
@@ -64,67 +55,75 @@
       </div>
     </div>
 
-    <!-- Statusfilter + Snel Zoeken -->
-    <div class="dex-controls__sub">
-      <div class="status-pills">
-        <button
-          type="button"
-          class="pb-pill pb-pill--interactive"
-          [class.is-active]="statusFilter() === 'all'"
-          (click)="selectStatus('all')"
-        >
-          Alle ({{ statusCounts().all }})
-        </button>
-        <button
-          type="button"
-          class="pb-pill pb-pill--interactive"
-          [class.is-active]="statusFilter() === 'missing'"
-          (click)="selectStatus('missing')"
-        >
-          Ontbrekend ({{ statusCounts().missing }})
-        </button>
-        <button
-          type="button"
-          class="pb-pill pb-pill--interactive"
-          [class.is-active-amber]="statusFilter() === 'in_collection'"
-          (click)="selectStatus('in_collection')"
-        >
-          Al in Collectie ({{ statusCounts().inCollection }})
-        </button>
-        <button
-          type="button"
-          class="pb-pill pb-pill--interactive"
-          [class.is-active-emerald]="statusFilter() === 'in_binder'"
-          (click)="selectStatus('in_binder')"
-        >
-          <span class="pb-dot pb-dot--secondary"></span>
-          In Binder ({{ statusCounts().inBinder }})
-        </button>
-        <button
-          type="button"
-          class="pb-pill pb-pill--interactive"
-          [class.is-active-amber]="statusFilter() === 'upgrade'"
-          (click)="selectStatus('upgrade')"
-        >
-          ★ Upgrade? ({{ statusCounts().upgrade }})
-        </button>
-      </div>
+    <!-- Rij 2: Generatie Pills (volledige breedte, nooit achter dropdown verborgen) -->
+    <div class="gen-pills" role="tablist" aria-label="Generatiefilter">
+      <button
+        type="button"
+        class="pb-pill pb-pill--interactive"
+        [class.is-active]="selectedGen() === 0"
+        (click)="selectGeneration(0)"
+      >
+        Alle ({{ store.pokedexStats().inBinder }}/{{ store.pokedexStats().total }})
+      </button>
 
-      <div class="dex-search">
-        <span class="material-symbols-outlined">search</span>
-        <input
-          type="text"
-          placeholder="Spring naar Pokémon of #nr…"
-          [ngModel]="searchQuery()"
-          (ngModelChange)="onSearchChange($event)"
-          aria-label="Zoek Pokémon in Pokédex Binder"
-        />
-        @if (searchQuery()) {
-          <button type="button" aria-label="Wissen" (click)="onSearchChange('')">
-            <span class="material-symbols-outlined">close</span>
-          </button>
-        }
-      </div>
+      @for (gen of generations; track gen.id) {
+        <button
+          type="button"
+          class="pb-pill pb-pill--interactive"
+          [class.is-active]="selectedGen() === gen.id"
+          (click)="selectGeneration(gen.id)"
+        >
+          {{ gen.shortLabel }}
+          <span class="gen-pills__cnt mono">
+            {{ generationCounts().get(gen.id)?.owned ?? 0 }}/{{ generationCounts().get(gen.id)?.total ?? 0 }}
+          </span>
+        </button>
+      }
+    </div>
+
+    <!-- Rij 3: Status Pills -->
+    <div class="status-pills">
+      <button
+        type="button"
+        class="pb-pill pb-pill--interactive"
+        [class.is-active]="statusFilter() === 'all'"
+        (click)="selectStatus('all')"
+      >
+        Alle ({{ statusCounts().all }})
+      </button>
+      <button
+        type="button"
+        class="pb-pill pb-pill--interactive"
+        [class.is-active]="statusFilter() === 'missing'"
+        (click)="selectStatus('missing')"
+      >
+        Ontbrekend ({{ statusCounts().missing }})
+      </button>
+      <button
+        type="button"
+        class="pb-pill pb-pill--interactive"
+        [class.is-active-amber]="statusFilter() === 'in_collection'"
+        (click)="selectStatus('in_collection')"
+      >
+        Al in Collectie ({{ statusCounts().inCollection }})
+      </button>
+      <button
+        type="button"
+        class="pb-pill pb-pill--interactive"
+        [class.is-active-emerald]="statusFilter() === 'in_binder'"
+        (click)="selectStatus('in_binder')"
+      >
+        <span class="pb-dot pb-dot--secondary"></span>
+        In Binder ({{ statusCounts().inBinder }})
+      </button>
+      <button
+        type="button"
+        class="pb-pill pb-pill--interactive"
+        [class.is-active-amber]="statusFilter() === 'upgrade'"
+        (click)="selectStatus('upgrade')"
+      >
+        ★ Upgrade? ({{ statusCounts().upgrade }})
+      </button>
     </div>
   </section>
 

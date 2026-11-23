@@ -1,9 +1,31 @@
 import { Injectable, inject } from '@angular/core';
 import { buildTcgdexAssetUrl, parseCardIdInput } from '../domain/card-id.utils';
 import { roundCurrency, roundOneDecimal } from '../domain/card-math.utils';
-import { CatalogCard, CatalogCardSummary } from '../domain/models';
+import {
+  CatalogCard,
+  CatalogCardSummary,
+  CatalogSetDetail,
+  CatalogSetSummary,
+} from '../domain/models';
 import { CardCatalogPort } from '../ports/card-catalog.port';
 import { LocalCacheAdapter } from './local-cache.adapter';
+
+interface TcgdexSetBriefResponse {
+  id: string;
+  name: string;
+  logo?: string;
+  symbol?: string;
+  cardCount?: { official?: number; total?: number };
+}
+
+interface TcgdexSetDetailResponse extends TcgdexSetBriefResponse {
+  serie?: { id?: string; name?: string };
+  cards?: TcgdexBriefResponse[];
+}
+
+const SETS_CACHE_KEY = 'pokebinder_tcgdex_sets_v1';
+const SET_DETAIL_CACHE_PREFIX = 'pokebinder_tcgdex_set_';
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 uur cache -> voorkomt API throttling!
 
 interface TcgdexCardResponse {
   id: string;
@@ -68,6 +90,8 @@ const RARITY_NORMALIZATION: Record<string, string> = {
 export class TcgdexAdapter implements CardCatalogPort {
   private readonly cache = inject(LocalCacheAdapter);
   private readonly memoryCards = new Map<string, CatalogCard>();
+  private readonly memorySetDetails = new Map<string, CatalogSetDetail>();
+  private memoryAllSets: CatalogSetSummary[] | null = null;
   private readonly artworkMap: Record<string, string>;
 
   constructor() {
@@ -151,6 +175,118 @@ export class TcgdexAdapter implements CardCatalogPort {
     if (!key) return '';
     if (this.artworkMap[key]) return this.artworkMap[key];
     return buildTcgdexAssetUrl(cardId, 'high');
+  }
+
+  /**
+   * Laadt alle ~170 officiële TCG-sets in 1 enkele request (~25 KB) met 24-uurs cache.
+   */
+  async listAllSets(): Promise<CatalogSetSummary[]> {
+    if (this.memoryAllSets) return this.memoryAllSets;
+
+    const cached = this.readTtlCache<CatalogSetSummary[]>(SETS_CACHE_KEY);
+    if (cached && cached.length > 0) {
+      this.memoryAllSets = cached;
+      return cached;
+    }
+
+    try {
+      const response = await fetch(`${TCGDEX_API_BASE}/sets`);
+      if (!response.ok) return [];
+      const raw = (await response.json()) as TcgdexSetBriefResponse[];
+      if (!Array.isArray(raw)) return [];
+
+      const mapped: CatalogSetSummary[] = raw
+        .filter((s) => Boolean(s.id && s.name))
+        .reverse()
+        .map((s) => ({
+          id: s.id,
+          name: s.name,
+          logoUrl: s.logo ? `${s.logo}.webp` : undefined,
+          symbolUrl: s.symbol ? `${s.symbol}.webp` : undefined,
+          officialCount: s.cardCount?.official ?? 0,
+          totalCount: s.cardCount?.total ?? s.cardCount?.official ?? 0,
+        }));
+
+      this.memoryAllSets = mapped;
+      this.writeTtlCache(SETS_CACHE_KEY, mapped);
+      return mapped;
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Laadt alle kaarten van 1 set in 1 enkele request (zero per-kaart calls -> geen throttling!).
+   * Volledige details & Cardmarket prijzen worden pas on-demand opgehaald bij aanklikken.
+   */
+  async getSetCards(setId: string): Promise<CatalogSetDetail | null> {
+    const cleanId = setId.trim();
+    if (!cleanId) return null;
+
+    const mem = this.memorySetDetails.get(cleanId.toLowerCase());
+    if (mem) return mem;
+
+    const cacheKey = `${SET_DETAIL_CACHE_PREFIX}${cleanId.toLowerCase()}`;
+    const stored = this.readTtlCache<CatalogSetDetail>(cacheKey);
+    if (stored) {
+      this.memorySetDetails.set(cleanId.toLowerCase(), stored);
+      return stored;
+    }
+
+    try {
+      const response = await fetch(`${TCGDEX_API_BASE}/sets/${encodeURIComponent(cleanId)}`);
+      if (!response.ok) return null;
+      const raw = (await response.json()) as TcgdexSetDetailResponse;
+      if (!raw || !raw.id) return null;
+
+      const cards: CatalogCardSummary[] = (raw.cards ?? []).map((item) => ({
+        id: item.id,
+        localId: item.localId,
+        name: item.name,
+        imageBase: item.image,
+        imageUrl: item.image ? `${item.image}/low.webp` : buildTcgdexAssetUrl(item.id, 'low'),
+      }));
+
+      const detail: CatalogSetDetail = {
+        id: raw.id,
+        name: raw.name,
+        seriesName: raw.serie?.name ?? '',
+        logoUrl: raw.logo ? `${raw.logo}.webp` : undefined,
+        symbolUrl: raw.symbol ? `${raw.symbol}.webp` : undefined,
+        officialCount: raw.cardCount?.official ?? cards.length,
+        totalCount: raw.cardCount?.total ?? cards.length,
+        cards,
+      };
+
+      this.memorySetDetails.set(cleanId.toLowerCase(), detail);
+      this.writeTtlCache(cacheKey, detail);
+      return detail;
+    } catch {
+      return null;
+    }
+  }
+
+  private readTtlCache<T>(key: string): T | null {
+    try {
+      if (typeof window === 'undefined') return null;
+      const raw = window.localStorage.getItem(key);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as { savedAt: number; data: T };
+      if (!parsed || Date.now() - parsed.savedAt > CACHE_TTL_MS) return null;
+      return parsed.data;
+    } catch {
+      return null;
+    }
+  }
+
+  private writeTtlCache(key: string, data: unknown): void {
+    try {
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(key, JSON.stringify({ savedAt: Date.now(), data }));
+      }
+    } catch {
+      // Quota vol: geen probleem, in-memory cache blijft actief
+    }
   }
 
   rememberArtwork(cardId: string, url: string): void {

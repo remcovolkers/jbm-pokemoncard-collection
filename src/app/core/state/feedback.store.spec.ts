@@ -31,6 +31,30 @@ describe('FeedbackStore', () => {
     vi.restoreAllMocks();
   });
 
+  it('start schoon zonder demo-data en verwijdert eventuele oude seed-items uit localStorage', () => {
+    expect(store.items().length).toBe(0);
+
+    // Simuleer oude seed-items in localStorage van een eerdere versie
+    window.localStorage.setItem(
+      'pokebinder_feedback_v1',
+      JSON.stringify([
+        { id: 'seed-old-demo', title: 'Oude demo', page: 'Dashboard', category: 'Idee', status: 'open', votes: 2, author: 'Team', platform: 'Web', createdAt: '2026-01-01', description: '', source: 'local' },
+        { id: 'fb-real-1', title: 'Echte feedback', page: 'Collectie', category: 'Bug', status: 'open', votes: 1, author: 'Remco', platform: 'Web', createdAt: '2026-11-23', description: '', source: 'local' },
+      ])
+    );
+
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: COLLECTION_REPOSITORY, useExisting: AppsScriptSheetsAdapter },
+        { provide: CARD_CATALOG_PORT, useExisting: TcgdexAdapter },
+      ],
+    });
+    const freshStore = TestBed.inject(FeedbackStore);
+    expect(freshStore.items().length).toBe(1);
+    expect(freshStore.items()[0].id).toBe('fb-real-1');
+  });
+
   it('mapt alle routes naar de juiste Nederlandse paginanaam', () => {
     expect(store.mapUrlToFeedbackPage('/dashboard')).toBe('Dashboard');
     expect(store.mapUrlToFeedbackPage('/collectie?set=151')).toBe('Collectie');

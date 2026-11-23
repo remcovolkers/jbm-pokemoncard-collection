@@ -80,6 +80,27 @@ class MockCardCatalogAdapter implements CardCatalogPort {
   getCachedArtworkUrl(cardId: string): string {
     return `https://assets.tcgdex.net/en/sv/sv03.5/${cardId}/high.webp`;
   }
+
+  async listAllSets() {
+    return [
+      { id: 'sv03.5', name: '151', officialCount: 165, totalCount: 207 },
+      { id: 'base1', name: 'Base Set', officialCount: 102, totalCount: 102 },
+    ];
+  }
+
+  async getSetCards(setId: string) {
+    return {
+      id: setId,
+      name: setId === 'base1' ? 'Base Set' : '151',
+      seriesName: 'Scarlet & Violet',
+      officialCount: 165,
+      totalCount: 207,
+      cards: [
+        { id: 'sv03.5-199', localId: '199', name: 'Charizard ex', imageUrl: MOCK_CATALOG_CARD.lowImageUrl },
+        { id: 'sv03-125', localId: '125', name: 'Charizard ex OBF', imageUrl: MOCK_CATALOG_CARD.lowImageUrl },
+      ],
+    };
+  }
 }
 
 describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
@@ -420,6 +441,12 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
       expect(el.textContent).toContain('Feedback & To-Do Hub');
       expect(el.textContent).toContain('Feedback geven');
       expect(el.textContent).toContain('Feedback Hub bekijken');
+      expect(el.textContent).toContain('Hoe koppel ik een eigen Google Sheet');
+
+      // Demo-modus uitzetten zonder spreadsheet -> badge toont "Niet gekoppeld"
+      comp.toggleDemoMode();
+      fixture.detectChanges();
+      expect(el.textContent).toContain('Niet gekoppeld');
 
       const fbBtn = Array.from(el.querySelectorAll('button')).find((b) =>
         b.textContent?.includes('Feedback geven')
@@ -427,6 +454,23 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
       fbBtn.click();
       expect(feedback.isComposerOpen()).toBe(true);
       expect(feedback.composerDefaultPage()).toBe('Algemeen / Hele app');
+    });
+
+    it('ondersteunt de Alle Sets Catalogus browser in QuickAddComponent met in-bezit detectie', async () => {
+      const fixture = TestBed.createComponent(QuickAddComponent);
+      const comp = fixture.componentInstance;
+      fixture.detectChanges();
+
+      await comp.openSetsCatalog();
+      expect(comp.inputMode()).toBe('sets');
+      expect(comp.allSets().length).toBe(2);
+
+      await comp.selectCatalogSet('sv03.5');
+      expect(comp.pagedSetCards().length).toBe(2);
+      expect(comp.isCardOwned('sv03.5-199')).toBe(true);
+
+      comp.onSetCardFilterChange('125');
+      expect(comp.filteredSetCards().length).toBe(1);
     });
   });
 
@@ -459,7 +503,7 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
       expect(feedback.isComposerOpen()).toBe(false);
     });
 
-    it('rendert publieke Feedback Hub to-do lijst met status-, pagina-, categorie- en zoekfilters', async () => {
+    it('rendert publieke Feedback Hub to-do lijst schoon zonder demodata en filtert op status/pagina/zoekterm', async () => {
       vi.spyOn(globalThis, 'fetch').mockResolvedValue(
         new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } })
       );
@@ -469,24 +513,42 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
       const comp = fixture.componentInstance;
       fixture.detectChanges();
 
-      expect(comp.filteredItems().length).toBeGreaterThanOrEqual(4);
+      // Standaard leeg (geen demo-data meer!)
+      expect(comp.filteredItems().length).toBe(0);
       expect((fixture.nativeElement as HTMLElement).textContent).toContain('Feedback Hub & To-Do Lijst');
 
+      // Voeg 2 echte feedback-items toe en test filters + upvotes
+      const itemA = await feedback.submitFeedback({
+        page: 'Dashboard',
+        category: 'Idee',
+        title: 'Home screen Widget',
+        description: 'Waarde op startscherm',
+      });
+      const itemB = await feedback.submitFeedback({
+        page: 'Collectie',
+        category: 'Bug',
+        title: 'Zoekbalk ellipsis',
+        description: 'Afkappen op smal scherm',
+      });
+      await feedback.setStatus(itemB, 'done');
+
+      expect(comp.filteredItems().length).toBe(2);
+
       comp.statusFilter.set('done');
-      expect(comp.filteredItems().every((i) => i.status === 'done')).toBe(true);
+      expect(comp.filteredItems().length).toBe(1);
+      expect(comp.filteredItems()[0].id).toBe(itemB.id);
 
       comp.statusFilter.set('all');
       comp.pageFilter.set('Dashboard');
-      expect(comp.filteredItems().every((i) => i.page === 'Dashboard')).toBe(true);
+      expect(comp.filteredItems().length).toBe(1);
 
       comp.pageFilter.set('ALL');
       comp.searchQuery.set('Widget');
       expect(comp.filteredItems().length).toBe(1);
 
-      const target = comp.filteredItems()[0];
-      const beforeVotes = target.votes;
-      await feedback.toggleUpvote(target);
-      expect(feedback.items().find((i) => i.id === target.id)?.votes).toBe(beforeVotes + 1);
+      const beforeVotes = itemA.votes;
+      await feedback.toggleUpvote(itemA);
+      expect(feedback.items().find((i) => i.id === itemA.id)?.votes).toBe(beforeVotes - 1);
     });
 
     it('toont desktop feedback-knop in App shell die huidige route meegeeft aan de modal', async () => {

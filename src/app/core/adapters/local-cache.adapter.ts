@@ -3,6 +3,7 @@ import { AppConnectionConfig, AppSnapshot, PendingMutation } from '../domain/mod
 
 const STORAGE_KEYS = {
   SNAPSHOT: 'pokebinder_snapshot_v1',
+  DEMO_SNAPSHOT: 'pokebinder_demo_snapshot_v1',
   CONFIG: 'pokebinder_config_v1',
   OFFLINE_QUEUE: 'pokebinder_offline_queue_v1',
   ARTWORK_CACHE: 'pokebinder_artwork_cache_v1',
@@ -50,6 +51,14 @@ export class LocalCacheAdapter {
     this.writeJson(STORAGE_KEYS.SNAPSHOT, snapshot);
   }
 
+  loadDemoSnapshot(): AppSnapshot | null {
+    return this.readJson<AppSnapshot>(STORAGE_KEYS.DEMO_SNAPSHOT);
+  }
+
+  saveDemoSnapshot(snapshot: AppSnapshot): void {
+    this.writeJson(STORAGE_KEYS.DEMO_SNAPSHOT, snapshot);
+  }
+
   loadConfig(): AppConnectionConfig {
     const saved = this.readJson<Partial<AppConnectionConfig>>(STORAGE_KEYS.CONFIG);
     return { ...DEFAULT_CONFIG, ...(saved ?? {}) };
@@ -88,6 +97,7 @@ export class LocalCacheAdapter {
     const s = this.storage;
     if (!s) return;
     s.removeItem(STORAGE_KEYS.SNAPSHOT);
+    s.removeItem(STORAGE_KEYS.DEMO_SNAPSHOT);
     s.removeItem(STORAGE_KEYS.OFFLINE_QUEUE);
     s.removeItem(STORAGE_KEYS.ARTWORK_CACHE);
   }

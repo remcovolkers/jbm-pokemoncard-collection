@@ -1,5 +1,10 @@
 import { InjectionToken } from '@angular/core';
-import { CatalogCard, CatalogCardSummary } from '../domain/models';
+import {
+  CatalogCard,
+  CatalogCardSummary,
+  CatalogSetDetail,
+  CatalogSetSummary,
+} from '../domain/models';
 
 /**
  * Hexagonale port voor kaartcatalogus-opzoekingen en artwork (TCGdex).
@@ -16,6 +21,12 @@ export interface CardCatalogPort {
 
   /** Retourneert gecachte of afgeleide high-res artwork URL voor een kaart-ID. */
   getCachedArtworkUrl(cardId: string): string;
+
+  /** Haalt het overzicht van alle officiële TCG-sets op (1 lichte request, 24u gecacht). */
+  listAllSets?(): Promise<CatalogSetSummary[]>;
+
+  /** Haalt alle kaarten van één set in 1 enkele request op (lokaal gecacht, geen per-kaart throttling). */
+  getSetCards?(setId: string): Promise<CatalogSetDetail | null>;
 }
 
 export const CARD_CATALOG_PORT = new InjectionToken<CardCatalogPort>('CARD_CATALOG_PORT');

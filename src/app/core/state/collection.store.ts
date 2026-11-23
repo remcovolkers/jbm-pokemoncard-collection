@@ -30,10 +30,11 @@ import {
   buildPokedexFromCollection,
   buildSetProgressFromCollection,
   createDemoSnapshot,
+  createEmptySnapshot,
 } from '../adapters/demo-data';
 import { LocalCacheAdapter, PackOpeningDefaults } from '../adapters/local-cache.adapter';
 
-export type SyncStatus = 'synced' | 'syncing' | 'offline' | 'demo' | 'error';
+export type SyncStatus = 'synced' | 'syncing' | 'offline' | 'demo' | 'unconfigured' | 'error';
 
 @Injectable({ providedIn: 'root' })
 export class CollectionStore {
@@ -91,10 +92,16 @@ export class CollectionStore {
       .sort((a, b) => b.marketPrice - a.marketPrice);
   });
 
+  readonly isSheetConfigured = computed(() => {
+    const cfg = this.config();
+    return Boolean(cfg.webAppUrl?.trim() && cfg.apiToken?.trim());
+  });
+
   readonly syncStatus = computed<SyncStatus>(() => {
     if (this.isSyncing()) return 'syncing';
-    if (!this.isOnline()) return 'offline';
     if (this.config().demoMode) return 'demo';
+    if (!this.isSheetConfigured()) return 'unconfigured';
+    if (!this.isOnline()) return 'offline';
     if (this.lastError()) return 'error';
     return 'synced';
   });
@@ -102,9 +109,15 @@ export class CollectionStore {
   private toastCounter = 0;
 
   constructor() {
-    // Persist snapshot & config automatisch naar localStorage voor offline-first support
+    // Persist snapshot & config gescheiden per modus zodat demo-data nooit lekt naar live-modus
     effect(() => {
-      this.cache.saveSnapshot(this.snapshot());
+      const cfg = this.config();
+      const snap = this.snapshot();
+      if (cfg.demoMode) {
+        this.cache.saveDemoSnapshot(snap);
+      } else if (cfg.webAppUrl?.trim() && cfg.apiToken?.trim()) {
+        this.cache.saveSnapshot(snap);
+      }
     });
 
     effect(() => {
@@ -133,17 +146,40 @@ export class CollectionStore {
 
     // Als live Google Sheets geconfigureerd is en demo-modus uit staat, haal direct verse data op
     const cfg = this.config();
-    if (!cfg.demoMode && cfg.webAppUrl && cfg.apiToken && this.isOnline()) {
+    if (!cfg.demoMode && cfg.webAppUrl?.trim() && cfg.apiToken?.trim() && this.isOnline()) {
       void this.syncFromRemote(true);
     }
   }
 
   private loadInitialSnapshot(): AppSnapshot {
-    const cached = this.cache.loadSnapshot();
-    if (cached && Array.isArray(cached.collection) && Array.isArray(cached.pokedex) && cached.pokedex.length > 0) {
-      return this.hydrateArtwork(cached);
+    const cfg = this.config();
+    if (cfg.demoMode) {
+      const demoCached = this.cache.loadDemoSnapshot();
+      if (
+        demoCached &&
+        Array.isArray(demoCached.collection) &&
+        Array.isArray(demoCached.pokedex) &&
+        demoCached.pokedex.length > 0
+      ) {
+        return this.hydrateArtwork(demoCached);
+      }
+      return createDemoSnapshot();
     }
-    return createDemoSnapshot();
+
+    if (!cfg.webAppUrl?.trim() || !cfg.apiToken?.trim()) {
+      return createEmptySnapshot();
+    }
+
+    const liveCached = this.cache.loadSnapshot();
+    if (
+      liveCached &&
+      Array.isArray(liveCached.collection) &&
+      Array.isArray(liveCached.pokedex) &&
+      liveCached.pokedex.length > 0
+    ) {
+      return this.hydrateArtwork(liveCached);
+    }
+    return createEmptySnapshot();
   }
 
   private hydrateArtwork(snap: AppSnapshot): AppSnapshot {
@@ -169,13 +205,27 @@ export class CollectionStore {
   updateConfig(partial: Partial<AppConnectionConfig>): void {
     const prev = this.config();
     const next = { ...prev, ...partial };
+    const hasSheet = Boolean(next.webAppUrl?.trim() && next.apiToken?.trim());
     this.config.set(next);
 
     if (partial.demoMode === true && !prev.demoMode) {
-      this.snapshot.set(createDemoSnapshot());
+      const demoCached = this.cache.loadDemoSnapshot();
+      this.snapshot.set(demoCached ? this.hydrateArtwork(demoCached) : createDemoSnapshot());
       this.lastError.set(null);
       this.showToast('Demo-modus ingeschakeld met voorbeeldcollectie.', 'info');
-    } else if (partial.demoMode === false && prev.demoMode && next.webAppUrl && next.apiToken) {
+    } else if (!next.demoMode && !hasSheet) {
+      // Geen spreadsheet gekoppeld -> geen demodata tonen, maar schone lege staat
+      this.snapshot.set(createEmptySnapshot());
+      this.lastError.set(null);
+      if (partial.demoMode === false && prev.demoMode) {
+        this.showToast(
+          'Demo-modus uitgeschakeld. Koppel hieronder je Google Sheet om je eigen collectie te laden.',
+          'info'
+        );
+      }
+    } else if (partial.demoMode === false && prev.demoMode && hasSheet) {
+      const liveCached = this.cache.loadSnapshot();
+      this.snapshot.set(liveCached ? this.hydrateArtwork(liveCached) : createEmptySnapshot());
       void this.syncFromRemote();
     }
   }
@@ -272,6 +322,8 @@ export class CollectionStore {
     this.pendingQueue.set([]);
     if (this.config().demoMode) {
       this.snapshot.set(createDemoSnapshot());
+    } else if (!this.isSheetConfigured()) {
+      this.snapshot.set(createEmptySnapshot());
     }
     this.showToast('Offline-cache geleegd.', 'info');
   }

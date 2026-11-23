@@ -3,14 +3,17 @@
   <div class="sync-strip">
     <div class="sync-strip__left">
       <span
-        class="pb-dot pb-dot--pulse"
+        class="pb-dot"
+        [class.pb-dot--pulse]="store.syncStatus() === 'synced' || store.syncStatus() === 'syncing'"
         [class.pb-dot--secondary]="store.syncStatus() === 'synced'"
-        [class.pb-dot--tertiary]="store.syncStatus() === 'demo' || store.syncStatus() === 'offline'"
+        [class.pb-dot--tertiary]="store.syncStatus() === 'demo' || store.syncStatus() === 'offline' || store.syncStatus() === 'unconfigured'"
         [class.pb-dot--primary]="store.syncStatus() === 'error'"
       ></span>
       <p class="sync-strip__text">
         @if (store.config().demoMode) {
           Demo-modus actief · <strong>Voorbeeldcollectie</strong> (koppel je Sheet bij Instellingen)
+        } @else if (store.syncStatus() === 'unconfigured') {
+          <strong>Nog geen Google Sheet gekoppeld</strong> · Koppel je spreadsheet bij Instellingen
         } @else if (!store.isOnline()) {
           Offline snapshot · <strong>{{ syncedTimeAgo() }}</strong>
           @if (store.pendingQueue().length > 0) {
@@ -21,14 +24,21 @@
         }
       </p>
     </div>
-    <button
-      type="button"
-      class="sync-strip__refresh"
-      aria-label="Nu verversen"
-      (click)="store.syncFromRemote()"
-    >
-      <span class="material-symbols-outlined" [class.pb-spin]="store.isSyncing()">sync</span>
-    </button>
+    @if (store.syncStatus() === 'unconfigured') {
+      <a routerLink="/meer/instellingen" class="pb-btn pb-btn--primary sync-strip__cta">
+        <span class="material-symbols-outlined">link</span>
+        <span>Koppelen</span>
+      </a>
+    } @else {
+      <button
+        type="button"
+        class="sync-strip__refresh"
+        aria-label="Nu verversen"
+        (click)="store.syncFromRemote()"
+      >
+        <span class="material-symbols-outlined" [class.pb-spin]="store.isSyncing()">sync</span>
+      </button>
+    }
   </div>
 
   <!-- Bovenste Bento-rij op desktop: Hero Portfolio + Pokédex Binder -->
@@ -183,41 +193,68 @@
       <span class="mono section__meta">Top 5 Portfolio</span>
     </div>
 
-    <div class="top-rail">
-      @for (card of store.topValuableCards(); track card.rowIndex + '-' + card.cardId) {
-        <article class="pb-card top-card" (click)="openCardInCollection(card)">
-          <div class="top-card__art">
-            <pb-card-artwork [cardId]="card.cardId" [src]="card.imageUrl" [alt]="card.name">
-              <span
-                class="top-card__badge"
-                [class.is-graded]="card.grading && card.grading !== 'Raw'"
-              >
-                {{ badgeLabel(card) }}
-              </span>
-            </pb-card-artwork>
-          </div>
+    @if (store.topValuableCards().length === 0) {
+      <div class="pb-empty">
+        <div class="pb-empty__icon">
+          <span class="material-symbols-outlined">style</span>
+        </div>
+        <h3 class="pb-empty__title">Nog geen kaarten in je portfolio</h3>
+        <p class="pb-empty__text">
+          @if (store.syncStatus() === 'unconfigured') {
+            Koppel je Google Sheet onder Instellingen (of zet Demo-modus aan) om je collectie te zien.
+          } @else {
+            Voeg je eerste Pokémon-kaart toe via Kaart Toevoegen.
+          }
+        </p>
+        <a
+          [routerLink]="store.syncStatus() === 'unconfigured' ? '/meer/instellingen' : '/toevoegen'"
+          class="pb-btn pb-btn--primary"
+        >
+          <span class="material-symbols-outlined">
+            {{ store.syncStatus() === 'unconfigured' ? 'link' : 'add_circle' }}
+          </span>
+          <span>
+            {{ store.syncStatus() === 'unconfigured' ? 'Google Sheet koppelen' : 'Eerste kaart toevoegen' }}
+          </span>
+        </a>
+      </div>
+    } @else {
+      <div class="top-rail">
+        @for (card of store.topValuableCards(); track card.rowIndex + '-' + card.cardId) {
+          <article class="pb-card top-card" (click)="openCardInCollection(card)">
+            <div class="top-card__art">
+              <pb-card-artwork [cardId]="card.cardId" [src]="card.imageUrl" [alt]="card.name">
+                <span
+                  class="top-card__badge"
+                  [class.is-graded]="card.grading && card.grading !== 'Raw'"
+                >
+                  {{ badgeLabel(card) }}
+                </span>
+              </pb-card-artwork>
+            </div>
 
-          <div class="top-card__meta">
-            <h3 class="top-card__name">{{ card.name }}</h3>
-            <p class="mono top-card__sub">
-              {{ card.setName }} {{ getDisplaySetCode(card.cardId, card.setName) }} · #{{ card.cardNumber }}
-            </p>
-            <div class="top-card__price-row">
-              <span class="mono top-card__price">{{ formatEur(card.marketPrice) }}</span>
-              <span
-                class="mono top-card__trend"
-                [class.is-negative]="cardRoi(card) < 0"
-              >
-                {{ formatPercent(cardRoi(card)) }}
+            <div class="top-card__meta">
+              <h3 class="top-card__name">{{ card.name }}</h3>
+              <p class="mono top-card__sub">
+                {{ card.setName }} {{ getDisplaySetCode(card.cardId, card.setName) }} · #{{ card.cardNumber }}
+              </p>
+              <div class="top-card__price-row">
+                <span class="mono top-card__price">{{ formatEur(card.marketPrice) }}</span>
+                <span
+                  class="mono top-card__trend"
+                  [class.is-negative]="cardRoi(card) < 0"
+                >
+                  {{ formatPercent(cardRoi(card)) }}
+                </span>
+              </div>
+              <span class="top-card__loc mono">
+                {{ card.grading !== 'Raw' ? 'Slab' : shortCondition(card.condition) }} · {{ card.storageLocation }}
               </span>
             </div>
-            <span class="top-card__loc mono">
-              {{ card.grading !== 'Raw' ? 'Slab' : shortCondition(card.condition) }} · {{ card.storageLocation }}
-            </span>
-          </div>
-        </article>
-      }
-    </div>
+          </article>
+        }
+      </div>
+    }
   </section>
 
   <!-- Actieve Master Sets -->
@@ -230,40 +267,46 @@
       <a routerLink="/meer/sets" class="section__link">Alles bekijken</a>
     </div>
 
-    <div class="sets-grid">
-      @for (set of topMasterSets(); track set.setName) {
-        <article class="pb-card set-card" (click)="openSetInCollection(set)">
-          <div class="set-card__top">
-            <div class="set-card__left">
-              <div class="set-card__code mono">
-                {{ set.setCode || set.setName.slice(0, 3).toUpperCase() }}
+    @if (topMasterSets().length === 0) {
+      <div class="pb-empty">
+        <p class="pb-empty__text">Zodra je kaarten hebt of je Google Sheet koppelt, verschijnt hier je Master Set voortgang.</p>
+      </div>
+    } @else {
+      <div class="sets-grid">
+        @for (set of topMasterSets(); track set.setName) {
+          <article class="pb-card set-card" (click)="openSetInCollection(set)">
+            <div class="set-card__top">
+              <div class="set-card__left">
+                <div class="set-card__code mono">
+                  {{ set.setCode || set.setName.slice(0, 3).toUpperCase() }}
+                </div>
+                <div class="set-card__titles">
+                  <h3 class="set-card__name">{{ set.setName }}</h3>
+                  <p class="mono set-card__series">{{ set.series }}</p>
+                </div>
               </div>
-              <div class="set-card__titles">
-                <h3 class="set-card__name">{{ set.setName }}</h3>
-                <p class="mono set-card__series">{{ set.series }}</p>
+              <div class="set-card__right">
+                <strong class="mono set-card__pct">{{ formatPercent(set.progressPercent, false) }}</strong>
+                <p class="mono set-card__rem">Nog {{ set.remaining }} kaarten</p>
               </div>
             </div>
-            <div class="set-card__right">
-              <span class="mono set-card__pct">{{ formatPercent(set.progressPercent, false) }}</span>
-              <p class="mono set-card__rem">Nog {{ set.remaining }} kaarten</p>
+
+            <div class="pb-progress">
+              <div
+                class="pb-progress__bar"
+                [class.pb-progress__bar--amber]="set.progressPercent < 50"
+                [style.width.%]="set.progressPercent"
+              ></div>
             </div>
-          </div>
 
-          <div class="pb-progress">
-            <div
-              class="pb-progress__bar"
-              [class.pb-progress__bar--amber]="set.progressPercent < 50"
-              [style.width.%]="set.progressPercent"
-            ></div>
-          </div>
-
-          <div class="set-card__foot mono">
-            <span>{{ set.ownedUnique }} / {{ set.totalCards }} kaarten</span>
-            <span>Waarde: {{ formatEur(set.totalSetValue) }}</span>
-          </div>
-        </article>
-      }
-    </div>
+            <div class="set-card__foot mono">
+              <span>{{ set.ownedUnique }} / {{ set.totalCards }} kaarten</span>
+              <span>Waarde: {{ formatEur(set.totalSetValue) }}</span>
+            </div>
+          </article>
+        }
+      </div>
+    }
   </section>
 
   <!-- Snelle Actieknoppen Onderaan -->

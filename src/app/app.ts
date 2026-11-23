@@ -59,6 +59,8 @@ export class App implements OnInit {
         return 'Offline';
       case 'demo':
         return 'Demo-modus';
+      case 'unconfigured':
+        return 'Niet gekoppeld';
       case 'error':
         return 'Sync-fout';
       default:

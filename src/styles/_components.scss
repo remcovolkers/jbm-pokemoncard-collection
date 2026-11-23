@@ -33,14 +33,22 @@
   align-items: center;
   justify-content: center;
   gap: $space-sm;
-  padding: 0.65rem 1.125rem;
+  max-width: 100%;
+  min-width: 0;
+  padding: 0.65rem 1.05rem;
   border-radius: $radius-md;
   font-family: $font-body;
   font-size: 0.875rem;
   font-weight: 600;
   line-height: 1.25;
-  white-space: nowrap;
+  text-align: center;
+  white-space: normal;
+  overflow-wrap: break-word;
   border: 1px solid transparent;
+
+  .material-symbols-outlined {
+    flex-shrink: 0;
+  }
 
   &:disabled {
     opacity: 0.45;
@@ -126,6 +134,7 @@
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
+  max-width: 100%;
   padding: 0.3rem 0.7rem;
   border-radius: $radius-full;
   white-space: nowrap;
@@ -225,6 +234,7 @@
 .pb-textarea {
   @include focus-ring;
   width: 100%;
+  min-width: 0;
   min-height: 46px;
   padding: 0.65rem 0.9rem;
   border-radius: $radius-md;
@@ -239,6 +249,8 @@
 
   &::placeholder {
     color: $color-on-surface-muted;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   &:focus {
@@ -249,9 +261,17 @@
   }
 }
 
+.pb-input,
+.pb-select {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .pb-textarea {
   min-height: 84px;
   resize: vertical;
+  white-space: pre-wrap;
 }
 
 .pb-select {

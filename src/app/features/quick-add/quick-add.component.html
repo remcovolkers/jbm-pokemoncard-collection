@@ -22,7 +22,7 @@
         (click)="inputMode.set('code')"
       >
         <span class="material-symbols-outlined">tag</span>
-        <span>Code / ID Invoer</span>
+        <span>Code / ID</span>
       </button>
       <button
         type="button"
@@ -33,7 +33,18 @@
         (click)="inputMode.set('name')"
       >
         <span class="material-symbols-outlined">search</span>
-        <span>Zoek op Naam</span>
+        <span>Op Naam</span>
+      </button>
+      <button
+        type="button"
+        role="tab"
+        class="mode-tabs__btn"
+        [class.is-active]="inputMode() === 'sets'"
+        [attr.aria-selected]="inputMode() === 'sets'"
+        (click)="openSetsCatalog()"
+      >
+        <span class="material-symbols-outlined">collections_bookmark</span>
+        <span>Alle Sets</span>
       </button>
     </div>
 
@@ -116,7 +127,7 @@
           }
         </div>
       </div>
-    } @else {
+    } @else if (inputMode() === 'name') {
       <!-- Invoermodus 2: Zoeken op Pokémon-naam -->
       <div class="pb-field">
         <div class="input-label-row">
@@ -154,6 +165,108 @@
               </button>
             }
           </div>
+        }
+      </div>
+    } @else {
+      <!-- Invoermodus 3: Alle Sets Catalogus (lazy per set geladen + 24u gecacht, geen throttling) -->
+      <div class="sets-browser">
+        <div class="input-label-row">
+          <label class="pb-label" for="qa-set-select">Blader door alle TCG-sets</label>
+          @if (isLoadingSets() || isLoadingSetCards()) {
+            <span class="lookup-status lookup-status--loading mono">Laden…</span>
+          } @else if (allSets().length > 0) {
+            <span class="lookup-status lookup-status--ok mono">{{ allSets().length }} sets beschikbaar</span>
+          }
+        </div>
+
+        <div class="sets-browser__controls">
+          <input
+            type="text"
+            class="pb-input"
+            placeholder="Filter sets (bijv. 151, Base, Prismatic, Surging)…"
+            [ngModel]="setSearchQuery()"
+            (ngModelChange)="setSearchQuery.set($event)"
+            aria-label="Filter TCG sets"
+          />
+
+          <select
+            id="qa-set-select"
+            class="pb-select"
+            [ngModel]="selectedCatalogSetId()"
+            (ngModelChange)="selectCatalogSet($event)"
+          >
+            <option value="">— Kies een set ({{ filteredCatalogSets().length }}) —</option>
+            @for (s of filteredCatalogSets(); track s.id) {
+              <option [value]="s.id">
+                {{ s.name }} ({{ s.id }} · {{ s.totalCount || s.officialCount }} kaarten)
+              </option>
+            }
+          </select>
+        </div>
+
+        @if (activeSetDetail(); as setDetail) {
+          <div class="sets-browser__header">
+            <div class="sets-browser__meta">
+              <strong>{{ setDetail.name }}</strong>
+              <span class="mono">
+                {{ setDetail.seriesName || 'Pokémon TCG' }} · {{ setDetail.cards.length }} kaarten
+              </span>
+            </div>
+            <input
+              type="text"
+              class="pb-input sets-browser__card-filter"
+              placeholder="Filter in {{ setDetail.name }} op naam of nr…"
+              [ngModel]="setCardFilter()"
+              (ngModelChange)="onSetCardFilterChange($event)"
+              aria-label="Filter kaarten in geselecteerde set"
+            />
+          </div>
+
+          <div class="search-results">
+            @for (item of pagedSetCards(); track item.id) {
+              <button
+                type="button"
+                class="result-tile"
+                [class.is-selected]="previewCard()?.id === item.id"
+                [class.is-owned]="isCardOwned(item.id)"
+                (click)="selectNameResult(item)"
+              >
+                <pb-card-artwork [cardId]="item.id" [src]="item.imageUrl" [alt]="item.name" [compact]="true">
+                  @if (isCardOwned(item.id)) {
+                    <span class="result-tile__owned mono">✓ In bezit</span>
+                  }
+                </pb-card-artwork>
+                <span class="result-tile__name">{{ item.name }}</span>
+                <span class="mono result-tile__id">#{{ item.localId }} · {{ item.id }}</span>
+              </button>
+            }
+          </div>
+
+          @if (catalogTotalPages() > 1) {
+            <div class="catalog-pager">
+              <button
+                type="button"
+                class="pb-btn pb-btn--secondary catalog-pager__btn"
+                [disabled]="setCatalogPage() <= 1"
+                (click)="setCatalogPage.set(setCatalogPage() - 1)"
+              >
+                <span class="material-symbols-outlined">chevron_left</span>
+                <span>Vorige</span>
+              </button>
+              <span class="mono catalog-pager__info">
+                Pagina {{ setCatalogPage() }} / {{ catalogTotalPages() }} ({{ filteredSetCards().length }})
+              </span>
+              <button
+                type="button"
+                class="pb-btn pb-btn--secondary catalog-pager__btn"
+                [disabled]="setCatalogPage() >= catalogTotalPages()"
+                (click)="setCatalogPage.set(setCatalogPage() + 1)"
+              >
+                <span>Volgende</span>
+                <span class="material-symbols-outlined">chevron_right</span>
+              </button>
+            </div>
+          }
         }
       </div>
     }

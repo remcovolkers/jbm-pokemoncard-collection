@@ -294,11 +294,16 @@
     box-shadow: none;
   }
 
+  &.is-unconfigured,
   &.is-offline {
     background-color: rgba($color-outline, 0.16);
-    border-color: rgba($color-outline, 0.4);
+    border-color: rgba($color-outline, 0.45);
     color: $color-on-surface-variant;
     box-shadow: none;
+
+    .sync-pill__dot {
+      animation: none;
+    }
   }
 
   &.is-error {

@@ -31,65 +31,6 @@ interface GitHubIssueDto {
   pull_request?: unknown;
 }
 
-const SEED_ROADMAP_ITEMS: FeedbackItem[] = [
-  {
-    id: 'seed-notifications',
-    createdAt: '2026-11-23T11:00:00Z',
-    page: 'Verlanglijst',
-    category: 'Idee',
-    title: 'Android pushnotificatie bij prijsdaling onder doelbudget',
-    description:
-      'Stuur via Capacitor Local Notifications een seintje zodra een kaart op de verlanglijst onder het ingestelde max. budget zakt.',
-    status: 'open',
-    votes: 4,
-    author: 'PokéBinder Team',
-    platform: 'Android App (APK)',
-    source: 'local',
-  },
-  {
-    id: 'seed-widget',
-    createdAt: '2026-11-23T11:05:00Z',
-    page: 'Dashboard',
-    category: 'Idee',
-    title: 'Android Home Screen Widget met portfoliowaarde & Pokédex %',
-    description:
-      'Compacte startscherm-widget die live de totale collectiewaarde en het National Pokédex percentage toont.',
-    status: 'open',
-    votes: 3,
-    author: 'PokéBinder Team',
-    platform: 'Android App (APK)',
-    source: 'local',
-  },
-  {
-    id: 'seed-camera-ocr',
-    createdAt: '2026-11-23T11:10:00Z',
-    page: 'Snel Toevoegen',
-    category: 'Verbetering',
-    title: 'Kaartcode scannen met telefooncamera in Pack Opening Mode',
-    description:
-      'Gebruik de camera om setcode + kaartnummer onderaan de kaart direct uit te lezen tijdens het openen van packs.',
-    status: 'in_progress',
-    votes: 5,
-    author: 'PokéBinder Team',
-    platform: 'Web App (PWA)',
-    source: 'local',
-  },
-  {
-    id: 'seed-capacitor-ota',
-    createdAt: '2026-11-23T11:15:00Z',
-    page: 'Instellingen',
-    category: 'Verbetering',
-    title: 'Android APK wrapper + automatische OTA in-app updates',
-    description:
-      'Installeerbare Android APK via Capacitor met automatische "Nieuwe versie beschikbaar" updates en directe APK downloadlink.',
-    status: 'done',
-    votes: 6,
-    author: 'PokéBinder Team',
-    platform: 'Android App (APK)',
-    source: 'local',
-  },
-];
-
 @Injectable({ providedIn: 'root' })
 export class FeedbackStore {
   private readonly collectionStore = inject(CollectionStore);
@@ -461,13 +402,15 @@ export class FeedbackStore {
 
   private loadLocalItems(): FeedbackItem[] {
     try {
-      if (typeof window === 'undefined') return [...SEED_ROADMAP_ITEMS];
+      if (typeof window === 'undefined') return [];
       const raw = window.localStorage.getItem(FEEDBACK_STORAGE_KEY);
-      if (!raw) return [...SEED_ROADMAP_ITEMS];
+      if (!raw) return [];
       const parsed = JSON.parse(raw) as FeedbackItem[];
-      return Array.isArray(parsed) ? parsed : [...SEED_ROADMAP_ITEMS];
+      if (!Array.isArray(parsed)) return [];
+      // Verwijder eventuele oude seed/demo-items uit eerdere versies
+      return parsed.filter((item) => item && !String(item.id || '').startsWith('seed-'));
     } catch {
-      return [...SEED_ROADMAP_ITEMS];
+      return [];
     }
   }
 

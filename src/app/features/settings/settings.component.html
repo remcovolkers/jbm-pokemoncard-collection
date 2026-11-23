@@ -7,9 +7,16 @@
         <span
           class="pb-pill"
           [class.pb-pill--tertiary]="store.config().demoMode"
-          [class.pb-pill--secondary]="!store.config().demoMode"
+          [class.pb-pill--secondary]="!store.config().demoMode && store.isSheetConfigured()"
+          [class.pb-pill--neutral]="!store.config().demoMode && !store.isSheetConfigured()"
         >
-          {{ store.config().demoMode ? 'Actief' : 'Live Google Sheets' }}
+          @if (store.config().demoMode) {
+            Demo actief
+          } @else if (store.isSheetConfigured()) {
+            Live Google Sheets
+          } @else {
+            Niet gekoppeld
+          }
         </span>
       </div>
       <p>
@@ -57,7 +64,9 @@
       <a class="pb-btn pb-btn--secondary" routerLink="/meer/feedback">
         <span class="material-symbols-outlined">checklist</span>
         <span>Feedback Hub bekijken</span>
-        <span class="pb-pill pb-pill--secondary mono">{{ feedback.stats().active }} open</span>
+        @if (feedback.stats().active > 0) {
+          <span class="pb-pill pb-pill--secondary mono">{{ feedback.stats().active }} open</span>
+        }
       </a>
     </div>
   </section>
@@ -172,6 +181,84 @@
         </button>
       </div>
     </form>
+
+    <!-- Korte handleiding & Sheet-vereisten -->
+    <details class="sheet-guide">
+      <summary class="sheet-guide__summary">
+        <span class="material-symbols-outlined">help_outline</span>
+        <span>Hoe koppel ik een eigen Google Sheet &amp; waar moet deze aan voldoen?</span>
+        <span class="material-symbols-outlined sheet-guide__chev">expand_more</span>
+      </summary>
+
+      <div class="sheet-guide__body">
+        <div class="guide-block">
+          <h3>Stappenplan (eenmalig ±3 minuten)</h3>
+          <ol class="guide-steps">
+            <li>
+              Open je Google Spreadsheet en klik bovenaan op <strong>Extensies → Apps Script</strong>.
+            </li>
+            <li>
+              Plak de volledige backend-code uit
+              <a
+                href="https://github.com/remcovolkers/jbm-pokemoncard-collection/blob/main/apps-script/Code.gs"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                apps-script/Code.gs
+              </a>
+              en sla op (<code>Ctrl+S</code>).
+            </li>
+            <li>
+              Herlaad je spreadsheet. Kies in het nieuwe menu <strong>⚡ Pokémon API / PokéBinder</strong> voor
+              <strong>Auto-sync aanzetten</strong> (zodat werken in Sheets ook live blijft werken) en
+              <strong>PokéBinder App API-token instellen</strong>.
+            </li>
+            <li>
+              Klik in Apps Script op <strong>Implementeren → Nieuwe implementatie → Web-app</strong>
+              (<em>Uitvoeren als: Ik</em>, <em>Wie heeft toegang: Iedereen</em>). Kopieer de
+              <code>/exec</code>-URL en plak die samen met je token hierboven → klik <strong>Opslaan &amp; Live Sync</strong>.
+            </li>
+          </ol>
+        </div>
+
+        <div class="guide-block">
+          <h3>Vereiste tabbladen &amp; kolomindeling (formules blijven 100% veilig)</h3>
+          <ul class="guide-tabs">
+            <li>
+              <strong>Collectie</strong> — Koprij 1, kaarten vanaf rij 2. Kolommen <code>A:Q</code> &amp;
+              <code>U:V</code> (Kaart-ID, Naam, Set, Nr, Taal, Type, Zeldzaamheid, Variant, Conditie, Grading, Grade,
+              Aantal, Locatie, Detail, Datum, Aankoop, Marktwaarde, Te ruil, Notities). Formules in
+              <code>R:T</code> worden nooit overschreven.
+            </li>
+            <li>
+              <strong>Set Voortgang</strong> — Koprij 1, sets vanaf rij 2. Alleen <code>A:C</code> (Setnaam, Serie,
+              Totaal) worden ingevuld; formules in <code>D:H</code> blijven intact.
+            </li>
+            <li>
+              <strong>Pokédex Binder</strong> — Cel <code>H4</code> = vakjes per pagina (<code>4 / 9 / 12 / 16</code>),
+              Pokémon <code>#0001–#1025</code> vanaf rij 8 (<code>D</code> = In Binder, <code>I</code> = Gekozen kaart,
+              <code>J</code> = Upgrade gewenst; formules in <code>E:H</code> blijven intact).
+            </li>
+            <li>
+              <strong>Verlanglijst</strong> — Koprij 1, data vanaf rij 2 (<code>A:H</code> &amp; <code>K:L</code>;
+              formules in <code>I:J</code> blijven intact).
+            </li>
+            <li>
+              <strong>Ruil &amp; Verkoop</strong> — Transactielogboek vanaf rij 22 (<code>A:G</code> &amp;
+              <code>I:J</code>; netto-formule in <code>H</code> blijft intact).
+            </li>
+            <li>
+              <strong>Instellingen</strong> — Koprij 1, keuzelijsten in kolommen <code>A:I</code> (Taal, Type,
+              Zeldzaamheid, Variant, Conditie, Grading, Opslaglocatie, Prioriteit, Transactietype).
+            </li>
+            <li>
+              <strong>Feedback</strong> (optioneel) — Wordt automatisch aangemaakt zodra je live feedback
+              opslaat.
+            </li>
+          </ul>
+        </div>
+      </div>
+    </details>
   </section>
 
   <!-- Synchronisatie, Prijzen & Offline Cache -->
@@ -192,7 +279,7 @@
         (click)="store.syncFromRemote()"
       >
         <span class="material-symbols-outlined" [class.pb-spin]="store.isSyncing()">sync</span>
-        <span>Handmatig volledig synchroniseren</span>
+        <span>Volledig synchroniseren</span>
       </button>
 
       <button
@@ -202,7 +289,7 @@
         (click)="refreshPrices()"
       >
         <span class="material-symbols-outlined">euro</span>
-        <span>Cardmarket EUR-prijzen verversen</span>
+        <span>Cardmarket-prijzen verversen</span>
       </button>
 
       <button

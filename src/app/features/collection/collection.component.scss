@@ -26,13 +26,15 @@
   &__row {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: $space-sm;
   }
 }
 
 .search-wrap {
   position: relative;
-  flex: 1;
+  flex: 1 1 210px;
+  min-width: 0;
   display: flex;
   align-items: center;
   background-color: $color-surface-lowest;
@@ -54,15 +56,21 @@
 
   &__input {
     width: 100%;
+    min-width: 0;
     height: 44px;
     padding: 0 2.3rem 0 2.5rem;
     background: transparent;
     border: none;
     color: $color-on-surface;
     font-size: 0.9rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 
     &::placeholder {
       color: $color-on-surface-muted;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     &:focus {
@@ -194,6 +202,9 @@
     font-weight: 600;
     cursor: pointer;
     max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 
     option {
       background-color: $color-surface-container;
@@ -462,6 +473,8 @@
     h3 {
       @include type-body-md;
       font-weight: 700;
+      @include truncate;
+      min-width: 0;
     }
   }
 

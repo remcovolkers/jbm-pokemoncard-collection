@@ -111,4 +111,45 @@ describe('TcgdexAdapter', () => {
     fetchSpy.mockRejectedValueOnce(new Error('Offline'));
     expect(await adapter.searchByName('Mew')).toEqual([]);
   });
+
+  it('laadt alle TCG-sets en set-kaarten in 1 request per aanroep met 24-uurs cache (geen throttling)', async () => {
+    fetchSpy.mockResolvedValueOnce(
+      jsonResponse([
+        { id: 'base1', name: 'Base Set', cardCount: { official: 102, total: 102 } },
+        { id: 'sv03.5', name: '151', cardCount: { official: 165, total: 207 } },
+      ])
+    );
+
+    const sets = await adapter.listAllSets();
+    expect(sets.length).toBe(2);
+    expect(sets[0].id).toBe('sv03.5'); // Nieuwste set eerst!
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+
+    // Tweede aanroep komt direct uit cache (0 extra requests!)
+    const cachedSets = await adapter.listAllSets();
+    expect(cachedSets.length).toBe(2);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+
+    // Kaarten van 1 set ophalen in 1 enkele request
+    fetchSpy.mockResolvedValueOnce(
+      jsonResponse({
+        id: 'sv03.5',
+        name: '151',
+        serie: { name: 'Scarlet & Violet' },
+        cardCount: { official: 165, total: 207 },
+        cards: [
+          { id: 'sv03.5-001', localId: '001', name: 'Bulbasaur', image: 'https://assets.tcgdex.net/en/sv/sv03.5/001' },
+        ],
+      })
+    );
+
+    const detail = await adapter.getSetCards('sv03.5');
+    expect(detail?.cards.length).toBe(1);
+    expect(detail?.cards[0].imageUrl).toContain('/low.webp');
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+
+    // Tweede aanroep voor dezelfde set gebruikt cache (geen extra fetch!)
+    await adapter.getSetCards('sv03.5');
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
 });

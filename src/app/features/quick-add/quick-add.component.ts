@@ -3,7 +3,12 @@ import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { parseCardIdInput } from '../../core/domain/card-id.utils';
 import { formatDexNumber, formatEur, formatPercent } from '../../core/domain/card-math.utils';
-import { CatalogCard, CatalogCardSummary } from '../../core/domain/models';
+import {
+  CatalogCard,
+  CatalogCardSummary,
+  CatalogSetDetail,
+  CatalogSetSummary,
+} from '../../core/domain/models';
 import { NATIONAL_DEX_NAMES } from '../../core/domain/national-dex.data';
 import { doesCardMatchPokemon } from '../../core/domain/pokedex-matching.utils';
 import { CARD_CATALOG_PORT } from '../../core/ports/card-catalog.port';
@@ -26,7 +31,7 @@ export class QuickAddComponent implements OnDestroy {
   readonly formatPercent = formatPercent;
   readonly formatDexNumber = formatDexNumber;
 
-  readonly inputMode = signal<'code' | 'name'>('code');
+  readonly inputMode = signal<'code' | 'name' | 'sets'>('code');
   readonly codeQuery = signal('');
   readonly nameQuery = signal('');
 
@@ -34,6 +39,53 @@ export class QuickAddComponent implements OnDestroy {
   readonly lookupError = signal<string | null>(null);
   readonly nameResults = signal<CatalogCardSummary[]>([]);
   readonly previewCard = signal<CatalogCard | null>(null);
+
+  // Alle Sets / Catalogus-browser (1 request per set + 24u cache + paginering per 24 kaarten)
+  readonly allSets = signal<CatalogSetSummary[]>([]);
+  readonly isLoadingSets = signal(false);
+  readonly setSearchQuery = signal('');
+  readonly selectedCatalogSetId = signal('');
+  readonly activeSetDetail = signal<CatalogSetDetail | null>(null);
+  readonly isLoadingSetCards = signal(false);
+  readonly setCardFilter = signal('');
+  readonly setCatalogPage = signal(1);
+  readonly catalogPageSize = 24;
+
+  readonly filteredCatalogSets = computed(() => {
+    const q = this.setSearchQuery().trim().toLowerCase();
+    const list = this.allSets();
+    if (!q) return list;
+    return list.filter(
+      (s) => s.name.toLowerCase().includes(q) || s.id.toLowerCase().includes(q)
+    );
+  });
+
+  readonly filteredSetCards = computed(() => {
+    const detail = this.activeSetDetail();
+    if (!detail) return [];
+    const q = this.setCardFilter().trim().toLowerCase();
+    if (!q) return detail.cards;
+    return detail.cards.filter(
+      (c) =>
+        c.name.toLowerCase().includes(q) ||
+        c.localId.toLowerCase().includes(q) ||
+        c.id.toLowerCase().includes(q)
+    );
+  });
+
+  readonly catalogTotalPages = computed(() =>
+    Math.max(1, Math.ceil(this.filteredSetCards().length / this.catalogPageSize))
+  );
+
+  readonly pagedSetCards = computed(() => {
+    const page = Math.min(this.setCatalogPage(), this.catalogTotalPages());
+    const start = (page - 1) * this.catalogPageSize;
+    return this.filteredSetCards().slice(start, start + this.catalogPageSize);
+  });
+
+  readonly ownedCardIdSet = computed(
+    () => new Set(this.store.collection().map((c) => c.cardId.toLowerCase()))
+  );
 
   // Formuliervelden
   readonly variant = signal('Normal');
@@ -185,6 +237,55 @@ export class QuickAddComponent implements OnDestroy {
     } finally {
       this.isSearching.set(false);
     }
+  }
+
+  async openSetsCatalog(): Promise<void> {
+    this.inputMode.set('sets');
+    this.lookupError.set(null);
+    if (this.allSets().length > 0 || !this.catalog.listAllSets) return;
+
+    this.isLoadingSets.set(true);
+    try {
+      const sets = await this.catalog.listAllSets();
+      this.allSets.set(sets);
+      if (sets.length === 0) {
+        this.lookupError.set('Kon het sets-overzicht niet ophalen (controleer je internetverbinding).');
+      }
+    } finally {
+      this.isLoadingSets.set(false);
+    }
+  }
+
+  async selectCatalogSet(setId: string): Promise<void> {
+    this.selectedCatalogSetId.set(setId);
+    this.setCardFilter.set('');
+    this.setCatalogPage.set(1);
+    this.lookupError.set(null);
+
+    if (!setId || !this.catalog.getSetCards) {
+      this.activeSetDetail.set(null);
+      return;
+    }
+
+    this.isLoadingSetCards.set(true);
+    try {
+      const detail = await this.catalog.getSetCards(setId);
+      this.activeSetDetail.set(detail);
+      if (!detail) {
+        this.lookupError.set(`Kon kaarten voor set "${setId}" niet laden.`);
+      }
+    } finally {
+      this.isLoadingSetCards.set(false);
+    }
+  }
+
+  onSetCardFilterChange(val: string): void {
+    this.setCardFilter.set(val);
+    this.setCatalogPage.set(1);
+  }
+
+  isCardOwned(cardId: string): boolean {
+    return this.ownedCardIdSet().has(cardId.toLowerCase());
   }
 
   applyExample(code: string): void {

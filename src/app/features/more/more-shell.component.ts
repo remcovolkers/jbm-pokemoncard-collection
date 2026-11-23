@@ -14,29 +14,37 @@ import { FeedbackStore } from '../../core/state/feedback.store';
           <a routerLink="sets" routerLinkActive="is-active" class="more-tab">
             <span class="material-symbols-outlined">fact_check</span>
             <span>Set Voortgang</span>
-            <span class="more-tab__badge mono">{{ store.setProgress().length }}</span>
+            @if (store.setProgress().length > 0) {
+              <span class="more-tab__badge mono">{{ store.setProgress().length }}</span>
+            }
           </a>
 
           <a routerLink="verlanglijst" routerLinkActive="is-active" class="more-tab">
             <span class="material-symbols-outlined">star</span>
             <span>Verlanglijst</span>
-            <span class="more-tab__badge more-tab__badge--coral mono">
-              {{ store.portfolio().openWishlistCount }}
-            </span>
+            @if (store.portfolio().openWishlistCount > 0) {
+              <span class="more-tab__badge more-tab__badge--coral mono">
+                {{ store.portfolio().openWishlistCount }}
+              </span>
+            }
           </a>
 
           <a routerLink="ruil-verkoop" routerLinkActive="is-active" class="more-tab">
             <span class="material-symbols-outlined">swap_horiz</span>
             <span>Ruil &amp; Verkoop</span>
-            <span class="more-tab__badge mono">{{ store.tradeBinderCards().length }}</span>
+            @if (store.tradeBinderCards().length > 0) {
+              <span class="more-tab__badge mono">{{ store.tradeBinderCards().length }}</span>
+            }
           </a>
 
           <a routerLink="feedback" routerLinkActive="is-active" class="more-tab">
             <span class="material-symbols-outlined">checklist</span>
             <span>Feedback Hub</span>
-            <span class="more-tab__badge more-tab__badge--emerald mono">
-              {{ feedback.stats().active }}
-            </span>
+            @if (feedback.stats().active > 0) {
+              <span class="more-tab__badge more-tab__badge--emerald mono">
+                {{ feedback.stats().active }}
+              </span>
+            }
           </a>
 
           <a routerLink="instellingen" routerLinkActive="is-active" class="more-tab">

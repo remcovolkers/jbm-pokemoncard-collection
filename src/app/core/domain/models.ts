@@ -180,6 +180,20 @@ export interface CatalogCardSummary {
   setName?: string;
 }
 
+export interface CatalogSetSummary {
+  id: string;
+  name: string;
+  logoUrl?: string;
+  symbolUrl?: string;
+  officialCount: number;
+  totalCount: number;
+}
+
+export interface CatalogSetDetail extends CatalogSetSummary {
+  seriesName: string;
+  cards: CatalogCardSummary[];
+}
+
 export interface AppConnectionConfig {
   webAppUrl: string;
   apiToken: string;

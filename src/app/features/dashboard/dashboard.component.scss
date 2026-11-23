@@ -63,6 +63,13 @@
       font-size: 18px;
     }
   }
+
+  &__cta {
+    min-height: 34px;
+    padding: 0.3rem 0.75rem;
+    font-size: 0.78rem;
+    flex-shrink: 0;
+  }
 }
 
 .dash__hero-grid {

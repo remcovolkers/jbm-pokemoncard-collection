@@ -23,34 +23,46 @@
       <a class="sidebar__link" routerLink="/collectie" routerLinkActive="is-active">
         <span class="material-symbols-outlined">style</span>
         <span>Collectie</span>
-        <span class="sidebar__badge">{{ store.portfolio().uniqueCards }}</span>
+        @if (store.portfolio().uniqueCards > 0) {
+          <span class="sidebar__badge">{{ store.portfolio().uniqueCards }}</span>
+        }
       </a>
       <a class="sidebar__link" routerLink="/pokedex" routerLinkActive="is-active">
         <span class="material-symbols-outlined">menu_book</span>
         <span>Pokédex Binder</span>
-        <span class="sidebar__badge sidebar__badge--emerald">{{ store.pokedexStats().inBinder }}</span>
+        @if (store.pokedexStats().inBinder > 0) {
+          <span class="sidebar__badge sidebar__badge--emerald">{{ store.pokedexStats().inBinder }}</span>
+        }
       </a>
 
       <span class="sidebar__section-label">Tools & Beheer</span>
       <a class="sidebar__link" routerLink="/meer/sets" routerLinkActive="is-active">
         <span class="material-symbols-outlined">fact_check</span>
         <span>Set Voortgang</span>
-        <span class="sidebar__badge">{{ store.setProgress().length }}</span>
+        @if (store.setProgress().length > 0) {
+          <span class="sidebar__badge">{{ store.setProgress().length }}</span>
+        }
       </a>
       <a class="sidebar__link" routerLink="/meer/verlanglijst" routerLinkActive="is-active">
         <span class="material-symbols-outlined">star</span>
         <span>Verlanglijst</span>
-        <span class="sidebar__badge sidebar__badge--coral">{{ store.portfolio().openWishlistCount }}</span>
+        @if (store.portfolio().openWishlistCount > 0) {
+          <span class="sidebar__badge sidebar__badge--coral">{{ store.portfolio().openWishlistCount }}</span>
+        }
       </a>
       <a class="sidebar__link" routerLink="/meer/ruil-verkoop" routerLinkActive="is-active">
         <span class="material-symbols-outlined">swap_horiz</span>
         <span>Ruil &amp; Verkoop</span>
-        <span class="sidebar__badge">{{ store.tradeBinderCards().length }}</span>
+        @if (store.tradeBinderCards().length > 0) {
+          <span class="sidebar__badge">{{ store.tradeBinderCards().length }}</span>
+        }
       </a>
       <a class="sidebar__link" routerLink="/meer/feedback" routerLinkActive="is-active">
         <span class="material-symbols-outlined">checklist</span>
         <span>Feedback Hub</span>
-        <span class="sidebar__badge sidebar__badge--emerald">{{ feedback.stats().active }}</span>
+        @if (feedback.stats().active > 0) {
+          <span class="sidebar__badge sidebar__badge--emerald">{{ feedback.stats().active }}</span>
+        }
       </a>
       <a class="sidebar__link" routerLink="/meer/instellingen" routerLinkActive="is-active">
         <span class="material-symbols-outlined">tune</span>
@@ -62,6 +74,7 @@
       <div
         class="sync-pill sync-pill--full"
         [class.is-demo]="store.syncStatus() === 'demo'"
+        [class.is-unconfigured]="store.syncStatus() === 'unconfigured'"
         [class.is-offline]="store.syncStatus() === 'offline'"
         [class.is-error]="store.syncStatus() === 'error'"
       >
@@ -70,14 +83,25 @@
         @if (store.pendingQueue().length > 0) {
           <span class="sync-pill__queue">{{ store.pendingQueue().length }} in wachtrij</span>
         }
-        <button
-          type="button"
-          class="sync-pill__btn"
-          aria-label="Nu synchroniseren"
-          (click)="store.syncFromRemote()"
-        >
-          <span class="material-symbols-outlined" [class.pb-spin]="store.isSyncing()">sync</span>
-        </button>
+        @if (store.syncStatus() === 'unconfigured') {
+          <a
+            routerLink="/meer/instellingen"
+            class="sync-pill__btn"
+            aria-label="Spreadsheet koppelen in Instellingen"
+            title="Koppel je Google Sheet"
+          >
+            <span class="material-symbols-outlined">link</span>
+          </a>
+        } @else {
+          <button
+            type="button"
+            class="sync-pill__btn"
+            aria-label="Nu synchroniseren"
+            (click)="store.syncFromRemote()"
+          >
+            <span class="material-symbols-outlined" [class.pb-spin]="store.isSyncing()">sync</span>
+          </button>
+        }
       </div>
     </div>
   </aside>
@@ -110,6 +134,7 @@
           type="button"
           class="sync-pill"
           [class.is-demo]="store.syncStatus() === 'demo'"
+          [class.is-unconfigured]="store.syncStatus() === 'unconfigured'"
           [class.is-offline]="store.syncStatus() === 'offline'"
           [class.is-error]="store.syncStatus() === 'error'"
           (click)="store.syncFromRemote()"

@@ -144,15 +144,27 @@
         <div class="pb-empty__icon">
           <span class="material-symbols-outlined">style</span>
         </div>
-        <h2 class="pb-empty__title">Geen kaarten gevonden</h2>
+        <h2 class="pb-empty__title">
+          {{ store.syncStatus() === 'unconfigured' ? 'Nog geen Google Sheet gekoppeld' : 'Geen kaarten gevonden' }}
+        </h2>
         <p class="pb-empty__text">
-          Pas je filters aan of voeg direct een nieuwe Pokémon-kaart toe via TCGdex.
+          @if (store.syncStatus() === 'unconfigured') {
+            Koppel je Google Sheet bij Instellingen om je collectie te laden, of voeg direct een kaart toe.
+          } @else {
+            Pas je filters aan of voeg direct een nieuwe Pokémon-kaart toe via TCGdex.
+          }
         </p>
         <div class="empty-actions">
           @if (hasActiveFilters()) {
             <button type="button" class="pb-btn pb-btn--secondary" (click)="resetFilters()">
               Filters wissen
             </button>
+          }
+          @if (store.syncStatus() === 'unconfigured') {
+            <a routerLink="/meer/instellingen" class="pb-btn pb-btn--secondary">
+              <span class="material-symbols-outlined">link</span>
+              <span>Sheet koppelen</span>
+            </a>
           }
           <a routerLink="/toevoegen" class="pb-btn pb-btn--primary">
             <span class="material-symbols-outlined">add</span>

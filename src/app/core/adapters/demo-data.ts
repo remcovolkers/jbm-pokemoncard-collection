@@ -750,6 +750,25 @@ export function createDemoSnapshot(): AppSnapshot {
 }
 
 /**
+ * Lege snapshot voor wanneer Demo-modus uit staat en er nog geen Google Sheet gekoppeld is.
+ * Bevat 0 kaarten, 0 sets, 0 wensen en 0 transacties, met de lege National Pokédex (#0001-#1025).
+ */
+export function createEmptySnapshot(): AppSnapshot {
+  const slotsPerPage: BinderSlotsPerPage = 9;
+  return {
+    collection: [],
+    setProgress: [],
+    pokedex: buildPokedexFromCollection([], slotsPerPage),
+    binderSlotsPerPage: slotsPerPage,
+    wishlist: [],
+    trades: [],
+    feedback: [],
+    settings: { ...DEFAULT_DROPDOWN_SETTINGS },
+    syncedAt: '',
+  };
+}
+
+/**
  * Bouwt of synchroniseert de 1.025 National Pokédex slots vanuit de huidige collectie.
  */
 export function buildPokedexFromCollection(

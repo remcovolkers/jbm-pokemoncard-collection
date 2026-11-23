@@ -66,10 +66,21 @@ describe('CollectionStore (Signals, Optimistic UI & Offline Queue)', () => {
     store = TestBed.inject(CollectionStore);
   });
 
-  it('leidt syncStatus correct af over alle 5 staten (demo, offline, syncing, error, synced)', async () => {
+  it('leidt syncStatus correct af over alle 6 staten (demo, unconfigured, offline, syncing, error, synced)', async () => {
     expect(store.syncStatus()).toBe('demo');
+    expect(store.collection().length).toBeGreaterThan(0);
+
+    // Demo-modus uit ZONDER gekoppelde spreadsheet -> 'unconfigured' met lege collectie (0 kaarten, 0 in binder!)
+    store.updateConfig({ demoMode: false, webAppUrl: '', apiToken: '' });
+    expect(store.syncStatus()).toBe('unconfigured');
+    expect(store.collection().length).toBe(0);
+    expect(store.setProgress().length).toBe(0);
+    expect(store.wishlist().length).toBe(0);
+    expect(store.pokedexStats().inBinder).toBe(0);
+    expect(store.syncedAt()).toBe('');
 
     // Overschakelen naar live-modus met geldige config triggert direct een sync
+    store.updateConfig({ demoMode: true });
     store.updateConfig({ demoMode: false, webAppUrl: 'https://example.com/exec', apiToken: 'tok' });
     expect(store.syncStatus()).toBe('syncing');
 
