@@ -1,4 +1,4 @@
-import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
+import { Component, ElementRef, HostListener, OnDestroy, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { getDisplaySetCode, parseCardIdInput } from '../../core/domain/card-id.utils';
@@ -16,6 +16,35 @@ import { CARD_CATALOG_PORT } from '../../core/ports/card-catalog.port';
 import { CollectionStore } from '../../core/state/collection.store';
 import { CardArtworkComponent } from '../../shared/card-artwork/card-artwork.component';
 
+const SERIES_SORT_PRIORITY: Record<string, number> = {
+  me: 10,
+  sv: 20,
+  swsh: 30,
+  sm: 40,
+  xy: 50,
+  bw: 60,
+  col: 70,
+  hgss: 80,
+  pl: 90,
+  dp: 100,
+  ex: 110,
+  ecard: 120,
+  lc: 130,
+  neo: 140,
+  gym: 150,
+  base: 160,
+  mc: 200,
+  tk: 210,
+  pop: 220,
+  misc: 230,
+};
+
+function getSeriesSortPriority(seriesId?: string): number {
+  const key = (seriesId ?? '').trim().toLowerCase();
+  if (!key) return 240;
+  return SERIES_SORT_PRIORITY[key] ?? -1;
+}
+
 @Component({
   selector: 'app-quick-add',
   standalone: true,
@@ -27,6 +56,7 @@ export class QuickAddComponent implements OnDestroy {
   readonly store = inject(CollectionStore);
   private readonly catalog = inject(CARD_CATALOG_PORT);
   private readonly router = inject(Router);
+  private readonly hostEl = inject(ElementRef<HTMLElement>);
 
   readonly formatEur = formatEur;
   readonly formatPercent = formatPercent;
@@ -46,6 +76,9 @@ export class QuickAddComponent implements OnDestroy {
   readonly allSets = signal<CatalogSetSummary[]>([]);
   readonly isLoadingSets = signal(false);
   readonly setSearchQuery = signal('');
+  readonly isSetDropdownOpen = signal(false);
+  readonly setSortMode = signal<'series' | 'newest' | 'az'>('series');
+  readonly highlightedSetIndex = signal(0);
   readonly selectedCatalogSetId = signal('');
   readonly activeSetDetail = signal<CatalogSetDetail | null>(null);
   readonly isLoadingSetCards = signal(false);
@@ -53,17 +86,86 @@ export class QuickAddComponent implements OnDestroy {
   readonly setCatalogPage = signal(1);
   readonly catalogPageSize = 24;
 
+  readonly selectedCatalogSet = computed(
+    () => this.allSets().find((s) => s.id === this.selectedCatalogSetId()) ?? null
+  );
+
   readonly filteredCatalogSets = computed(() => {
     const q = this.setSearchQuery().trim().toLowerCase();
+    const mode = this.setSortMode();
     const list = this.allSets();
-    if (!q) return list;
-    return list.filter(
-      (s) =>
-        (s.code ?? '').toLowerCase().includes(q) ||
-        s.name.toLowerCase().includes(q) ||
-        (s.series ?? '').toLowerCase().includes(q) ||
-        s.id.toLowerCase().includes(q)
-    );
+
+    const filtered = !q
+      ? [...list]
+      : list.filter(
+          (s) =>
+            (s.code ?? '').toLowerCase().includes(q) ||
+            s.name.toLowerCase().includes(q) ||
+            (s.series ?? '').toLowerCase().includes(q) ||
+            s.id.toLowerCase().includes(q) ||
+            (s.releaseDate ?? '').toLowerCase().includes(q)
+        );
+
+    const compareByMode = (a: CatalogSetSummary, b: CatalogSetSummary): number => {
+      if (mode === 'az') {
+        return a.name.localeCompare(b.name, 'nl', { sensitivity: 'base' });
+      }
+      if (mode === 'newest') {
+        return (
+          (b.releaseDate ?? '').localeCompare(a.releaseDate ?? '') ||
+          a.name.localeCompare(b.name, 'nl', { sensitivity: 'base' })
+        );
+      }
+      // 'series': nieuwste hoofd-era eerst, zijseries onderaan, binnen era op releasedatum desc
+      const prioDiff = getSeriesSortPriority(a.seriesId) - getSeriesSortPriority(b.seriesId);
+      if (prioDiff !== 0) return prioDiff;
+      return (
+        (b.releaseDate ?? '').localeCompare(a.releaseDate ?? '') ||
+        a.name.localeCompare(b.name, 'nl', { sensitivity: 'base' })
+      );
+    };
+
+    if (!q) {
+      return filtered.sort(compareByMode);
+    }
+
+    const matchScore = (s: CatalogSetSummary): number => {
+      const code = (s.code || getDisplaySetCode(s.id, s.name)).toLowerCase();
+      const id = s.id.toLowerCase();
+      const name = s.name.toLowerCase();
+      if (code === q || id === q) return 0;
+      if (name === q) return 1;
+      if (code.startsWith(q) || name.startsWith(q)) return 2;
+      return 3;
+    };
+
+    return filtered.sort((a, b) => {
+      const scoreDiff = matchScore(a) - matchScore(b);
+      return scoreDiff !== 0 ? scoreDiff : compareByMode(a, b);
+    });
+  });
+
+  readonly flatSetIndexMap = computed(() => {
+    const map = new Map<string, number>();
+    this.filteredCatalogSets().forEach((s, idx) => map.set(s.id, idx));
+    return map;
+  });
+
+  readonly groupedCatalogSets = computed(() => {
+    const groups: { series: string; sets: CatalogSetSummary[] }[] = [];
+    const bySeries = new Map<string, CatalogSetSummary[]>();
+
+    for (const s of this.filteredCatalogSets()) {
+      const label = s.series?.trim() || 'Overige sets';
+      let bucket = bySeries.get(label);
+      if (!bucket) {
+        bucket = [];
+        bySeries.set(label, bucket);
+        groups.push({ series: label, sets: bucket });
+      }
+      bucket.push(s);
+    }
+    return groups;
   });
 
   readonly filteredSetCards = computed(() => {
@@ -152,10 +254,22 @@ export class QuickAddComponent implements OnDestroy {
 
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
   private focusTimer: ReturnType<typeof setTimeout> | null = null;
+  private setSearchFocusTimer: ReturnType<typeof setTimeout> | null = null;
 
   ngOnDestroy(): void {
     if (this.debounceTimer) clearTimeout(this.debounceTimer);
     if (this.focusTimer) clearTimeout(this.focusTimer);
+    if (this.setSearchFocusTimer) clearTimeout(this.setSearchFocusTimer);
+  }
+
+  @HostListener('document:click', ['$event'])
+  onDocumentClick(event: MouseEvent): void {
+    if (!this.isSetDropdownOpen()) return;
+    const target = event.target as Node | null;
+    const pickerEl = this.hostEl.nativeElement.querySelector('.set-picker');
+    if (pickerEl && target && !pickerEl.contains(target)) {
+      this.closeSetDropdown();
+    }
   }
 
   togglePackMode(): void {
@@ -280,10 +394,96 @@ export class QuickAddComponent implements OnDestroy {
         this.applyCatalogCard(full);
         const humanCode = getDisplaySetCode(full.id, full.setName);
         this.codeQuery.set(`${humanCode} ${full.localId}`);
+      } else {
+        this.lookupError.set(`Kon kaartdetails voor "${item.name}" (${item.id}) niet ophalen.`);
       }
     } finally {
       this.isSearching.set(false);
     }
+  }
+
+  toggleSetDropdown(): void {
+    if (this.isSetDropdownOpen()) {
+      this.closeSetDropdown();
+    } else {
+      this.openSetDropdown();
+    }
+  }
+
+  openSetDropdown(): void {
+    const selectedId = this.selectedCatalogSetId();
+    const activeIdx = selectedId ? (this.flatSetIndexMap().get(selectedId) ?? 0) : 0;
+    this.highlightedSetIndex.set(activeIdx);
+    this.isSetDropdownOpen.set(true);
+
+    if (typeof document !== 'undefined') {
+      if (this.setSearchFocusTimer) clearTimeout(this.setSearchFocusTimer);
+      this.setSearchFocusTimer = setTimeout(() => {
+        const input = document.getElementById('qa-set-search-input') as HTMLInputElement | null;
+        input?.focus();
+        input?.select();
+      }, 0);
+    }
+  }
+
+  closeSetDropdown(): void {
+    this.isSetDropdownOpen.set(false);
+  }
+
+  setSetSortMode(mode: 'series' | 'newest' | 'az'): void {
+    this.setSortMode.set(mode);
+    this.highlightedSetIndex.set(0);
+  }
+
+  onSetSearchQueryChange(val: string): void {
+    this.setSearchQuery.set(val);
+    this.highlightedSetIndex.set(0);
+  }
+
+  onSetSearchKeydown(event: KeyboardEvent): void {
+    const sets = this.filteredCatalogSets();
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      this.closeSetDropdown();
+      return;
+    }
+    if (sets.length === 0) return;
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      const next = Math.min(sets.length - 1, this.highlightedSetIndex() + 1);
+      this.highlightedSetIndex.set(next);
+      this.scrollHighlightedSetIntoView(next);
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      const prev = Math.max(0, this.highlightedSetIndex() - 1);
+      this.highlightedSetIndex.set(prev);
+      this.scrollHighlightedSetIntoView(prev);
+    } else if (event.key === 'Enter') {
+      event.preventDefault();
+      const target = sets[this.highlightedSetIndex()] ?? sets[0];
+      if (target) {
+        this.chooseCatalogSet(target.id);
+      }
+    }
+  }
+
+  chooseCatalogSet(setId: string): void {
+    this.closeSetDropdown();
+    void this.selectCatalogSet(setId);
+  }
+
+  formatReleaseYear(releaseDate?: string): string {
+    const match = (releaseDate ?? '').match(/^(\d{4})/);
+    return match ? match[1] : '';
+  }
+
+  private scrollHighlightedSetIntoView(index: number): void {
+    if (typeof document === 'undefined') return;
+    const el = this.hostEl.nativeElement.querySelector(
+      `[data-set-option-index="${index}"]`
+    ) as HTMLElement | null;
+    el?.scrollIntoView?.({ block: 'nearest' });
   }
 
   async openSetsCatalog(): Promise<void> {

@@ -3,6 +3,7 @@ import {
   SET_CODE_ALIASES,
   buildCardmarketProductUrl,
   buildCardmarketSearchUrl,
+  buildPokemonTcgAssetUrl,
   buildTcgdexAssetUrl,
   extractCardmarketUrlFromNotes,
   getDisplaySetCode,
@@ -11,6 +12,7 @@ import {
   parseCardIdInput,
   registerDynamicSetCodes,
   resetDynamicSetCodesForTests,
+  resolveCardArtworkUrl,
   resolveCardmarketUrl,
 } from './card-id.utils';
 
@@ -78,14 +80,20 @@ describe('card-id.utils', () => {
       expect(baseCard?.candidateIds).toContain('base1-044');
     });
 
-    it('verwerkt subset-kaartnummers zoals GG70 en TG05', () => {
+    it('verwerkt subset-kaartnummers zoals GG70, TG05 en SV001 inclusief multi-set aliassen', () => {
       const crz = parseCardIdInput('CRZ GG70/GG70');
       expect(crz?.tcgdexSetId).toBe('swsh12.5');
       expect(crz?.localNumber).toBe('GG70');
       expect(crz?.normalizedId).toBe('swsh12.5-GG70');
+      expect(crz?.candidateIds).toContain('swsh12.5gg-GG70');
 
       const lor = parseCardIdInput('LOR TG05/TG30');
       expect(lor?.normalizedId).toBe('swsh11-TG05');
+      expect(lor?.candidateIds).toContain('swsh11tg-TG05');
+
+      const shf = parseCardIdInput('SHF SV001');
+      expect(shf?.candidateIds).toContain('swsh4.5-SV001');
+      expect(shf?.candidateIds).toContain('swsh4.5sv-SV001');
     });
 
     it('behoudt onbekende setcodes in lowercase zonder te crashen', () => {
@@ -152,8 +160,44 @@ describe('card-id.utils', () => {
       expect(buildTcgdexAssetUrl('30th-c-015', 'high')).toBe(
         'https://assets.tcgdex.net/en/me/30th-c/015/high.webp'
       );
+      expect(buildTcgdexAssetUrl('swsh4.5sv-SV001', 'low')).toBe(
+        'https://assets.tcgdex.net/en/swsh/swsh4.5/SV001/low.webp'
+      );
+      expect(buildTcgdexAssetUrl('swsh9tg-TG01', 'high')).toBe(
+        'https://assets.tcgdex.net/en/swsh/swsh9/TG01/high.webp'
+      );
       expect(buildTcgdexAssetUrl('')).toBe('');
       expect(buildTcgdexAssetUrl('invalidid')).toBe('');
+    });
+
+    it('bouwt PokemonTCG CDN fallback URLs en kiest slimme artwork-resolutie per set', () => {
+      expect(buildPokemonTcgAssetUrl('tk-ex-latia-4', 'low')).toBe(
+        'https://images.pokemontcg.io/tk1a/4.png'
+      );
+      expect(buildPokemonTcgAssetUrl('tk-ex-latia-4', 'high')).toBe(
+        'https://images.pokemontcg.io/tk1a/4_hires.png'
+      );
+      expect(buildPokemonTcgAssetUrl('sm3.5-1', 'low')).toBe(
+        'https://images.pokemontcg.io/sm35/1.png'
+      );
+      expect(buildPokemonTcgAssetUrl('svp-085', 'low')).toBe(
+        'https://images.pokemontcg.io/svp/85.png'
+      );
+      expect(buildPokemonTcgAssetUrl('ecard3-H01', 'low')).toBe(
+        'https://images.pokemontcg.io/ecard3/H1.png'
+      );
+      expect(buildPokemonTcgAssetUrl('me06-011', 'low')).toBe('');
+
+      // resolveCardArtworkUrl: expliciete imageBase -> TCGdex parent subset -> PokemonTCG fallback
+      expect(resolveCardArtworkUrl('sv03.5-199', 'https://assets.tcgdex.net/en/sv/sv03.5/199', 'low')).toBe(
+        'https://assets.tcgdex.net/en/sv/sv03.5/199/low.webp'
+      );
+      expect(resolveCardArtworkUrl('swsh4.5sv-SV001', undefined, 'low')).toBe(
+        'https://assets.tcgdex.net/en/swsh/swsh4.5/SV001/low.webp'
+      );
+      expect(resolveCardArtworkUrl('tk-ex-latia-1', undefined, 'low')).toBe(
+        'https://images.pokemontcg.io/tk1a/1.png'
+      );
     });
   });
 

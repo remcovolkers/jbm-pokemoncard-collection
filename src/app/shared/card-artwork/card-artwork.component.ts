@@ -1,5 +1,5 @@
-import { ChangeDetectionStrategy, Component, computed, input, signal } from '@angular/core';
-import { buildTcgdexAssetUrl } from '../../core/domain/card-id.utils';
+import { ChangeDetectionStrategy, Component, computed, input, linkedSignal } from '@angular/core';
+import { buildPokemonTcgAssetUrl, buildTcgdexAssetUrl } from '../../core/domain/card-id.utils';
 
 @Component({
   selector: 'pb-card-artwork',
@@ -89,32 +89,57 @@ export class CardArtworkComponent {
   readonly alt = input<string>('Pokémon kaart');
   readonly compact = input<boolean>(false);
 
-  private readonly fallbackStep = signal<0 | 1 | 2>(0);
-
-  readonly activeUrl = computed(() => {
-    const step = this.fallbackStep();
-    const explicit = (this.src() ?? '').trim();
-    const id = (this.cardId() ?? '').trim();
-
-    if (step === 0) {
-      return explicit || buildTcgdexAssetUrl(id, 'high');
-    }
-    if (step === 1) {
-      if (explicit.includes('/high.webp')) {
-        return explicit.replace('/high.webp', '/low.webp');
-      }
-      if (explicit.includes('/low.webp')) {
-        return explicit.replace('/low.webp', '/high.png');
-      }
-      return buildTcgdexAssetUrl(id, 'low');
-    }
-    return '';
+  private readonly fallbackStep = linkedSignal<string, number>({
+    source: () => `${this.cardId()}|${this.src() ?? ''}|${this.compact()}`,
+    computation: () => 0,
   });
 
-  readonly failed = computed(() => this.fallbackStep() >= 2);
+  readonly candidateUrls = computed<string[]>(() => {
+    const urls: string[] = [];
+    const pushUnique = (url: string) => {
+      const clean = url.trim();
+      if (clean && !urls.includes(clean)) {
+        urls.push(clean);
+      }
+    };
+
+    const explicit = (this.src() ?? '').trim();
+    const id = (this.cardId() ?? '').trim();
+    const preferredQuality: 'high' | 'low' = this.compact() ? 'low' : 'high';
+
+    if (explicit) {
+      pushUnique(explicit);
+      if (explicit.includes('/high.webp')) {
+        pushUnique(explicit.replace('/high.webp', '/low.webp'));
+      } else if (explicit.includes('/low.webp')) {
+        pushUnique(explicit.replace('/low.webp', '/high.png'));
+      } else if (explicit.endsWith('_hires.png')) {
+        pushUnique(explicit.replace(/_hires\.png$/, '.png'));
+      }
+    } else if (id) {
+      pushUnique(buildTcgdexAssetUrl(id, 'high'));
+      pushUnique(buildTcgdexAssetUrl(id, 'low'));
+    }
+
+    if (id) {
+      pushUnique(buildTcgdexAssetUrl(id, preferredQuality));
+      if (preferredQuality === 'high') {
+        pushUnique(buildPokemonTcgAssetUrl(id, 'high'));
+        pushUnique(buildPokemonTcgAssetUrl(id, 'low'));
+      } else {
+        pushUnique(buildPokemonTcgAssetUrl(id, 'low'));
+      }
+    }
+
+    return urls;
+  });
+
+  readonly activeUrl = computed(() => this.candidateUrls()[this.fallbackStep()] ?? '');
+  readonly failed = computed(() => !this.activeUrl());
   readonly fallbackLabel = computed(() => this.cardId() || this.alt());
 
   onImgError(): void {
-    this.fallbackStep.update((s) => (s < 2 ? ((s + 1) as 0 | 1 | 2) : 2));
+    const max = this.candidateUrls().length;
+    this.fallbackStep.update((s) => (s < max ? s + 1 : max));
   }
 }

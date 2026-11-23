@@ -38,7 +38,7 @@
     },
     {
       "name": "tcgdex-artwork",
-      "urls": ["https://assets.tcgdex.net/**"],
+      "urls": ["https://assets.tcgdex.net/**", "https://images.pokemontcg.io/**"],
       "cacheConfig": {
         "maxSize": 800,
         "maxAge": "30d",

@@ -85,8 +85,46 @@ class MockCardCatalogAdapter implements CardCatalogPort {
 
   async listAllSets() {
     return [
-      { id: 'sv03.5', name: '151', officialCount: 165, totalCount: 207 },
-      { id: 'base1', name: 'Base Set', officialCount: 102, totalCount: 102 },
+      {
+        id: 'base1',
+        code: 'BS',
+        name: 'Base Set',
+        series: 'Base',
+        seriesId: 'base',
+        releaseDate: '1999-01-09',
+        officialCount: 102,
+        totalCount: 102,
+      },
+      {
+        id: 'tk-ex-latia',
+        code: 'TK1A',
+        name: 'EX trainer Kit (Latias)',
+        series: 'Trainer kits',
+        seriesId: 'tk',
+        releaseDate: '2004-07-01',
+        officialCount: 10,
+        totalCount: 10,
+      },
+      {
+        id: 'sv03.5',
+        code: 'MEW',
+        name: '151',
+        series: 'Scarlet & Violet',
+        seriesId: 'sv',
+        releaseDate: '2023-09-22',
+        officialCount: 165,
+        totalCount: 207,
+      },
+      {
+        id: 'swsh4.5sv',
+        code: 'SHF',
+        name: 'Shining Fates Shiny Vault',
+        series: 'Sword & Shield',
+        seriesId: 'swsh',
+        releaseDate: '2021-02-19',
+        officialCount: 122,
+        totalCount: 122,
+      },
     ];
   }
 
@@ -678,16 +716,59 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
       expect(el.textContent).toContain('Test: Remco Test');
     });
 
-    it('ondersteunt de Alle Sets Catalogus browser in QuickAddComponent met in-bezit detectie', async () => {
+    it('ondersteunt de Alle Sets Catalogus browser in QuickAddComponent met in-bezit detectie, zoekbare dropdown en sortering', async () => {
       const fixture = TestBed.createComponent(QuickAddComponent);
       const comp = fixture.componentInstance;
       fixture.detectChanges();
 
       await comp.openSetsCatalog();
+      fixture.detectChanges();
       expect(comp.inputMode()).toBe('sets');
-      expect(comp.allSets().length).toBe(2);
+      expect(comp.allSets().length).toBe(4);
 
-      await comp.selectCatalogSet('sv03.5');
+      // Standaard 'series'-sortering: Scarlet & Violet (151) vóór Sword & Shield, Base, en Trainer kits onderaan
+      expect(comp.filteredCatalogSets().map((s) => s.id)).toEqual([
+        'sv03.5',
+        'swsh4.5sv',
+        'base1',
+        'tk-ex-latia',
+      ]);
+
+      // Dropdown openen, zoeken in de dropdown, sorteervolgorde wisselen en toetsenbord-navigatie testen
+      comp.openSetDropdown();
+      fixture.detectChanges();
+      const el = fixture.nativeElement as HTMLElement;
+      expect(el.querySelector('#qa-set-search-input')).not.toBeNull();
+
+      comp.setSetSortMode('az');
+      expect(comp.filteredCatalogSets().map((s) => s.name)).toEqual([
+        '151',
+        'Base Set',
+        'EX trainer Kit (Latias)',
+        'Shining Fates Shiny Vault',
+      ]);
+
+      comp.setSetSortMode('newest');
+      expect(comp.filteredCatalogSets().map((s) => s.id)).toEqual([
+        'sv03.5',
+        'swsh4.5sv',
+        'tk-ex-latia',
+        'base1',
+      ]);
+
+      comp.onSetSearchQueryChange('shf');
+      expect(comp.filteredCatalogSets().map((s) => s.id)).toEqual(['swsh4.5sv']);
+
+      comp.onSetSearchQueryChange('');
+      comp.onSetSearchKeydown(new KeyboardEvent('keydown', { key: 'Escape' }));
+      expect(comp.isSetDropdownOpen()).toBe(false);
+
+      comp.openSetDropdown();
+      comp.onSetSearchQueryChange('151');
+      comp.onSetSearchKeydown(new KeyboardEvent('keydown', { key: 'Enter' }));
+      await new Promise((r) => setTimeout(r, 0));
+      expect(comp.isSetDropdownOpen()).toBe(false);
+      expect(comp.selectedCatalogSetId()).toBe('sv03.5');
       expect(comp.pagedSetCards().length).toBe(2);
       expect(comp.isCardOwned('sv03.5-199')).toBe(true);
 

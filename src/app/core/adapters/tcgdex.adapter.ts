@@ -5,6 +5,7 @@ import {
   hasKnownSetCode,
   parseCardIdInput,
   registerDynamicSetCodes,
+  resolveCardArtworkUrl,
 } from '../domain/card-id.utils';
 import { roundCurrency, roundOneDecimal } from '../domain/card-math.utils';
 import {
@@ -38,7 +39,7 @@ interface StaticSetsCatalogFile {
 }
 
 const SETS_CACHE_KEY = 'pokebinder_tcgdex_sets_v2';
-const SET_DETAIL_CACHE_PREFIX = 'pokebinder_tcgdex_set_';
+const SET_DETAIL_CACHE_PREFIX = 'pokebinder_tcgdex_set_v2_';
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 uur cache -> voorkomt API throttling!
 const DIGITAL_POCKET_ID_RE = /^(?:[AB]\d+[a-z]?|P-A)$/i;
 
@@ -185,7 +186,7 @@ export class TcgdexAdapter implements CardCatalogPort {
       const combined = [...withArt.reverse(), ...withoutArt].slice(0, limit);
 
       return combined.map((item) => {
-        const imageUrl = item.image ? `${item.image}/low.webp` : buildTcgdexAssetUrl(item.id, 'low');
+        const imageUrl = resolveCardArtworkUrl(item.id, item.image, 'low');
         if (item.image) {
           this.rememberArtwork(item.id, `${item.image}/high.webp`);
         }
@@ -335,7 +336,7 @@ export class TcgdexAdapter implements CardCatalogPort {
         localId: item.localId,
         name: item.name,
         imageBase: item.image,
-        imageUrl: item.image ? `${item.image}/low.webp` : buildTcgdexAssetUrl(item.id, 'low'),
+        imageUrl: resolveCardArtworkUrl(item.id, item.image, 'low'),
       }));
 
       const detail: CatalogSetDetail = {
@@ -408,8 +409,8 @@ export class TcgdexAdapter implements CardCatalogPort {
     const cardNumber = official ? `${raw.localId}/${official}` : raw.localId;
 
     const imageBase = raw.image;
-    const imageUrl = imageBase ? `${imageBase}/high.webp` : buildTcgdexAssetUrl(raw.id, 'high');
-    const lowImageUrl = imageBase ? `${imageBase}/low.webp` : buildTcgdexAssetUrl(raw.id, 'low');
+    const imageUrl = resolveCardArtworkUrl(raw.id, imageBase, 'high');
+    const lowImageUrl = resolveCardArtworkUrl(raw.id, imageBase, 'low');
 
     const { marketPriceEur, lowPriceEur, highPriceEur, trendPercent } = this.extractCardmarketPrices(raw);
     const rawProductId = this.positiveNumber(raw.pricing?.cardmarket?.idProduct);

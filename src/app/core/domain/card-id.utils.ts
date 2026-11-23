@@ -139,6 +139,14 @@ export const SET_CODE_ALIASES: Record<string, string> = {
  */
 export const SET_CODE_MULTI_ALIASES: Record<string, readonly string[]> = {
   '30C': ['30th', '30th-c'],
+  SHF: ['swsh4.5', 'swsh4.5sv'],
+  BRS: ['swsh9', 'swsh9tg'],
+  ASR: ['swsh10', 'swsh10tg'],
+  LOR: ['swsh11', 'swsh11tg'],
+  SIT: ['swsh12', 'swsh12tg'],
+  CRZ: ['swsh12.5', 'swsh12.5gg'],
+  CEL: ['cel25', 'cel25cc'],
+  HIF: ['sm11.5', 'sma'],
 };
 
 const REVERSE_DISPLAY_CODE: Record<string, string> = {
@@ -181,17 +189,24 @@ const REVERSE_DISPLAY_CODE: Record<string, string> = {
   'swsh3.5': 'CPA',
   swsh4: 'VIV',
   'swsh4.5': 'SHF',
+  'swsh4.5sv': 'SHF',
   swsh5: 'BST',
   swsh6: 'CRE',
   swsh7: 'EVS',
   cel25: 'CEL',
+  cel25cc: 'CEL',
   swsh8: 'FST',
   swsh9: 'BRS',
+  swsh9tg: 'BRS',
   swsh10: 'ASR',
+  swsh10tg: 'ASR',
   'swsh10.5': 'PGO',
   swsh11: 'LOR',
+  swsh11tg: 'LOR',
   swsh12: 'SIT',
+  swsh12tg: 'SIT',
   'swsh12.5': 'CRZ',
+  'swsh12.5gg': 'CRZ',
   swshp: 'SWSHP',
 
   // Sun & Moon
@@ -210,6 +225,7 @@ const REVERSE_DISPLAY_CODE: Record<string, string> = {
   sm10: 'UNB',
   sm11: 'UNM',
   'sm11.5': 'HIF',
+  sma: 'HIF',
   sm12: 'CEC',
 
   // Classic / WOTC / e-Card / EX
@@ -425,6 +441,70 @@ export function inferTcgdexSeriesFolder(setId: string): string {
   return id.replace(/\d.*$/, '') || 'sv';
 }
 
+const TCGDEX_ASSET_SET_OVERRIDES: Record<string, { series: string; setId: string }> = {
+  'swsh4.5sv': { series: 'swsh', setId: 'swsh4.5' },
+  swsh9tg: { series: 'swsh', setId: 'swsh9' },
+  swsh10tg: { series: 'swsh', setId: 'swsh10' },
+  swsh11tg: { series: 'swsh', setId: 'swsh11' },
+  swsh12tg: { series: 'swsh', setId: 'swsh12' },
+  'swsh12.5gg': { series: 'swsh', setId: 'swsh12.5' },
+};
+
+const TCGDEX_TO_PTCG_SET_ID: Record<string, string> = {
+  'tk-ex-latia': 'tk1a',
+  'tk-ex-latio': 'tk1b',
+  'tk-ex-p': 'tk2a',
+  'tk-ex-m': 'tk2b',
+  'swsh4.5sv': 'swsh45sv',
+  'swsh4.5': 'swsh45',
+  'swsh3.5': 'swsh35',
+  'swsh10.5': 'pgo',
+  'swsh12.5': 'swsh12pt5',
+  'swsh12.5gg': 'swsh12pt5gg',
+  'sm3.5': 'sm35',
+  'sm7.5': 'sm75',
+  'sm11.5': 'sm115',
+  'sv03.5': 'sv3pt5',
+  'sv04.5': 'sv4pt5',
+  'sv06.5': 'sv6pt5',
+  'sv08.5': 'sv8pt5',
+  bog: 'bp',
+  hgssp: 'hsp',
+  '2011bw': 'mcd11',
+  '2012bw': 'mcd12',
+  '2016xy': 'mcd16',
+  '2019sm': 'mcd19',
+  '2021swsh': 'mcd21',
+  '2022swsh': 'mcd22',
+};
+
+const UNSUPPORTED_PTCG_EXACT_SETS = new Set([
+  'mep',
+  'mee',
+  'mfb',
+  'exu',
+  'ex5.5',
+  'miscp',
+  'cel25cc',
+  '2014xy',
+  '2015xy',
+  '2017sm',
+  '2018sm',
+  '2023sv',
+  '2024sv',
+]);
+
+function splitCardIdParts(cardId: string): { setId: string; localId: string } | null {
+  const val = cardId.trim();
+  if (!val || val.startsWith('http://') || val.startsWith('https://')) return null;
+  const dashIdx = val.lastIndexOf('-');
+  if (dashIdx <= 0 || dashIdx >= val.length - 1) return null;
+  return {
+    setId: val.slice(0, dashIdx).toLowerCase(),
+    localId: val.slice(dashIdx + 1),
+  };
+}
+
 /**
  * Bouwt de directe hoge-resolutie TCGdex artwork URL op.
  */
@@ -438,12 +518,77 @@ export function buildTcgdexAssetUrl(
     if (/\.(webp|png|jpg|jpeg)$/i.test(val)) return val;
     return `${val.replace(/\/$/, '')}/${quality}.webp`;
   }
-  const dashIdx = val.lastIndexOf('-');
-  if (dashIdx <= 0) return '';
-  const setId = val.slice(0, dashIdx).toLowerCase();
-  const localId = val.slice(dashIdx + 1);
-  const series = inferTcgdexSeriesFolder(setId);
-  return `https://assets.tcgdex.net/en/${series}/${setId}/${localId}/${quality}.webp`;
+  const parts = splitCardIdParts(val);
+  if (!parts) return '';
+  const override = TCGDEX_ASSET_SET_OVERRIDES[parts.setId];
+  const series = override?.series ?? inferTcgdexSeriesFolder(parts.setId);
+  const assetSetId = override?.setId ?? parts.setId;
+  return `https://assets.tcgdex.net/en/${series}/${assetSetId}/${parts.localId}/${quality}.webp`;
+}
+
+/**
+ * Bouwt een fallback artwork URL via het PokemonTCG.io CDN voor sets waar TCGdex geen afbeelding heeft.
+ */
+export function buildPokemonTcgAssetUrl(
+  cardId: string,
+  quality: 'high' | 'low' = 'low'
+): string {
+  const parts = splitCardIdParts(cardId);
+  if (!parts) return '';
+  const { setId, localId } = parts;
+
+  if (
+    UNSUPPORTED_PTCG_EXACT_SETS.has(setId) ||
+    /^me\d/i.test(setId) ||
+    /^30th/i.test(setId) ||
+    /^tk-(?:dp|hs|bw|xy|sm)-/i.test(setId) ||
+    /^sv10\.5[wb]$/i.test(setId)
+  ) {
+    return '';
+  }
+
+  let ptcgSetId = TCGDEX_TO_PTCG_SET_ID[setId];
+  if (!ptcgSetId) {
+    const svMatch = setId.match(/^sv0(\d)$/i);
+    ptcgSetId = svMatch ? `sv${svMatch[1]}` : setId;
+  }
+
+  let normalizedLocalId = localId;
+  if (/^\d+$/.test(localId)) {
+    normalizedLocalId = String(parseInt(localId, 10));
+  } else {
+    const holoMatch = localId.match(/^H0+(\d+)$/i);
+    if (holoMatch) {
+      normalizedLocalId = `H${Number(holoMatch[1])}`;
+    }
+  }
+
+  const suffix = quality === 'high' ? '_hires.png' : '.png';
+  return `https://images.pokemontcg.io/${ptcgSetId}/${normalizedLocalId}${suffix}`;
+}
+
+/**
+ * Kiest de beste beschikbare artwork URL voor een TCGdex-kaart (met subset- & PokemonTCG-fallback).
+ */
+export function resolveCardArtworkUrl(
+  cardId: string,
+  imageBase: string | undefined,
+  quality: 'high' | 'low'
+): string {
+  const cleanBase = imageBase?.trim();
+  if (cleanBase) {
+    return `${cleanBase.replace(/\/$/, '')}/${quality}.webp`;
+  }
+
+  const parts = splitCardIdParts(cardId);
+  if (parts && (TCGDEX_ASSET_SET_OVERRIDES[parts.setId] || parts.setId === 'mep')) {
+    return buildTcgdexAssetUrl(cardId, quality);
+  }
+
+  const ptcgUrl = buildPokemonTcgAssetUrl(cardId, quality);
+  if (ptcgUrl) return ptcgUrl;
+
+  return buildTcgdexAssetUrl(cardId, quality);
 }
 
 export function buildCardmarketProductUrl(productId: number): string {

@@ -210,4 +210,34 @@ describe('TcgdexAdapter', () => {
     expect(card?.id).toBe('me07-005');
     expect(card?.name).toBe('Zoroark ex');
   });
+
+  it('lost ontbrekende subset- en Trainer Kit-afbeeldingen automatisch op in getSetCards', async () => {
+    fetchSpy
+      .mockResolvedValueOnce(
+        jsonResponse({
+          id: 'swsh4.5sv',
+          name: 'Shining Fates Shiny Vault',
+          abbreviation: { official: 'SHF' },
+          serie: { id: 'swsh', name: 'Sword & Shield' },
+          cards: [{ id: 'swsh4.5sv-SV001', localId: 'SV001', name: 'Rowlet' }],
+        })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          id: 'tk-ex-latia',
+          name: 'EX trainer Kit (Latias)',
+          tcgOnline: 'TK1A',
+          serie: { id: 'tk', name: 'Trainer kits' },
+          cards: [{ id: 'tk-ex-latia-4', localId: '4', name: 'Latias' }],
+        })
+      );
+
+    const shinyVault = await adapter.getSetCards('swsh4.5sv');
+    expect(shinyVault?.cards[0].imageUrl).toBe(
+      'https://assets.tcgdex.net/en/swsh/swsh4.5/SV001/low.webp'
+    );
+
+    const trainerKit = await adapter.getSetCards('tk-ex-latia');
+    expect(trainerKit?.cards[0].imageUrl).toBe('https://images.pokemontcg.io/tk1a/4.png');
+  });
 });

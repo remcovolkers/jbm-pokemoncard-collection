@@ -299,16 +299,7 @@
   display: flex;
   flex-direction: column;
   gap: $space-sm;
-
-  &__controls {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    gap: $space-sm;
-
-    @include mq-sm {
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr);
-    }
-  }
+  position: relative;
 
   &__header {
     display: flex;
@@ -350,6 +341,317 @@
 
     @include mq-sm {
       max-width: 260px;
+    }
+  }
+}
+
+.set-picker {
+  position: relative;
+
+  &__trigger {
+    @include focus-ring;
+    @include touch-target(50px);
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.65rem;
+    padding: 0.55rem 0.85rem;
+    border-radius: $radius-md;
+    background-color: $color-surface-lowest;
+    border: 1px solid $color-outline-variant;
+    color: $color-on-surface;
+    text-align: left;
+    transition:
+      border-color 150ms ease,
+      box-shadow 150ms ease,
+      background-color 150ms ease;
+
+    &:hover {
+      border-color: $color-outline-strong;
+      background-color: $color-surface-low;
+    }
+
+    &.is-open {
+      border-color: $color-primary-container;
+      box-shadow: 0 0 0 3px rgba($color-primary-container, 0.22);
+      background-color: $color-surface-low;
+    }
+  }
+
+  &__trigger-main {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    min-width: 0;
+    flex: 1;
+  }
+
+  &__trigger-icon {
+    color: $color-on-surface-muted;
+    font-size: 20px;
+    flex-shrink: 0;
+  }
+
+  &__trigger-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+
+    strong {
+      font-size: 0.92rem;
+      font-weight: 600;
+      @include truncate;
+    }
+
+    span {
+      font-size: 0.7rem;
+      color: $color-on-surface-muted;
+      @include truncate;
+    }
+  }
+
+  &__placeholder {
+    color: $color-on-surface-muted;
+    font-size: 0.9375rem;
+    @include truncate;
+  }
+
+  &__count-pill {
+    padding: 0.12rem 0.45rem;
+    border-radius: $radius-full;
+    background-color: $color-surface-high;
+    color: $color-on-surface-variant;
+    font-size: 0.7rem;
+    flex-shrink: 0;
+  }
+
+  &__chevron {
+    color: $color-on-surface-muted;
+    font-size: 20px;
+    flex-shrink: 0;
+    transition: transform 160ms ease;
+
+    &.is-open {
+      transform: rotate(180deg);
+      color: $color-primary;
+    }
+  }
+
+  &__code {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 3.35rem;
+    padding: 0.2rem 0.42rem;
+    border-radius: $radius-xs;
+    background-color: $color-surface-high;
+    border: 1px solid rgba($color-outline-strong, 0.45);
+    color: $color-tertiary;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    flex-shrink: 0;
+  }
+
+  &__panel {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    z-index: 30;
+    border-radius: $radius-md;
+    background-color: $color-surface-low;
+    border: 1px solid $color-outline-strong;
+    box-shadow: $shadow-elevated;
+    overflow: hidden;
+  }
+
+  &__head {
+    padding: 0.65rem;
+    background-color: $color-surface-container;
+    border-bottom: 1px solid rgba($color-outline-variant, 0.7);
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  &__search {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  &__search-icon {
+    position: absolute;
+    left: 0.75rem;
+    color: $color-on-surface-muted;
+    font-size: 18px;
+    pointer-events: none;
+  }
+
+  &__search-input {
+    min-height: 42px;
+    padding-left: 2.3rem;
+    padding-right: 2.3rem;
+    font-size: 0.875rem;
+  }
+
+  &__clear {
+    position: absolute;
+    right: 6px;
+    width: 30px;
+    height: 30px;
+    border-radius: $radius-sm;
+    color: $color-on-surface-muted;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    .material-symbols-outlined {
+      font-size: 18px;
+    }
+
+    &:hover {
+      background-color: $color-surface-high;
+      color: $color-on-surface;
+    }
+  }
+
+  &__toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  &__sort {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 2px;
+    border-radius: $radius-sm;
+    background-color: $color-surface-lowest;
+    border: 1px solid rgba($color-outline-variant, 0.6);
+  }
+
+  &__sort-btn {
+    @include pressable;
+    padding: 0.25rem 0.55rem;
+    border-radius: $radius-xs;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: $color-on-surface-muted;
+
+    &:hover {
+      color: $color-on-surface;
+    }
+
+    &.is-active {
+      background-color: $color-surface-highest;
+      color: $color-primary;
+    }
+  }
+
+  &__match-count {
+    font-size: 0.7rem;
+    color: $color-on-surface-muted;
+  }
+
+  &__list {
+    max-height: min(380px, 55dvh);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  &__group {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.35rem 0.75rem;
+    background-color: $color-surface-container;
+    border-bottom: 1px solid rgba($color-outline-variant, 0.45);
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: $color-on-surface-variant;
+  }
+
+  &__option {
+    width: 100%;
+    min-height: 44px;
+    padding: 0.5rem 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    text-align: left;
+    border-bottom: 1px solid rgba($color-outline-variant, 0.25);
+    color: $color-on-surface;
+    transition: background-color 100ms ease;
+
+    &:hover,
+    &.is-highlighted {
+      background-color: $color-surface-high;
+    }
+
+    &.is-selected {
+      background-color: rgba($color-secondary, 0.12);
+
+      .set-picker__option-name {
+        color: $color-secondary;
+        font-weight: 700;
+      }
+    }
+  }
+
+  &__option-main {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
+  }
+
+  &__option-name {
+    font-size: 0.85rem;
+    font-weight: 600;
+    @include truncate;
+  }
+
+  &__option-series {
+    font-size: 0.68rem;
+    color: $color-on-surface-muted;
+    @include truncate;
+  }
+
+  &__option-meta {
+    font-size: 0.7rem;
+    color: $color-on-surface-muted;
+    flex-shrink: 0;
+  }
+
+  &__check {
+    font-size: 18px;
+    color: $color-secondary;
+    flex-shrink: 0;
+  }
+
+  &__empty {
+    padding: $space-lg $space-md;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.6rem;
+    text-align: center;
+
+    p {
+      @include type-body-sm;
+      color: $color-on-surface-muted;
     }
   }
 }

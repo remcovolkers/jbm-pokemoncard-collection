@@ -179,29 +179,195 @@
           }
         </div>
 
-        <div class="sets-browser__controls">
-          <input
-            type="text"
-            class="pb-input"
-            placeholder="Filter op kaartcode, set of serie (bijv. DLR, 151, PBL, Mega)…"
-            [ngModel]="setSearchQuery()"
-            (ngModelChange)="setSearchQuery.set($event)"
-            aria-label="Filter TCG sets"
-          />
-
-          <select
+        <div class="set-picker">
+          <button
             id="qa-set-select"
-            class="pb-select"
-            [ngModel]="selectedCatalogSetId()"
-            (ngModelChange)="selectCatalogSet($event)"
+            type="button"
+            role="combobox"
+            class="set-picker__trigger"
+            [class.is-open]="isSetDropdownOpen()"
+            [attr.aria-expanded]="isSetDropdownOpen()"
+            aria-haspopup="listbox"
+            aria-controls="qa-set-listbox"
+            (click)="toggleSetDropdown()"
+            (keydown.escape)="closeSetDropdown()"
           >
-            <option value="">— Kies een set ({{ filteredCatalogSets().length }}) —</option>
-            @for (s of filteredCatalogSets(); track s.id) {
-              <option [value]="s.id">
-                {{ s.code || getDisplaySetCode(s.id, s.name) }} · {{ s.name }} ({{ s.totalCount || s.officialCount }} kaarten)
-              </option>
+            @if (selectedCatalogSet(); as currentSet) {
+              <div class="set-picker__trigger-main">
+                <span class="set-picker__code mono">
+                  {{ currentSet.code || getDisplaySetCode(currentSet.id, currentSet.name) }}
+                </span>
+                <div class="set-picker__trigger-text">
+                  <strong>{{ currentSet.name }}</strong>
+                  <span class="mono">
+                    {{ currentSet.series || 'Pokémon TCG' }}
+                    @if (formatReleaseYear(currentSet.releaseDate); as yr) {
+                      · {{ yr }}
+                    }
+                    · {{ currentSet.totalCount || currentSet.officialCount }} kaarten
+                  </span>
+                </div>
+              </div>
+            } @else {
+              <div class="set-picker__trigger-main">
+                <span class="material-symbols-outlined set-picker__trigger-icon">collections_bookmark</span>
+                <span class="set-picker__placeholder">Kies een TCG-set…</span>
+                @if (allSets().length > 0) {
+                  <span class="set-picker__count-pill mono">{{ allSets().length }}</span>
+                }
+              </div>
             }
-          </select>
+            <span class="material-symbols-outlined set-picker__chevron" [class.is-open]="isSetDropdownOpen()">
+              expand_more
+            </span>
+          </button>
+
+          @if (isSetDropdownOpen()) {
+            <div class="set-picker__panel">
+              <div class="set-picker__head">
+                <div class="set-picker__search">
+                  <span class="material-symbols-outlined set-picker__search-icon">search</span>
+                  <input
+                    id="qa-set-search-input"
+                    type="text"
+                    class="pb-input set-picker__search-input"
+                    placeholder="Zoek op setnaam, code, serie of jaar (bijv. 151, SHF, Shiny Vault)…"
+                    [ngModel]="setSearchQuery()"
+                    (ngModelChange)="onSetSearchQueryChange($event)"
+                    (keydown)="onSetSearchKeydown($event)"
+                    aria-label="Zoek in TCG sets"
+                  />
+                  @if (setSearchQuery()) {
+                    <button
+                      type="button"
+                      class="set-picker__clear"
+                      aria-label="Zoekterm wissen"
+                      (click)="onSetSearchQueryChange('')"
+                    >
+                      <span class="material-symbols-outlined">close</span>
+                    </button>
+                  }
+                </div>
+
+                <div class="set-picker__toolbar">
+                  <div class="set-picker__sort" role="group" aria-label="Sets sorteren">
+                    <button
+                      type="button"
+                      class="set-picker__sort-btn"
+                      [class.is-active]="setSortMode() === 'series'"
+                      (click)="setSetSortMode('series')"
+                    >
+                      Per serie
+                    </button>
+                    <button
+                      type="button"
+                      class="set-picker__sort-btn"
+                      [class.is-active]="setSortMode() === 'newest'"
+                      (click)="setSetSortMode('newest')"
+                    >
+                      Nieuwste
+                    </button>
+                    <button
+                      type="button"
+                      class="set-picker__sort-btn"
+                      [class.is-active]="setSortMode() === 'az'"
+                      (click)="setSetSortMode('az')"
+                    >
+                      A–Z
+                    </button>
+                  </div>
+                  <span class="set-picker__match-count mono">
+                    {{ filteredCatalogSets().length }} / {{ allSets().length }}
+                  </span>
+                </div>
+              </div>
+
+              <div id="qa-set-listbox" class="set-picker__list" role="listbox" aria-label="Beschikbare TCG-sets">
+                @if (filteredCatalogSets().length === 0) {
+                  <div class="set-picker__empty">
+                    <p>Geen sets gevonden voor "{{ setSearchQuery() }}".</p>
+                    <button
+                      type="button"
+                      class="pb-btn pb-btn--secondary"
+                      (click)="onSetSearchQueryChange('')"
+                    >
+                      Wis zoekterm
+                    </button>
+                  </div>
+                } @else if (setSortMode() === 'series') {
+                  @for (group of groupedCatalogSets(); track group.series) {
+                    <div class="set-picker__group">
+                      <span>{{ group.series }}</span>
+                      <span class="mono">{{ group.sets.length }}</span>
+                    </div>
+                    @for (s of group.sets; track s.id) {
+                      @let flatIdx = flatSetIndexMap().get(s.id) ?? 0;
+                      <button
+                        type="button"
+                        role="option"
+                        class="set-picker__option"
+                        [attr.data-set-option-index]="flatIdx"
+                        [attr.aria-selected]="selectedCatalogSetId() === s.id"
+                        [class.is-selected]="selectedCatalogSetId() === s.id"
+                        [class.is-highlighted]="highlightedSetIndex() === flatIdx"
+                        (mouseenter)="highlightedSetIndex.set(flatIdx)"
+                        (click)="chooseCatalogSet(s.id)"
+                      >
+                        <span class="set-picker__code mono">
+                          {{ s.code || getDisplaySetCode(s.id, s.name) }}
+                        </span>
+                        <span class="set-picker__option-main">
+                          <span class="set-picker__option-name">{{ s.name }}</span>
+                        </span>
+                        <span class="set-picker__option-meta mono">
+                          @if (formatReleaseYear(s.releaseDate); as yr) {
+                            {{ yr }} ·
+                          }
+                          {{ s.totalCount || s.officialCount }}
+                        </span>
+                        @if (selectedCatalogSetId() === s.id) {
+                          <span class="material-symbols-outlined set-picker__check">check</span>
+                        }
+                      </button>
+                    }
+                  }
+                } @else {
+                  @for (s of filteredCatalogSets(); track s.id; let idx = $index) {
+                    <button
+                      type="button"
+                      role="option"
+                      class="set-picker__option"
+                      [attr.data-set-option-index]="idx"
+                      [attr.aria-selected]="selectedCatalogSetId() === s.id"
+                      [class.is-selected]="selectedCatalogSetId() === s.id"
+                      [class.is-highlighted]="highlightedSetIndex() === idx"
+                      (mouseenter)="highlightedSetIndex.set(idx)"
+                      (click)="chooseCatalogSet(s.id)"
+                    >
+                      <span class="set-picker__code mono">
+                        {{ s.code || getDisplaySetCode(s.id, s.name) }}
+                      </span>
+                      <span class="set-picker__option-main">
+                        <span class="set-picker__option-name">{{ s.name }}</span>
+                        @if (s.series) {
+                          <span class="set-picker__option-series">{{ s.series }}</span>
+                        }
+                      </span>
+                      <span class="set-picker__option-meta mono">
+                        @if (formatReleaseYear(s.releaseDate); as yr) {
+                          {{ yr }} ·
+                        }
+                        {{ s.totalCount || s.officialCount }}
+                      </span>
+                      @if (selectedCatalogSetId() === s.id) {
+                        <span class="material-symbols-outlined set-picker__check">check</span>
+                      }
+                    </button>
+                  }
+                }
+              </div>
+            </div>
+          }
         </div>
 
         @if (activeSetDetail(); as setDetail) {
