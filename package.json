@@ -11,6 +11,7 @@
     "build:capacitor": "ng build --configuration capacitor",
     "cap:sync": "npm run build:capacitor && npx cap sync android",
     "cap:open": "npx cap open android",
+    "sync:sets": "node scripts/sync-sets-catalog.mjs",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
     "test:apps-script": "node --test apps-script/code.test.mjs",

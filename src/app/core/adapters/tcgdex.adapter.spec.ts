@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { resetDynamicSetCodesForTests } from '../domain/card-id.utils';
 import { TcgdexAdapter } from './tcgdex.adapter';
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -15,6 +16,7 @@ describe('TcgdexAdapter', () => {
 
   beforeEach(() => {
     window.localStorage.clear();
+    resetDynamicSetCodesForTests();
     fetchSpy.mockReset();
     vi.stubGlobal('fetch', fetchSpy);
     TestBed.configureTestingModule({});
@@ -22,6 +24,7 @@ describe('TcgdexAdapter', () => {
   });
 
   afterEach(() => {
+    resetDynamicSetCodesForTests();
     vi.unstubAllGlobals();
   });
 
@@ -112,17 +115,23 @@ describe('TcgdexAdapter', () => {
     expect(await adapter.searchByName('Mew')).toEqual([]);
   });
 
-  it('laadt alle TCG-sets en set-kaarten in 1 request per aanroep met 24-uurs cache (geen throttling)', async () => {
+  it('laadt fysieke TCG-sets uit gebundelde sets-catalog.json, filtert TCG Pocket weg en cachet 24 uur', async () => {
     fetchSpy.mockResolvedValueOnce(
-      jsonResponse([
-        { id: 'base1', name: 'Base Set', cardCount: { official: 102, total: 102 } },
-        { id: 'sv03.5', name: '151', cardCount: { official: 165, total: 207 } },
-      ])
+      jsonResponse({
+        generatedAt: '2026-11-23T14:00:00Z',
+        sets: [
+          { id: 'me06', code: 'DLR', name: 'Delta Reign', series: 'Mega Evolution', seriesId: 'me', officialCount: 103, totalCount: 141 },
+          { id: 'A1', code: 'A1', name: 'Genetic Apex', series: 'Pokémon TCG Pocket', seriesId: 'tcgp', officialCount: 226, totalCount: 286 },
+          { id: 'sv03.5', code: 'MEW', name: '151', series: 'Scarlet & Violet', seriesId: 'sv', officialCount: 165, totalCount: 207 },
+        ],
+      })
     );
 
     const sets = await adapter.listAllSets();
     expect(sets.length).toBe(2);
-    expect(sets[0].id).toBe('sv03.5'); // Nieuwste set eerst!
+    expect(sets[0].id).toBe('me06');
+    expect(sets[0].code).toBe('DLR');
+    expect(sets.some((s) => s.id === 'A1')).toBe(false);
     expect(fetchSpy).toHaveBeenCalledTimes(1);
 
     // Tweede aanroep komt direct uit cache (0 extra requests!)
@@ -133,23 +142,69 @@ describe('TcgdexAdapter', () => {
     // Kaarten van 1 set ophalen in 1 enkele request
     fetchSpy.mockResolvedValueOnce(
       jsonResponse({
-        id: 'sv03.5',
-        name: '151',
-        serie: { name: 'Scarlet & Violet' },
-        cardCount: { official: 165, total: 207 },
+        id: 'me06',
+        name: 'Delta Reign',
+        abbreviation: { official: 'DLR' },
+        serie: { id: 'me', name: 'Mega Evolution' },
+        cardCount: { official: 103, total: 141 },
         cards: [
-          { id: 'sv03.5-001', localId: '001', name: 'Bulbasaur', image: 'https://assets.tcgdex.net/en/sv/sv03.5/001' },
+          { id: 'me06-011', localId: '011', name: 'Zorua', image: 'https://assets.tcgdex.net/en/me/me06/011' },
         ],
       })
     );
 
-    const detail = await adapter.getSetCards('sv03.5');
+    const detail = await adapter.getSetCards('me06');
+    expect(detail?.code).toBe('DLR');
     expect(detail?.cards.length).toBe(1);
     expect(detail?.cards[0].imageUrl).toContain('/low.webp');
     expect(fetchSpy).toHaveBeenCalledTimes(2);
 
     // Tweede aanroep voor dezelfde set gebruikt cache (geen extra fetch!)
-    await adapter.getSetCards('sv03.5');
+    await adapter.getSetCards('me06');
     expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('valt terug op TCGdex REST als sets-catalog.json ontbreekt en hydrateert onbekende setcodes automatisch', async () => {
+    fetchSpy
+      .mockResolvedValueOnce(new Response('Not found', { status: 404 }))
+      .mockResolvedValueOnce(
+        jsonResponse([
+          { id: 'base1', name: 'Base Set', cardCount: { official: 102, total: 102 } },
+          { id: 'A1a', name: 'Mythical Island', cardCount: { official: 68, total: 86 } },
+          { id: 'me06', name: 'Delta Reign', cardCount: { official: 103, total: 141 } },
+        ])
+      );
+
+    const sets = await adapter.listAllSets();
+    expect(sets.map((s) => s.id)).toEqual(['me06', 'base1']); // A1a TCG Pocket uitgefilterd!
+    expect(sets[0].code).toBe('DLR');
+
+    // Nieuwe adapter-instantie test automatische hydratie van splinternieuwe setcode FUT -> me07
+    window.localStorage.clear();
+    resetDynamicSetCodesForTests();
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({});
+    const freshAdapter = TestBed.inject(TcgdexAdapter);
+
+    fetchSpy
+      .mockResolvedValueOnce(
+        jsonResponse({
+          sets: [{ id: 'me07', code: 'FUT', name: 'Future Set', series: 'Mega Evolution', seriesId: 'me', officialCount: 100, totalCount: 140 }],
+        })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          id: 'me07-005',
+          localId: '005',
+          name: 'Zoroark ex',
+          types: ['Darkness'],
+          rarity: 'Double Rare',
+          set: { id: 'me07', name: 'Future Set', cardCount: { official: 100, total: 140 } },
+        })
+      );
+
+    const card = await freshAdapter.lookupByCardId('FUT 5');
+    expect(card?.id).toBe('me07-005');
+    expect(card?.name).toBe('Zoroark ex');
   });
 });

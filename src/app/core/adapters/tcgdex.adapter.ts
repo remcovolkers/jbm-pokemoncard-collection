@@ -1,5 +1,11 @@
 import { Injectable, inject } from '@angular/core';
-import { buildTcgdexAssetUrl, parseCardIdInput } from '../domain/card-id.utils';
+import {
+  buildTcgdexAssetUrl,
+  getDisplaySetCode,
+  hasKnownSetCode,
+  parseCardIdInput,
+  registerDynamicSetCodes,
+} from '../domain/card-id.utils';
 import { roundCurrency, roundOneDecimal } from '../domain/card-math.utils';
 import {
   CatalogCard,
@@ -13,19 +19,28 @@ import { LocalCacheAdapter } from './local-cache.adapter';
 interface TcgdexSetBriefResponse {
   id: string;
   name: string;
+  tcgOnline?: string;
+  abbreviation?: { official?: string };
+  serie?: { id?: string; name?: string };
   logo?: string;
   symbol?: string;
   cardCount?: { official?: number; total?: number };
 }
 
 interface TcgdexSetDetailResponse extends TcgdexSetBriefResponse {
-  serie?: { id?: string; name?: string };
   cards?: TcgdexBriefResponse[];
 }
 
-const SETS_CACHE_KEY = 'pokebinder_tcgdex_sets_v1';
+interface StaticSetsCatalogFile {
+  generatedAt?: string;
+  totalPhysicalSets?: number;
+  sets?: CatalogSetSummary[];
+}
+
+const SETS_CACHE_KEY = 'pokebinder_tcgdex_sets_v2';
 const SET_DETAIL_CACHE_PREFIX = 'pokebinder_tcgdex_set_';
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 uur cache -> voorkomt API throttling!
+const DIGITAL_POCKET_ID_RE = /^(?:[AB]\d+[a-z]?|P-A)$/i;
 
 interface TcgdexCardResponse {
   id: string;
@@ -92,6 +107,7 @@ export class TcgdexAdapter implements CardCatalogPort {
   private readonly memoryCards = new Map<string, CatalogCard>();
   private readonly memorySetDetails = new Map<string, CatalogSetDetail>();
   private memoryAllSets: CatalogSetSummary[] | null = null;
+  private staticCatalogAttempted = false;
   private readonly artworkMap: Record<string, string>;
 
   constructor() {
@@ -99,8 +115,15 @@ export class TcgdexAdapter implements CardCatalogPort {
   }
 
   async lookupByCardId(rawInput: string): Promise<CatalogCard | null> {
-    const parsed = parseCardIdInput(rawInput);
+    let parsed = parseCardIdInput(rawInput);
     if (!parsed) return null;
+
+    // Als de ingetypte setcode (bijv. een splinternieuwe set) nog niet bekend is, laad 1x de gebundelde setcatalogus
+    if (!hasKnownSetCode(parsed.inputSetCode) && !this.staticCatalogAttempted) {
+      await this.tryLoadBundledSetsCatalog();
+      parsed = parseCardIdInput(rawInput);
+      if (!parsed) return null;
+    }
 
     for (const candidateId of parsed.candidateIds) {
       const card = await this.getCardByExactId(candidateId);
@@ -178,15 +201,24 @@ export class TcgdexAdapter implements CardCatalogPort {
   }
 
   /**
-   * Laadt alle ~170 officiële TCG-sets in 1 enkele request (~25 KB) met 24-uurs cache.
+   * Laadt alle fysieke Pokémon TCG-sets (zonder digitale TCG Pocket-sets) met geprinte kaartcodes (DLR, PBL, 30C, MEW...).
+   * Gebruikt eerst de lokaal gebundelde sets-catalog.json (0 externe calls) en valt bij nood terug op TCGdex REST.
    */
   async listAllSets(): Promise<CatalogSetSummary[]> {
     if (this.memoryAllSets) return this.memoryAllSets;
 
     const cached = this.readTtlCache<CatalogSetSummary[]>(SETS_CACHE_KEY);
     if (cached && cached.length > 0) {
+      registerDynamicSetCodes(cached);
       this.memoryAllSets = cached;
       return cached;
+    }
+
+    const bundled = await this.tryLoadBundledSetsCatalog();
+    if (bundled && bundled.length > 0) {
+      this.memoryAllSets = bundled;
+      this.writeTtlCache(SETS_CACHE_KEY, bundled);
+      return bundled;
     }
 
     try {
@@ -196,22 +228,57 @@ export class TcgdexAdapter implements CardCatalogPort {
       if (!Array.isArray(raw)) return [];
 
       const mapped: CatalogSetSummary[] = raw
-        .filter((s) => Boolean(s.id && s.name))
+        .filter(
+          (s) =>
+            Boolean(s.id && s.name) &&
+            s.serie?.id !== 'tcgp' &&
+            !DIGITAL_POCKET_ID_RE.test(s.id)
+        )
         .reverse()
         .map((s) => ({
           id: s.id,
+          code: (
+            s.abbreviation?.official ||
+            s.tcgOnline ||
+            getDisplaySetCode(s.id, s.name)
+          ).toUpperCase(),
           name: s.name,
+          series: s.serie?.name,
+          seriesId: s.serie?.id,
           logoUrl: s.logo ? `${s.logo}.webp` : undefined,
           symbolUrl: s.symbol ? `${s.symbol}.webp` : undefined,
           officialCount: s.cardCount?.official ?? 0,
           totalCount: s.cardCount?.total ?? s.cardCount?.official ?? 0,
         }));
 
+      registerDynamicSetCodes(mapped);
       this.memoryAllSets = mapped;
       this.writeTtlCache(SETS_CACHE_KEY, mapped);
       return mapped;
     } catch {
       return [];
+    }
+  }
+
+  private async tryLoadBundledSetsCatalog(): Promise<CatalogSetSummary[] | null> {
+    this.staticCatalogAttempted = true;
+    try {
+      const res = await fetch('sets-catalog.json');
+      if (!res.ok) return null;
+      const json = (await res.json()) as StaticSetsCatalogFile;
+      if (!json || !Array.isArray(json.sets) || json.sets.length === 0) return null;
+
+      const physical = json.sets
+        .filter((s) => Boolean(s?.id && s?.name) && s.seriesId !== 'tcgp')
+        .map((s) => ({
+          ...s,
+          code: (s.code || getDisplaySetCode(s.id, s.name)).toUpperCase(),
+        }));
+
+      registerDynamicSetCodes(physical);
+      return physical;
+    } catch {
+      return null;
     }
   }
 
@@ -229,6 +296,7 @@ export class TcgdexAdapter implements CardCatalogPort {
     const cacheKey = `${SET_DETAIL_CACHE_PREFIX}${cleanId.toLowerCase()}`;
     const stored = this.readTtlCache<CatalogSetDetail>(cacheKey);
     if (stored) {
+      if (stored.code) registerDynamicSetCodes([{ id: stored.id, code: stored.code }]);
       this.memorySetDetails.set(cleanId.toLowerCase(), stored);
       return stored;
     }
@@ -238,6 +306,13 @@ export class TcgdexAdapter implements CardCatalogPort {
       if (!response.ok) return null;
       const raw = (await response.json()) as TcgdexSetDetailResponse;
       if (!raw || !raw.id) return null;
+
+      const resolvedCode = (
+        raw.abbreviation?.official ||
+        raw.tcgOnline ||
+        getDisplaySetCode(raw.id, raw.name)
+      ).toUpperCase();
+      registerDynamicSetCodes([{ id: raw.id, code: resolvedCode }]);
 
       const cards: CatalogCardSummary[] = (raw.cards ?? []).map((item) => ({
         id: item.id,
@@ -249,7 +324,10 @@ export class TcgdexAdapter implements CardCatalogPort {
 
       const detail: CatalogSetDetail = {
         id: raw.id,
+        code: resolvedCode,
         name: raw.name,
+        series: raw.serie?.name ?? '',
+        seriesId: raw.serie?.id ?? '',
         seriesName: raw.serie?.name ?? '',
         logoUrl: raw.logo ? `${raw.logo}.webp` : undefined,
         symbolUrl: raw.symbol ? `${raw.symbol}.webp` : undefined,

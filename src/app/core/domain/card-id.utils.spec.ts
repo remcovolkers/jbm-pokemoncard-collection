@@ -1,16 +1,29 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import {
   SET_CODE_ALIASES,
   buildCardmarketSearchUrl,
   buildTcgdexAssetUrl,
   getDisplaySetCode,
+  hasKnownSetCode,
   inferTcgdexSeriesFolder,
   parseCardIdInput,
+  registerDynamicSetCodes,
+  resetDynamicSetCodesForTests,
 } from './card-id.utils';
 
 describe('card-id.utils', () => {
+  afterEach(() => {
+    resetDynamicSetCodesForTests();
+  });
+
   describe('parseCardIdInput', () => {
-    it('vertaalt bekende setcode-aliassen naar officiële TCGdex set-IDs', () => {
+    it('vertaalt bekende setcode-aliassen (incl. Mega Evolution & SV10.5) naar officiële TCGdex set-IDs', () => {
+      expect(parseCardIdInput('DLR 11')?.normalizedId).toBe('me06-011');
+      expect(parseCardIdInput('DLR 11')?.candidateIds).toEqual(['me06-011', 'me06-11']);
+      expect(parseCardIdInput('PBL 5')?.normalizedId).toBe('me05-005');
+      expect(parseCardIdInput('MEG 1/132')?.normalizedId).toBe('me01-001');
+      expect(parseCardIdInput('WHT 12')?.normalizedId).toBe('sv10.5w-012');
+      expect(parseCardIdInput('BLK 7')?.normalizedId).toBe('sv10.5b-007');
       expect(parseCardIdInput('MEW 181')?.normalizedId).toBe('sv03.5-181');
       expect(parseCardIdInput('151 199')?.normalizedId).toBe('sv03.5-199');
       expect(parseCardIdInput('OBF 199/197')?.normalizedId).toBe('sv03-199');
@@ -21,6 +34,25 @@ describe('card-id.utils', () => {
       expect(parseCardIdInput('LOR 186/196')?.normalizedId).toBe('swsh11-186');
       expect(parseCardIdInput('BS 44')?.normalizedId).toBe('base1-44');
       expect(parseCardIdInput('EXP 13/165')?.normalizedId).toBe('ecard1-13');
+    });
+
+    it('ondersteunt gedeelde kaartcodes zoals 30C (30th Celebration én 30th Classic Collection) en koppelteken-IDs', () => {
+      const thirty = parseCardIdInput('30C 15');
+      expect(thirty?.normalizedId).toBe('30th-015');
+      expect(thirty?.candidateIds).toEqual(['30th-015', '30th-15', '30th-c-015', '30th-c-15']);
+
+      const directClassic = parseCardIdInput('30th-c-015');
+      expect(directClassic?.tcgdexSetId).toBe('30th-c');
+      expect(directClassic?.normalizedId).toBe('30th-c-015');
+    });
+
+    it('ondersteunt dynamisch geregistreerde toekomstige setcodes uit sets-catalog.json', () => {
+      expect(hasKnownSetCode('FUT')).toBe(false);
+      registerDynamicSetCodes([{ id: 'me07', code: 'FUT' }]);
+      expect(hasKnownSetCode('FUT')).toBe(true);
+      expect(parseCardIdInput('FUT 9')?.normalizedId).toBe('me07-009');
+      expect(getDisplaySetCode('me07-009')).toBe('FUT');
+      expect(getDisplaySetCode('me07')).toBe('FUT');
     });
 
     it('accepteert verschillende scheidingstekens (#, :, spatie, koppelteken) en case-insensitivity', () => {
@@ -76,8 +108,11 @@ describe('card-id.utils', () => {
   });
 
   describe('inferTcgdexSeriesFolder & buildTcgdexAssetUrl', () => {
-    it('leidt TCGdex serie-mappen af voor alle eras', () => {
+    it('leidt TCGdex serie-mappen af voor alle eras (incl. Mega Evolution & 30th)', () => {
       expect(inferTcgdexSeriesFolder('sv03.5')).toBe('sv');
+      expect(inferTcgdexSeriesFolder('me06')).toBe('me');
+      expect(inferTcgdexSeriesFolder('30th')).toBe('me');
+      expect(inferTcgdexSeriesFolder('30th-c')).toBe('me');
       expect(inferTcgdexSeriesFolder('swsh7')).toBe('swsh');
       expect(inferTcgdexSeriesFolder('cel25')).toBe('swsh');
       expect(inferTcgdexSeriesFolder('sm12')).toBe('sm');
@@ -108,13 +143,25 @@ describe('card-id.utils', () => {
       expect(buildTcgdexAssetUrl('base1-44', 'low')).toBe(
         'https://assets.tcgdex.net/en/base/base1/44/low.webp'
       );
+      expect(buildTcgdexAssetUrl('me06-011', 'high')).toBe(
+        'https://assets.tcgdex.net/en/me/me06/011/high.webp'
+      );
+      expect(buildTcgdexAssetUrl('30th-c-015', 'high')).toBe(
+        'https://assets.tcgdex.net/en/me/30th-c/015/high.webp'
+      );
       expect(buildTcgdexAssetUrl('')).toBe('');
       expect(buildTcgdexAssetUrl('invalidid')).toBe('');
     });
   });
 
   describe('getDisplaySetCode & buildCardmarketSearchUrl', () => {
-    it('geeft korte setcode terug of fallback op basis van setnaam', () => {
+    it('geeft herkenbare geprinte kaartcode terug of fallback op basis van setnaam', () => {
+      expect(getDisplaySetCode('me06-011')).toBe('DLR');
+      expect(getDisplaySetCode('me05-005')).toBe('PBL');
+      expect(getDisplaySetCode('30th-015')).toBe('30C');
+      expect(getDisplaySetCode('30th-c-015')).toBe('30C');
+      expect(getDisplaySetCode('me06')).toBe('DLR');
+      expect(getDisplaySetCode('sv10.5b')).toBe('BLK');
       expect(getDisplaySetCode('sv03.5-199')).toBe('MEW');
       expect(getDisplaySetCode('swsh7-215')).toBe('EVS');
       expect(getDisplaySetCode('base1-44')).toBe('BS');

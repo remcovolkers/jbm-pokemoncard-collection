@@ -34,6 +34,9 @@ jobs:
       - name: Run unit, integration & Apps Script tests
         run: npm run test:all
 
+      - name: Refresh physical Pokémon TCG sets catalog
+        run: node scripts/sync-sets-catalog.mjs || echo "Using committed public/sets-catalog.json fallback"
+
       - name: Stamp release version for PWA & OTA bundle
         env:
           RELEASE_NOTES: ${{ github.event.head_commit.message }}

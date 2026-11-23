@@ -1,7 +1,7 @@
 import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { parseCardIdInput } from '../../core/domain/card-id.utils';
+import { getDisplaySetCode, parseCardIdInput } from '../../core/domain/card-id.utils';
 import { formatDexNumber, formatEur, formatPercent } from '../../core/domain/card-math.utils';
 import {
   CatalogCard,
@@ -30,6 +30,7 @@ export class QuickAddComponent implements OnDestroy {
   readonly formatEur = formatEur;
   readonly formatPercent = formatPercent;
   readonly formatDexNumber = formatDexNumber;
+  readonly getDisplaySetCode = getDisplaySetCode;
 
   readonly inputMode = signal<'code' | 'name' | 'sets'>('code');
   readonly codeQuery = signal('');
@@ -56,7 +57,11 @@ export class QuickAddComponent implements OnDestroy {
     const list = this.allSets();
     if (!q) return list;
     return list.filter(
-      (s) => s.name.toLowerCase().includes(q) || s.id.toLowerCase().includes(q)
+      (s) =>
+        (s.code ?? '').toLowerCase().includes(q) ||
+        s.name.toLowerCase().includes(q) ||
+        (s.series ?? '').toLowerCase().includes(q) ||
+        s.id.toLowerCase().includes(q)
     );
   });
 
@@ -136,7 +141,7 @@ export class QuickAddComponent implements OnDestroy {
     return null;
   });
 
-  readonly quickExamples = ['MEW 181', 'MEW 199', 'OBF 125', 'BS 44', 'EVS 215'];
+  readonly quickExamples = ['DLR 11', 'MEW 181', 'OBF 125', 'BS 44', 'EVS 215'];
 
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -175,7 +180,7 @@ export class QuickAddComponent implements OnDestroy {
   async lookupByCode(rawInput: string): Promise<void> {
     const parsed = parseCardIdInput(rawInput);
     if (!parsed) {
-      this.lookupError.set('Gebruik een setcode + nummer, bijv. MEW 181, OBF 199/197 of BS 44.');
+      this.lookupError.set('Gebruik een kaartcode + nummer, bijv. DLR 11, MEW 181, OBF 199/197 of BS 44.');
       return;
     }
 
@@ -232,7 +237,8 @@ export class QuickAddComponent implements OnDestroy {
       const full = await this.catalog.getCardByExactId(item.id);
       if (full) {
         this.applyCatalogCard(full);
-        this.codeQuery.set(full.id);
+        const humanCode = getDisplaySetCode(full.id, full.setName);
+        this.codeQuery.set(`${humanCode} ${full.localId}`);
       }
     } finally {
       this.isSearching.set(false);

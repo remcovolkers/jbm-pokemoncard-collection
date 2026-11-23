@@ -101,7 +101,7 @@
             id="qa-code-input"
             type="text"
             class="pb-input code-input-wrap__field mono"
-            placeholder="Typ bijv. MEW 181, OBF 199/197, BS 44"
+            placeholder="Typ bijv. DLR 11, MEW 181, OBF 199/197, BS 44"
             [ngModel]="codeQuery()"
             (ngModelChange)="onCodeInputChange($event)"
             (keydown.enter)="lookupByCode(codeQuery())"
@@ -161,7 +161,7 @@
               >
                 <pb-card-artwork [cardId]="item.id" [src]="item.imageUrl" [alt]="item.name" [compact]="true" />
                 <span class="result-tile__name">{{ item.name }}</span>
-                <span class="mono result-tile__id">{{ item.id }}</span>
+                <span class="mono result-tile__id">{{ getDisplaySetCode(item.id) }} #{{ item.localId }}</span>
               </button>
             }
           </div>
@@ -183,7 +183,7 @@
           <input
             type="text"
             class="pb-input"
-            placeholder="Filter sets (bijv. 151, Base, Prismatic, Surging)…"
+            placeholder="Filter op kaartcode, set of serie (bijv. DLR, 151, PBL, Mega)…"
             [ngModel]="setSearchQuery()"
             (ngModelChange)="setSearchQuery.set($event)"
             aria-label="Filter TCG sets"
@@ -198,7 +198,7 @@
             <option value="">— Kies een set ({{ filteredCatalogSets().length }}) —</option>
             @for (s of filteredCatalogSets(); track s.id) {
               <option [value]="s.id">
-                {{ s.name }} ({{ s.id }} · {{ s.totalCount || s.officialCount }} kaarten)
+                {{ s.code || getDisplaySetCode(s.id, s.name) }} · {{ s.name }} ({{ s.totalCount || s.officialCount }} kaarten)
               </option>
             }
           </select>
@@ -207,9 +207,9 @@
         @if (activeSetDetail(); as setDetail) {
           <div class="sets-browser__header">
             <div class="sets-browser__meta">
-              <strong>{{ setDetail.name }}</strong>
+              <strong>{{ setDetail.code || getDisplaySetCode(setDetail.id, setDetail.name) }} · {{ setDetail.name }}</strong>
               <span class="mono">
-                {{ setDetail.seriesName || 'Pokémon TCG' }} · {{ setDetail.cards.length }} kaarten
+                {{ setDetail.seriesName || 'Pokémon TCG' }} · {{ setDetail.cards.length }} kaarten · API: {{ setDetail.id }}
               </span>
             </div>
             <input
@@ -237,7 +237,9 @@
                   }
                 </pb-card-artwork>
                 <span class="result-tile__name">{{ item.name }}</span>
-                <span class="mono result-tile__id">#{{ item.localId }} · {{ item.id }}</span>
+                <span class="mono result-tile__id">
+                  {{ setDetail.code || getDisplaySetCode(item.id) }} #{{ item.localId }}
+                </span>
               </button>
             }
           </div>
@@ -297,7 +299,7 @@
 
             <h2 class="preview-slab__name">{{ card.name }}</h2>
             <p class="mono preview-slab__set">
-              {{ card.setName }} ({{ card.setId }}) · #{{ card.cardNumber }}
+              {{ card.setName }} ({{ getDisplaySetCode(card.id, card.setName) }}) · #{{ card.cardNumber }}
             </p>
 
             <div class="price-box">
@@ -373,7 +375,7 @@
           <div>
             <strong>Deze kaart zit al in je collectie!</strong>
             <p class="mono">
-              {{ dup.name }} ({{ dup.cardId }}) · {{ dup.quantity }}× · {{ dup.variant }} · {{ dup.storageLocation }}
+              {{ dup.name }} ({{ getDisplaySetCode(dup.cardId, dup.setName) }} #{{ dup.cardNumber }}) · {{ dup.quantity }}× · {{ dup.variant }} · {{ dup.storageLocation }}
             </p>
           </div>
         </div>

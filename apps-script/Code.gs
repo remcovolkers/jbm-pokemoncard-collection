@@ -31,8 +31,35 @@ var DEX_START_ROW = 8;
 var DEX_COUNT = 1025; // #0001 t/m #1025
 
 var TCGDEX_BASE_URL = 'https://api.tcgdex.net/v2/en';
+var TCGDEX_GRAPHQL_URL = 'https://api.tcgdex.net/v2/graphql';
 
+// Mapping van geprinte kaartcodes (linksonder op fysieke kaarten) naar TCGdex API-codes
 var SET_CODE_ALIASES = {
+  // Mega Evolution & 30th Anniversary
+  MEG: 'me01',
+  ME1: 'me01',
+  ME01: 'me01',
+  PFL: 'me02',
+  ME2: 'me02',
+  ME02: 'me02',
+  ASC: 'me02.5',
+  'ME02.5': 'me02.5',
+  POR: 'me03',
+  ME3: 'me03',
+  ME03: 'me03',
+  CRI: 'me04',
+  ME4: 'me04',
+  ME04: 'me04',
+  PBL: 'me05',
+  ME5: 'me05',
+  ME05: 'me05',
+  DLR: 'me06',
+  ME6: 'me06',
+  ME06: 'me06',
+  '30C': '30th',
+  '30CC': '30th-c',
+  MEP: 'mep',
+  MEE: 'mee',
   // Scarlet & Violet
   SVI: 'sv01',
   SV1: 'sv01',
@@ -58,6 +85,9 @@ var SET_CODE_ALIASES = {
   JTG: 'sv09',
   SV9: 'sv09',
   DRI: 'sv10',
+  SV10: 'sv10',
+  WHT: 'sv10.5w',
+  BLK: 'sv10.5b',
   SVP: 'svp',
   // Sword & Shield
   SSH: 'swsh1',
@@ -102,6 +132,7 @@ var SET_CODE_ALIASES = {
   FO: 'base3',
   BS2: 'base4',
   TR: 'base5',
+  PR: 'basep',
   G1: 'gym1',
   G2: 'gym2',
   N1: 'neo1',
@@ -113,6 +144,93 @@ var SET_CODE_ALIASES = {
   AQ: 'ecard2',
   SK: 'ecard3',
   DX: 'ex8'
+};
+
+// Kaartcodes die op meerdere sets voorkomen (bijv. 30C voor 30th Celebration én 30th Classic Collection)
+var MULTI_SET_ALIASES = {
+  '30C': ['30th', '30th-c']
+};
+
+// Reverse lookup van TCGdex API-code -> officiële geprinte kaartcode op de fysieke kaart
+var OFFICIAL_CODE_BY_SET_ID = {
+  me01: 'MEG',
+  me02: 'PFL',
+  'me02.5': 'ASC',
+  me03: 'POR',
+  me04: 'CRI',
+  me05: 'PBL',
+  me06: 'DLR',
+  '30th': '30C',
+  '30th-c': '30C',
+  mep: 'MEP',
+  mee: 'MEE',
+  sv01: 'SVI',
+  sv02: 'PAL',
+  sv03: 'OBF',
+  'sv03.5': 'MEW',
+  sv04: 'PAR',
+  'sv04.5': 'PAF',
+  sv05: 'TEF',
+  sv06: 'TWM',
+  'sv06.5': 'SFA',
+  sv07: 'SCR',
+  sv08: 'SSP',
+  'sv08.5': 'PRE',
+  sv09: 'JTG',
+  sv10: 'DRI',
+  'sv10.5w': 'WHT',
+  'sv10.5b': 'BLK',
+  svp: 'SVP',
+  swsh1: 'SSH',
+  swsh2: 'RCL',
+  swsh3: 'DAA',
+  'swsh3.5': 'CPA',
+  swsh4: 'VIV',
+  'swsh4.5': 'SHF',
+  swsh5: 'BST',
+  swsh6: 'CRE',
+  swsh7: 'EVS',
+  cel25: 'CEL',
+  swsh8: 'FST',
+  swsh9: 'BRS',
+  swsh10: 'ASR',
+  'swsh10.5': 'PGO',
+  swsh11: 'LOR',
+  swsh12: 'SIT',
+  'swsh12.5': 'CRZ',
+  swshp: 'SWSHP',
+  sm1: 'SUM',
+  sm2: 'GRI',
+  sm3: 'BUS',
+  'sm3.5': 'SLG',
+  sm4: 'CIN',
+  sm5: 'UPR',
+  sm6: 'FLI',
+  sm7: 'CES',
+  'sm7.5': 'DRM',
+  sm8: 'LOT',
+  sm9: 'TEU',
+  det1: 'DET',
+  sm10: 'UNB',
+  sm11: 'UNM',
+  'sm11.5': 'HIF',
+  sm12: 'CEC',
+  base1: 'BS',
+  base2: 'JU',
+  base3: 'FO',
+  base4: 'BS2',
+  base5: 'TR',
+  basep: 'PR',
+  gym1: 'G1',
+  gym2: 'G2',
+  neo1: 'N1',
+  neo2: 'N2',
+  neo3: 'N3',
+  neo4: 'N4',
+  ecard1: 'EXP',
+  ecard2: 'AQ',
+  ecard3: 'SK',
+  ex8: 'DX'
 };
 
 // ============================================================================
@@ -249,34 +367,124 @@ function refreshAllPricesFromMenu() {
 }
 
 /**
- * Menuknop: Maakt/ververst het overzichtstabblad "Setcodes" met alle officiële TCGdex set-ID's.
+ * Menuknop: Maakt/ververst het overzichtstabblad "Setcodes" met zowel de herkenbare
+ * "Kaartcode (Op kaart)" (bijv. DLR, PBL, 30C, MEW) als de technische "API-code (TCGdex)" (me06, sv03.5).
+ * Filtert digitale Pokémon TCG Pocket-sets automatisch weg en maakt eigen aanvullingen direct bruikbaar bij invoer!
  */
 function syncSetCodesSheet() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getSheetByName(SHEET_NAMES.SETCODES);
   if (!sheet) sheet = ss.insertSheet(SHEET_NAMES.SETCODES);
 
-  var res = UrlFetchApp.fetch(TCGDEX_BASE_URL + '/sets', { muteHttpExceptions: true });
-  if (res.getResponseCode() !== 200) {
-    SpreadsheetApp.getUi().alert('Kon sets niet ophalen van TCGdex.');
-    return;
+  var rawSets = null;
+  var gqlQuery = '{ sets { id name tcgOnline serie { id name } cardCount { official total } } }';
+  try {
+    var gqlRes = UrlFetchApp.fetch(TCGDEX_GRAPHQL_URL, {
+      method: 'post',
+      contentType: 'application/json',
+      payload: JSON.stringify({ query: gqlQuery }),
+      muteHttpExceptions: true
+    });
+    if (gqlRes.getResponseCode() === 200) {
+      var gqlJson = JSON.parse(gqlRes.getContentText());
+      if (gqlJson && gqlJson.data && gqlJson.data.sets && gqlJson.data.sets.length > 0) {
+        rawSets = gqlJson.data.sets;
+      }
+    }
+  } catch (e) {
+    // Val terug op REST endpoint
   }
 
-  var sets = JSON.parse(res.getContentText()).reverse();
-  var rows = [['TCGdex Set-ID', 'Setnaam', 'Officieel aantal', 'Totaal (incl. secrets)', 'Voorbeeld Kaart-ID']];
+  if (!rawSets) {
+    var res = UrlFetchApp.fetch(TCGDEX_BASE_URL + '/sets', { muteHttpExceptions: true });
+    if (res.getResponseCode() !== 200) {
+      if (SpreadsheetApp.getUi) {
+        SpreadsheetApp.getUi().alert('Kon sets niet ophalen van TCGdex.');
+      }
+      return;
+    }
+    rawSets = JSON.parse(res.getContentText());
+  }
 
-  for (var i = 0; i < sets.length; i++) {
-    var s = sets[i];
-    var official = s.cardCount ? s.cardCount.official : '';
-    var total = s.cardCount ? s.cardCount.total : '';
-    rows.push([s.id, s.name, official, total, s.id + '-001']);
+  var pocketIdRe = /^(?:[AB]\d+[a-z]?|P-A)$/i;
+  var physicalSets = [];
+  var skippedPocket = 0;
+
+  for (var p = 0; p < rawSets.length; p++) {
+    var item = rawSets[p];
+    if (!item || !item.id || !item.name) continue;
+    var isPocket = (item.serie && item.serie.id === 'tcgp') || pocketIdRe.test(String(item.id));
+    if (isPocket) {
+      skippedPocket++;
+      continue;
+    }
+    physicalSets.push(item);
+  }
+
+  // Nieuwste releases bovenaan
+  physicalSets.reverse();
+
+  var rows = [[
+    'Kaartcode (Op kaart)',
+    'Setnaam',
+    'Serie / Era',
+    'Officieel',
+    'Totaal (incl. secrets)',
+    'Voorbeeld invoer',
+    'API-code (TCGdex)'
+  ]];
+
+  for (var i = 0; i < physicalSets.length; i++) {
+    var s = physicalSets[i];
+    var setId = String(s.id).trim();
+    var setIdLower = setId.toLowerCase();
+    var kaartCode = OFFICIAL_CODE_BY_SET_ID[setIdLower] || (s.tcgOnline ? String(s.tcgOnline).trim().toUpperCase() : '');
+
+    // Voor splinternieuwe moderne sets die nog niet in OFFICIAL_CODE_BY_SET_ID staan: haal abbreviation.official op
+    if (!kaartCode && (/^(?:me|sv)\d|^30th/i.test(setIdLower) || (s.serie && (s.serie.id === 'me' || s.serie.id === 'sv')))) {
+      try {
+        var detailRes = UrlFetchApp.fetch(TCGDEX_BASE_URL + '/sets/' + encodeURIComponent(setId), {
+          muteHttpExceptions: true
+        });
+        if (detailRes.getResponseCode() === 200) {
+          var detail = JSON.parse(detailRes.getContentText());
+          if (detail && detail.abbreviation && detail.abbreviation.official) {
+            kaartCode = String(detail.abbreviation.official).trim().toUpperCase();
+          } else if (detail && detail.tcgOnline) {
+            kaartCode = String(detail.tcgOnline).trim().toUpperCase();
+          }
+        }
+      } catch (e) {
+        // Gebruik fallback hieronder
+      }
+    }
+
+    if (!kaartCode) {
+      kaartCode = setId.toUpperCase();
+    }
+
+    var serieName = (s.serie && s.serie.name) ? String(s.serie.name).trim() : '';
+    var official = s.cardCount && s.cardCount.official !== undefined ? s.cardCount.official : '';
+    var total = s.cardCount && s.cardCount.total !== undefined ? s.cardCount.total : '';
+    var prefersPadded = /^(?:sv|me)\d|^30th/i.test(setIdLower);
+    var exampleInput = kaartCode + ' ' + (prefersPadded ? '001' : '1');
+
+    rows.push([kaartCode, s.name, serieName, official, total, exampleInput, setId]);
   }
 
   if (sheet.clearContents) sheet.clearContents();
   sheet.getRange(1, 1, rows.length, rows[0].length).setValues(rows);
   if (sheet.setFrozenRows) sheet.setFrozenRows(1);
-  if (sheet.autoResizeColumns) sheet.autoResizeColumns(1, 5);
-  SpreadsheetApp.getUi().alert(sets.length + ' sets geladen op het tabblad "' + SHEET_NAMES.SETCODES + '".');
+  if (sheet.autoResizeColumns) sheet.autoResizeColumns(1, rows[0].length);
+
+  if (SpreadsheetApp.getUi) {
+    var msg = physicalSets.length + ' fysieke Pokémon TCG-sets geladen op het tabblad "' + SHEET_NAMES.SETCODES + '".';
+    if (skippedPocket > 0) {
+      msg += '\n(' + skippedPocket + ' digitale TCG Pocket-sets automatisch overgeslagen.)';
+    }
+    msg += '\n\nJe kunt in Collectie gewoon de "Kaartcode (Op kaart)" intypen (bijv. DLR 011 of MEW 181)!';
+    SpreadsheetApp.getUi().alert(msg);
+  }
 }
 
 /**
@@ -779,12 +987,13 @@ function handleAddCard_(ss, payload) {
   var sheet = ss.getSheetByName(SHEET_NAMES.COLLECTION);
   if (!sheet) throw new Error('Tabblad "' + SHEET_NAMES.COLLECTION + '" niet gevonden.');
 
-  var cardId = normalizeCardId_(payload.cardId || '');
+  var rawCardInput = String(payload.cardId || '').trim();
+  var cardId = normalizeCardId_(rawCardInput, ss);
   var cardData = Object.assign({}, payload, { cardId: cardId });
 
-  // Vul ontbrekende kaartmetadata aan via TCGdex
-  if (cardId && (!cardData.name || !cardData.setName || !cardData.cardNumber)) {
-    var fetched = fetchTcgdexCard_(cardId);
+  // Vul ontbrekende kaartmetadata aan via TCGdex (gebruik ruwe invoer zodat multi-set codes zoals 30C alle sets proberen)
+  if (rawCardInput && (!cardData.name || !cardData.setName || !cardData.cardNumber)) {
+    var fetched = fetchTcgdexCard_(rawCardInput, ss);
     if (fetched) {
       cardData.cardId = fetched.id || cardData.cardId;
       cardData.name = cardData.name || fetched.name;
@@ -1342,8 +1551,8 @@ function doesCardMatchPokemon_(cardName, pokemonName) {
  * of formule-kolommen (R:T) te overschrijven.
  */
 function fetchAndPopulateRow_(ss, sheet, row, rawInput, priceOnly) {
-  var normalized = normalizeCardId_(rawInput);
-  var card = fetchTcgdexCard_(normalized);
+  var normalized = normalizeCardId_(rawInput, ss);
+  var card = fetchTcgdexCard_(rawInput, ss);
   if (!card) return null;
 
   var existingVariant = String(sheet.getRange(row, 8).getValue() || '');
@@ -1417,7 +1626,7 @@ function refreshCollectionPrices_(ss) {
     var rawId = String(ids[i][0] || '').trim();
     if (!rawId) continue;
     total++;
-    var card = fetchTcgdexCard_(normalizeCardId_(rawId));
+    var card = fetchTcgdexCard_(rawId, ss);
     if (card) {
       var eur = extractCardmarketEur_(card, String(variants[i][0] || ''));
       if (eur > 0) {
@@ -1433,33 +1642,128 @@ function refreshCollectionPrices_(ss) {
   return { updated: updated, total: total };
 }
 
-function normalizeCardId_(rawInput) {
-  var cleaned = String(rawInput || '').trim();
-  if (!cleaned) return '';
+/**
+ * Leest dynamische Kaartcode -> API-code koppelingen uit het tabblad "Setcodes" (indien aanwezig),
+ * zodat nieuw uitgebrachte of handmatig toegevoegde sets direct werken zonder script-update.
+ */
+function readDynamicSetCodesFromSheet_(ss) {
+  var map = {};
+  if (!ss || !ss.getSheetByName) return map;
+  var sheet = ss.getSheetByName(SHEET_NAMES.SETCODES);
+  if (!sheet) return map;
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return map;
 
-  // Match patronen zoals "MEW 181", "OBF 199/197", "sv03.5-181", "BS 44"
-  var match = cleaned.match(/^([a-z0-9.]+)\s*[-\s#]\s*0*([0-9a-z]+)(?:\/\d+)?$/i);
-  if (!match) return cleaned.toLowerCase();
+  var headerRow = sheet.getRange(1, 1, 1, 7).getValues()[0];
+  var codeCol = -1;
+  var apiCol = -1;
+  for (var c = 0; c < headerRow.length; c++) {
+    var h = String(headerRow[c] || '').trim().toLowerCase();
+    if (!h) continue;
+    if (codeCol === -1 && (h.indexOf('kaartcode') !== -1 || h.indexOf('op kaart') !== -1)) {
+      codeCol = c;
+    }
+    if (apiCol === -1 && (h.indexOf('api-code') !== -1 || h.indexOf('tcgdex') !== -1)) {
+      apiCol = c;
+    }
+  }
 
-  var rawSet = match[1].toUpperCase();
-  var mappedSet = SET_CODE_ALIASES[rawSet] || rawSet.toLowerCase();
-  var rawNum = match[2];
+  // Alleen bij een tabblad met zowel Kaartcode als aparte API-code kolom
+  if (codeCol === -1 || apiCol === -1 || codeCol === apiCol) return map;
 
-  // Voor Scarlet & Violet sets gebruikt TCGdex vaak 3-cijferige voorloopnullen (bijv. sv03.5-003)
-  return mappedSet + '-' + rawNum;
+  var numCols = Math.max(codeCol, apiCol) + 1;
+  var rows = sheet.getRange(2, 1, lastRow - 1, numCols).getValues();
+  for (var r = 0; r < rows.length; r++) {
+    var kaartCode = String(rows[r][codeCol] || '').trim().toUpperCase();
+    var apiId = String(rows[r][apiCol] || '').trim().toLowerCase();
+    if (!kaartCode || !apiId) continue;
+    if (!map[kaartCode]) map[kaartCode] = [];
+    if (map[kaartCode].indexOf(apiId) === -1) {
+      map[kaartCode].push(apiId);
+    }
+  }
+  return map;
 }
 
-function fetchTcgdexCard_(cardId) {
-  if (!cardId) return null;
-  var candidates = [cardId];
-  var parts = cardId.split('-');
-  if (parts.length === 2 && /^\d+$/.test(parts[1])) {
-    var numInt = parseInt(parts[1], 10);
-    var unpadded = parts[0] + '-' + String(numInt);
-    var padded3 = parts[0] + '-' + ('000' + numInt).slice(-3);
-    if (candidates.indexOf(padded3) === -1) candidates.push(padded3);
-    if (candidates.indexOf(unpadded) === -1) candidates.push(unpadded);
+function resolveCandidateSetIds_(rawSetUpper, ss) {
+  var out = [];
+  var pushUnique = function (id) {
+    var norm = String(id || '').trim().toLowerCase();
+    if (norm && out.indexOf(norm) === -1) out.push(norm);
+  };
+
+  if (MULTI_SET_ALIASES[rawSetUpper]) {
+    for (var m = 0; m < MULTI_SET_ALIASES[rawSetUpper].length; m++) {
+      pushUnique(MULTI_SET_ALIASES[rawSetUpper][m]);
+    }
   }
+  if (SET_CODE_ALIASES[rawSetUpper]) {
+    pushUnique(SET_CODE_ALIASES[rawSetUpper]);
+  }
+
+  // Controleer dynamische koppelingen uit het Setcodes-tabblad (overslaan als het al een bekende API-ID zoals me06/sv03.5 is)
+  var rawLower = rawSetUpper.toLowerCase();
+  if (!OFFICIAL_CODE_BY_SET_ID[rawLower] && ss) {
+    var dynamicMap = readDynamicSetCodesFromSheet_(ss);
+    if (dynamicMap[rawSetUpper]) {
+      for (var d = 0; d < dynamicMap[rawSetUpper].length; d++) {
+        pushUnique(dynamicMap[rawSetUpper][d]);
+      }
+    }
+  }
+
+  if (out.length === 0) {
+    pushUnique(rawLower);
+  }
+  return out;
+}
+
+function resolveCandidateCardIds_(rawInput, ss) {
+  var cleaned = String(rawInput || '').trim().replace(/\s+/g, ' ');
+  if (!cleaned) return [];
+
+  // Accepteert: "DLR 11", "MEW 181", "30C 15", "30th-c-015", "OBF 199/197", "BS #044", "CRZ GG70/GG70"
+  var match = cleaned.match(/^([a-z0-9.]+(?:-[a-z]+)?)\s*[-\s#:]+\s*#?([a-z]*\d+[a-z]?)(?:\/[a-z]*\d+)?$/i);
+  if (!match) return [cleaned.toLowerCase()];
+
+  var rawSet = match[1].toUpperCase();
+  var targetSets = resolveCandidateSetIds_(rawSet, ss);
+  var rawNum = match[2].trim();
+  var isPureDigits = /^\d+$/.test(rawNum);
+  var unpadded = isPureDigits ? String(parseInt(rawNum, 10)) : rawNum.toUpperCase();
+  var padded3 = isPureDigits ? ('000' + unpadded).slice(-3) : unpadded;
+
+  var candidates = [];
+  var pushUnique = function (id) {
+    if (candidates.indexOf(id) === -1) candidates.push(id);
+  };
+
+  for (var i = 0; i < targetSets.length; i++) {
+    var setId = targetSets[i];
+    var prefersPadded = /^(?:sv|me)\d|^30th/i.test(setId);
+    if (prefersPadded) {
+      pushUnique(setId + '-' + padded3);
+      pushUnique(setId + '-' + unpadded);
+    } else {
+      pushUnique(setId + '-' + unpadded);
+      pushUnique(setId + '-' + padded3);
+    }
+    if (rawNum !== (prefersPadded ? padded3 : unpadded)) {
+      pushUnique(setId + '-' + rawNum);
+    }
+  }
+
+  return candidates;
+}
+
+function normalizeCardId_(rawInput, ss) {
+  var candidates = resolveCandidateCardIds_(rawInput, ss);
+  return candidates.length > 0 ? candidates[0] : '';
+}
+
+function fetchTcgdexCard_(rawInputOrId, ss) {
+  var candidates = resolveCandidateCardIds_(rawInputOrId, ss);
+  if (candidates.length === 0) return null;
 
   for (var i = 0; i < candidates.length; i++) {
     var url = TCGDEX_BASE_URL + '/cards/' + encodeURIComponent(candidates[i]);

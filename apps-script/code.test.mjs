@@ -590,4 +590,137 @@ describe('apps-script/Code.gs Backend API & Formule-integriteit', () => {
     assert.equal(sheets['Pokédex Binder']._grid[10][3], false);
     assert.equal(lockState.waitCalls, lockState.releaseCalls);
   });
+
+  it('syncSetCodesSheet schrijft Kaartcode (Op kaart) én API-code (TCGdex), filtert TCG Pocket weg en ondersteunt dynamische/multi-set lookups (DLR, 30C, nieuwe sets)', () => {
+    const fetchedUrls = [];
+    const { sandbox, sheets } = createGasEnvironment({
+      tcgdexMock: (url) => {
+        fetchedUrls.push(url);
+        if (url.includes('/graphql')) {
+          return {
+            getResponseCode: () => 200,
+            getContentText: () =>
+              JSON.stringify({
+                data: {
+                  sets: [
+                    { id: 'base1', name: 'Base Set', tcgOnline: 'BS', serie: { id: 'base', name: 'Base' }, cardCount: { official: 102, total: 102 } },
+                    { id: 'A1', name: 'Genetic Apex', tcgOnline: null, serie: { id: 'tcgp', name: 'Pokémon TCG Pocket' }, cardCount: { official: 226, total: 286 } },
+                    { id: 'me06', name: 'Delta Reign', tcgOnline: null, serie: { id: 'me', name: 'Mega Evolution' }, cardCount: { official: 103, total: 141 } },
+                    { id: 'me07', name: 'Future Mega Set', tcgOnline: null, serie: { id: 'me', name: 'Mega Evolution' }, cardCount: { official: 99, total: 135 } },
+                  ],
+                },
+              }),
+          };
+        }
+        if (url.endsWith('/sets/me07')) {
+          return {
+            getResponseCode: () => 200,
+            getContentText: () => JSON.stringify({ id: 'me07', abbreviation: { official: 'FMS' } }),
+          };
+        }
+        if (url.endsWith('/cards/me06-011')) {
+          return {
+            getResponseCode: () => 200,
+            getContentText: () =>
+              JSON.stringify({
+                id: 'me06-011',
+                localId: '011',
+                name: 'Zorua',
+                types: ['Darkness'],
+                rarity: 'Common',
+                set: { id: 'me06', name: 'Delta Reign', serie: { name: 'Mega Evolution' }, cardCount: { official: 103, total: 141 } },
+                pricing: { cardmarket: { trend: 0.45 } },
+              }),
+          };
+        }
+        if (url.endsWith('/cards/30th-c-015')) {
+          return {
+            getResponseCode: () => 200,
+            getContentText: () =>
+              JSON.stringify({
+                id: '30th-c-015',
+                localId: '015',
+                name: 'Pikachu Classic',
+                types: ['Lightning'],
+                rarity: 'Holo Rare',
+                set: { id: '30th-c', name: '30th Classic Collection', serie: { name: 'Mega Evolution' }, cardCount: { official: 30, total: 30 } },
+                pricing: { cardmarket: { trend: 12.0 } },
+              }),
+          };
+        }
+        if (url.endsWith('/cards/me07-007')) {
+          return {
+            getResponseCode: () => 200,
+            getContentText: () =>
+              JSON.stringify({
+                id: 'me07-007',
+                localId: '007',
+                name: 'Lucario ex',
+                types: ['Fighting'],
+                rarity: 'Double Rare',
+                set: { id: 'me07', name: 'Future Mega Set', serie: { name: 'Mega Evolution' }, cardCount: { official: 99, total: 135 } },
+                pricing: { cardmarket: { trend: 3.5 } },
+              }),
+          };
+        }
+        return { getResponseCode: () => 404, getContentText: () => 'Not Found' };
+      },
+    });
+
+    // 1. Draai syncSetCodesSheet -> 7 kolommen, TCG Pocket (A1) uitgefilterd, me07 krijgt live FMS code!
+    sandbox.syncSetCodesSheet();
+    assert.ok(sheets.Setcodes);
+    const grid = sheets.Setcodes._grid;
+    assert.deepEqual(grid[0], [
+      'Kaartcode (Op kaart)',
+      'Setnaam',
+      'Serie / Era',
+      'Officieel',
+      'Totaal (incl. secrets)',
+      'Voorbeeld invoer',
+      'API-code (TCGdex)',
+    ]);
+    assert.equal(grid.length, 4); // koprij + 3 fysieke sets (A1 overgeslagen!)
+    assert.deepEqual(grid[1], ['FMS', 'Future Mega Set', 'Mega Evolution', 99, 135, 'FMS 001', 'me07']);
+    assert.deepEqual(grid[2], ['DLR', 'Delta Reign', 'Mega Evolution', 103, 141, 'DLR 001', 'me06']);
+    assert.deepEqual(grid[3], ['BS', 'Base Set', 'Base', 102, 102, 'BS 1', 'base1']);
+
+    // 2. Mel typt "DLR 11" -> vindt direct me06-011 (Zorua)
+    sheets.Collectie.getRange(2, 1).setValue('DLR 11');
+    sandbox.handleSheetEdit({ range: sheets.Collectie.getRange(2, 1, 1, 1) });
+    assert.equal(sheets.Collectie._grid[1][0], 'me06-011');
+    assert.equal(sheets.Collectie._grid[1][1], 'Zorua');
+    assert.equal(sheets.Collectie._grid[1][2], 'Delta Reign');
+
+    // 3. Mel typt "30C 15" -> probeert 30th (404) en valt automatisch door naar 30th-c-015!
+    const res30c = JSON.parse(
+      sandbox.doPost({
+        postData: {
+          contents: JSON.stringify({
+            token: 'test-secret-token',
+            action: 'addCard',
+            payload: { cardId: '30C 15' },
+          }),
+        },
+      }).getContent()
+    );
+    assert.equal(res30c.ok, true);
+    assert.equal(res30c.result.cardId, '30th-c-015');
+
+    // 4. Mel typt nieuwe setcode "FMS 7" (niet hardcoded in Code.gs, maar dynamisch gelezen uit Setcodes-tabblad!)
+    const resFms = JSON.parse(
+      sandbox.doPost({
+        postData: {
+          contents: JSON.stringify({
+            token: 'test-secret-token',
+            action: 'addCard',
+            payload: { cardId: 'FMS 7' },
+          }),
+        },
+      }).getContent()
+    );
+    assert.equal(resFms.ok, true);
+    assert.equal(resFms.result.cardId, 'me07-007');
+    assert.ok(fetchedUrls.some((u) => u.endsWith('/cards/me07-007')));
+  });
 });

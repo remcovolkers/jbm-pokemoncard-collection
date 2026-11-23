@@ -1,7 +1,7 @@
 import { Component, HostListener, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { buildCardmarketSearchUrl, getDisplaySetCode } from '../../core/domain/card-id.utils';
+import { buildCardmarketSearchUrl, getDisplaySetCode, parseCardIdInput } from '../../core/domain/card-id.utils';
 import {
   calculateCardMetrics,
   compareCardNumbers,
@@ -68,6 +68,8 @@ export class CollectionComponent implements OnInit {
     const tradeOnly = this.onlyForTrade();
     const sort = this.sortBy();
 
+    const parsedCodeQuery = query ? parseCardIdInput(query) : null;
+
     const list = this.store.collection().filter((card) => {
       if (setFilter !== 'ALL' && card.setName !== setFilter) return false;
       if (locFilter !== 'ALL' && card.storageLocation !== locFilter) return false;
@@ -75,7 +77,10 @@ export class CollectionComponent implements OnInit {
       if (tradeOnly && !card.forTrade) return false;
       if (query) {
         const hay = `${card.name} ${card.cardId} ${card.setName} ${card.cardNumber} ${card.storageLocation} ${card.rarity}`.toLowerCase();
-        if (!hay.includes(query)) return false;
+        const matchesParsedCode =
+          parsedCodeQuery !== null &&
+          parsedCodeQuery.candidateIds.some((cid) => cid.toLowerCase() === card.cardId.toLowerCase());
+        if (!hay.includes(query) && !matchesParsedCode) return false;
       }
       return true;
     });

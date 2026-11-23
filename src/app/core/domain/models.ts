@@ -182,7 +182,12 @@ export interface CatalogCardSummary {
 
 export interface CatalogSetSummary {
   id: string;
+  /** Officiële geprinte kaartcode op de kaart zelf (bijv. DLR, PBL, 30C, MEW) */
+  code?: string;
   name: string;
+  series?: string;
+  seriesId?: string;
+  releaseDate?: string;
   logoUrl?: string;
   symbolUrl?: string;
   officialCount: number;
