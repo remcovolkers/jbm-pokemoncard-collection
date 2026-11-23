@@ -1,0 +1,277 @@
+<div class="hub-page">
+  <!-- Hero To-Do Voortgangskaart -->
+  <section class="pb-card hub-hero">
+    <div class="hub-hero__top">
+      <div>
+        <div class="hub-hero__title-row">
+          <span class="material-symbols-outlined hub-hero__icon">checklist</span>
+          <h1>Feedback Hub &amp; To-Do Lijst</h1>
+        </div>
+        <p class="hub-hero__sub">
+          Openbaar overzicht van alle ideeën, bugs en verbeteringen voor PokéBinder. Iedereen kan
+          meelezen, stemmen en feedback toevoegen.
+        </p>
+      </div>
+
+      <div class="hub-hero__actions">
+        <button type="button" class="pb-btn pb-btn--primary" (click)="openNewFeedback()">
+          <span class="material-symbols-outlined">add_comment</span>
+          <span>Nieuwe feedback</span>
+        </button>
+        <button
+          type="button"
+          class="pb-btn pb-btn--secondary"
+          [disabled]="feedback.isLoadingPublic()"
+          (click)="feedback.refreshPublicIssues(false)"
+          aria-label="Publieke feedback verversen"
+        >
+          <span class="material-symbols-outlined" [class.pb-spin]="feedback.isLoadingPublic()">sync</span>
+          <span>Verversen</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- To-Do Voortgang KPI's -->
+    <div class="hub-stats">
+      <div class="hub-stat">
+        <span class="hub-stat__label">Open (To-Do)</span>
+        <strong class="mono hub-stat__val">{{ feedback.stats().open }}</strong>
+      </div>
+      <div class="hub-stat">
+        <span class="hub-stat__label">In behandeling</span>
+        <strong class="mono hub-stat__val text-amber">{{ feedback.stats().inProgress }}</strong>
+      </div>
+      <div class="hub-stat">
+        <span class="hub-stat__label">Afgerond</span>
+        <strong class="mono hub-stat__val text-emerald">{{ feedback.stats().done }}</strong>
+      </div>
+    </div>
+
+    <div class="hub-progress">
+      <div class="hub-progress__meta mono">
+        <span>Voortgang to-do lijst</span>
+        <strong>{{ feedback.stats().donePercent }}% afgerond</strong>
+      </div>
+      <div class="pb-progress pb-progress--lg">
+        <div
+          class="pb-progress__bar pb-progress__bar--gradient"
+          [style.width.%]="feedback.stats().donePercent"
+        ></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Filterbalk -->
+  <section class="hub-filters">
+    <div class="status-tabs">
+      <button
+        type="button"
+        class="pb-pill pb-pill--interactive"
+        [class.is-active]="statusFilter() === 'all'"
+        (click)="statusFilter.set('all')"
+      >
+        Alle ({{ feedback.stats().total }})
+      </button>
+      <button
+        type="button"
+        class="pb-pill pb-pill--interactive"
+        [class.is-active]="statusFilter() === 'open'"
+        (click)="statusFilter.set('open')"
+      >
+        Open ({{ feedback.stats().open }})
+      </button>
+      <button
+        type="button"
+        class="pb-pill pb-pill--interactive"
+        [class.is-active-amber]="statusFilter() === 'in_progress'"
+        (click)="statusFilter.set('in_progress')"
+      >
+        Bezig ({{ feedback.stats().inProgress }})
+      </button>
+      <button
+        type="button"
+        class="pb-pill pb-pill--interactive"
+        [class.is-active-emerald]="statusFilter() === 'done'"
+        (click)="statusFilter.set('done')"
+      >
+        Afgerond ({{ feedback.stats().done }})
+      </button>
+    </div>
+
+    <div class="hub-filter-inputs">
+      <input
+        id="hub-search"
+        name="hubSearch"
+        type="text"
+        class="pb-input"
+        placeholder="Zoek in to-do's & ideeën…"
+        [ngModel]="searchQuery()"
+        (ngModelChange)="searchQuery.set($event)"
+        aria-label="Zoek in Feedback Hub"
+      />
+
+      <select
+        id="hub-page-filter"
+        name="hubPageFilter"
+        class="pb-select hub-filter-select"
+        [ngModel]="pageFilter()"
+        (ngModelChange)="pageFilter.set($event)"
+        aria-label="Filter op pagina"
+      >
+        <option value="ALL">Alle pagina's</option>
+        @for (p of pages; track p) {
+          <option [value]="p">{{ p }}</option>
+        }
+      </select>
+
+      <select
+        id="hub-cat-filter"
+        name="hubCategoryFilter"
+        class="pb-select hub-filter-select"
+        [ngModel]="categoryFilter()"
+        (ngModelChange)="categoryFilter.set($event)"
+        aria-label="Filter op categorie"
+      >
+        <option value="ALL">Alle categorieën</option>
+        @for (c of categories; track c) {
+          <option [value]="c">{{ c }}</option>
+        }
+      </select>
+    </div>
+  </section>
+
+  <!-- To-Do Lijst -->
+  @if (filteredItems().length === 0) {
+    <div class="pb-empty">
+      <div class="pb-empty__icon">
+        <span class="material-symbols-outlined">task_alt</span>
+      </div>
+      <h2 class="pb-empty__title">Geen feedback-items gevonden</h2>
+      <p class="pb-empty__text">
+        Pas je filters aan of dien direct het eerste idee of verbeterpunt in.
+      </p>
+      <button type="button" class="pb-btn pb-btn--primary" (click)="openNewFeedback()">
+        <span class="material-symbols-outlined">add_comment</span>
+        <span>Nieuwe feedback toevoegen</span>
+      </button>
+    </div>
+  } @else {
+    <div class="todo-list">
+      @for (item of filteredItems(); track item.id) {
+        <article class="pb-card todo-item" [class.is-done]="item.status === 'done'">
+          <!-- Linker kolom: To-do vinkje & Upvote -->
+          <div class="todo-item__controls">
+            <button
+              type="button"
+              class="todo-check"
+              [class.is-progress]="item.status === 'in_progress'"
+              [class.is-done]="item.status === 'done'"
+              [attr.aria-label]="'Status wijzigen voor ' + item.title"
+              title="Klik om status te wisselen (Open → Bezig → Afgerond)"
+              (click)="feedback.cycleStatus(item)"
+            >
+              @if (item.status === 'done') {
+                <span class="material-symbols-outlined is-filled">check</span>
+              } @else if (item.status === 'in_progress') {
+                <span class="material-symbols-outlined">schedule</span>
+              }
+            </button>
+
+            <button
+              type="button"
+              class="vote-btn"
+              [class.is-voted]="feedback.hasUpvoted(item.id)"
+              [attr.aria-label]="'Stem op ' + item.title"
+              (click)="feedback.toggleUpvote(item)"
+            >
+              <span class="material-symbols-outlined">keyboard_arrow_up</span>
+              <span class="mono">{{ item.votes }}</span>
+            </button>
+          </div>
+
+          <!-- Rechter kolom: Inhoud & Metadata -->
+          <div class="todo-item__body">
+            <div class="todo-item__badges">
+              <span
+                class="pb-pill"
+                [class.pb-pill--primary]="item.category === 'Bug'"
+                [class.pb-pill--secondary]="item.category === 'Idee'"
+                [class.pb-pill--tertiary]="item.category === 'Verbetering'"
+                [class.pb-pill--neutral]="item.category === 'UI / Design'"
+              >
+                {{ item.category }}
+              </span>
+
+              <span class="pb-pill pb-pill--slab">{{ item.page }}</span>
+
+              <span
+                class="pb-pill"
+                [class.pb-pill--secondary]="item.status === 'done'"
+                [class.pb-pill--tertiary]="item.status === 'in_progress'"
+                [class.pb-pill--neutral]="item.status === 'open'"
+              >
+                {{ statusLabel(item.status) }}
+              </span>
+            </div>
+
+            <h2 class="todo-item__title">{{ item.title }}</h2>
+
+            @if (item.description) {
+              <p class="todo-item__desc">{{ item.description }}</p>
+            }
+
+            <div class="todo-item__foot">
+              <span class="mono todo-item__meta">
+                {{ item.author }} · {{ formatDate(item.createdAt) }} · {{ sourceLabel(item.source) }}
+              </span>
+
+              <div class="todo-item__foot-actions">
+                <select
+                  class="status-mini-select mono"
+                  [ngModel]="item.status"
+                  (ngModelChange)="feedback.setStatus(item, $event)"
+                  [attr.aria-label]="'Status voor ' + item.title"
+                >
+                  <option value="open">Open</option>
+                  <option value="in_progress">Bezig</option>
+                  <option value="done">Afgerond</option>
+                </select>
+
+                @if (item.externalUrl) {
+                  <a
+                    class="todo-link"
+                    [href]="item.externalUrl"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="Open op GitHub"
+                  >
+                    <span class="material-symbols-outlined">open_in_new</span>
+                  </a>
+                } @else {
+                  <a
+                    class="todo-link"
+                    [href]="feedback.buildGitHubIssueUrl(item)"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="Deel publiek als GitHub Issue"
+                  >
+                    <span class="material-symbols-outlined">public</span>
+                  </a>
+                  <button
+                    type="button"
+                    class="todo-link todo-link--del"
+                    aria-label="Item verwijderen"
+                    title="Verwijderen"
+                    (click)="feedback.deleteItem(item)"
+                  >
+                    <span class="material-symbols-outlined">delete</span>
+                  </button>
+                }
+              </div>
+            </div>
+          </div>
+        </article>
+      }
+    </div>
+  }
+</div>

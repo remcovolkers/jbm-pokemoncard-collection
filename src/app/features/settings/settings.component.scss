@@ -218,7 +218,8 @@
   }
 }
 
-.updates-actions {
+.updates-actions,
+.feedback-actions {
   display: flex;
   flex-wrap: wrap;
   gap: $space-sm;

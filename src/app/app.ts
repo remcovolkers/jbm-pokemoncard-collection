@@ -5,16 +5,19 @@ import { filter, map, startWith } from 'rxjs';
 import { AppUpdateService } from './core/platform/app-update.service';
 import { PlatformService } from './core/platform/platform.service';
 import { CollectionStore } from './core/state/collection.store';
+import { FeedbackStore } from './core/state/feedback.store';
+import { FeedbackModalComponent } from './shared/feedback-modal/feedback-modal.component';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterOutlet, RouterLink, RouterLinkActive],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, FeedbackModalComponent],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
 export class App implements OnInit {
   readonly store = inject(CollectionStore);
+  readonly feedback = inject(FeedbackStore);
   readonly platform = inject(PlatformService);
   readonly updates = inject(AppUpdateService);
   private readonly router = inject(Router);
@@ -44,6 +47,7 @@ export class App implements OnInit {
     if (url.startsWith('/meer/verlanglijst')) return 'Verlanglijst';
     if (url.startsWith('/meer/ruil-verkoop')) return 'Ruil & Verkoop';
     if (url.startsWith('/meer/instellingen')) return 'Instellingen';
+    if (url.startsWith('/meer/feedback') || url.startsWith('/feedback')) return 'Feedback Hub';
     return 'Dashboard';
   });
 
@@ -61,6 +65,11 @@ export class App implements OnInit {
         return 'Gesynct';
     }
   });
+
+  openPageFeedback(): void {
+    const page = this.feedback.mapUrlToFeedbackPage(this.currentUrl());
+    this.feedback.openComposer(page);
+  }
 
   goBack(): void {
     if (typeof window !== 'undefined' && window.history.length > 1) {

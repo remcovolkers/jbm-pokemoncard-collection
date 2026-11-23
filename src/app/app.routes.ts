@@ -68,7 +68,20 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./features/settings/settings.component').then((m) => m.SettingsComponent),
       },
+      {
+        path: 'feedback',
+        title: 'PokéBinder — Feedback Hub',
+        loadComponent: () =>
+          import('./features/feedback-hub/feedback-hub.component').then(
+            (m) => m.FeedbackHubComponent
+          ),
+      },
     ],
+  },
+  {
+    path: 'feedback',
+    pathMatch: 'full',
+    redirectTo: 'meer/feedback',
   },
   {
     path: '**',

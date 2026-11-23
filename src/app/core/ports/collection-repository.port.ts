@@ -1,5 +1,14 @@
 import { InjectionToken } from '@angular/core';
-import { AppConnectionConfig, AppSnapshot, BinderSlotsPerPage, CollectionCard, TradeEntry, WishlistItem } from '../domain/models';
+import {
+  AppConnectionConfig,
+  AppSnapshot,
+  BinderSlotsPerPage,
+  CollectionCard,
+  FeedbackItem,
+  FeedbackStatus,
+  TradeEntry,
+  WishlistItem,
+} from '../domain/models';
 
 export interface ConnectionTestResult {
   ok: boolean;
@@ -47,6 +56,12 @@ export interface CollectionRepository {
   addWishlist(config: AppConnectionConfig, payload: Omit<WishlistItem, 'rowIndex' | 'found'>): Promise<AppSnapshot>;
   markWishlistFound(config: AppConnectionConfig, payload: MarkWishlistFoundPayload): Promise<AppSnapshot>;
   logTrade(config: AppConnectionConfig, payload: Omit<TradeEntry, 'rowIndex' | 'netResult'>): Promise<AppSnapshot>;
+  addFeedback?(config: AppConnectionConfig, payload: Omit<FeedbackItem, 'source' | 'rowIndex'>): Promise<AppSnapshot>;
+  updateFeedback?(
+    config: AppConnectionConfig,
+    payload: { id: string; status?: FeedbackStatus; votes?: number }
+  ): Promise<AppSnapshot>;
+  deleteFeedback?(config: AppConnectionConfig, payload: { id: string }): Promise<AppSnapshot>;
   refreshPrices(config: AppConnectionConfig): Promise<RefreshPricesResult>;
 }
 

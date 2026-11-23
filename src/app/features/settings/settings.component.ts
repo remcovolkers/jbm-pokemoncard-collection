@@ -1,19 +1,22 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { AppUpdateService } from '../../core/platform/app-update.service';
 import { PlatformService } from '../../core/platform/platform.service';
 import { ConnectionTestResult } from '../../core/ports/collection-repository.port';
 import { CollectionStore } from '../../core/state/collection.store';
+import { FeedbackStore } from '../../core/state/feedback.store';
 
 @Component({
   selector: 'app-settings',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, RouterLink],
   templateUrl: './settings.component.html',
   styleUrl: './settings.component.scss',
 })
 export class SettingsComponent {
   readonly store = inject(CollectionStore);
+  readonly feedback = inject(FeedbackStore);
   readonly platform = inject(PlatformService);
   readonly updates = inject(AppUpdateService);
 

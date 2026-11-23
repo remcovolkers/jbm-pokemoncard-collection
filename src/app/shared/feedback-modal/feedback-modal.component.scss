@@ -1,0 +1,47 @@
+@use 'tokens' as *;
+@use 'mixins' as *;
+
+.fb-sheet__sub {
+  @include type-body-sm;
+  color: $color-on-surface-muted;
+  margin-top: 2px;
+}
+
+.fb-form {
+  display: flex;
+  flex-direction: column;
+  gap: $space-md;
+}
+
+.fb-cats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.fb-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding-top: $space-xs;
+}
+
+.fb-hub-link {
+  @include pressable;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.45rem;
+  color: $color-secondary;
+  font-size: 0.82rem;
+  font-weight: 600;
+
+  .material-symbols-outlined {
+    font-size: 17px;
+  }
+
+  &:hover {
+    text-decoration: underline;
+  }
+}

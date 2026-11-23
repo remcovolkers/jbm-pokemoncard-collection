@@ -219,6 +219,11 @@ function createGasEnvironment(options = {}) {
       getActiveSpreadsheet: () => ({
         getName: () => 'Pokémon Kaartencollectie Tracker',
         getSheetByName: (name) => sheets[name] ?? null,
+        insertSheet: (name) => {
+          const created = createFakeSheet(name, []);
+          sheets[name] = created;
+          return created;
+        },
       }),
       newDataValidation: () => {
         const rule = { values: [] };
@@ -440,5 +445,65 @@ describe('apps-script/Code.gs Backend API & Formule-integriteit', () => {
     );
     assert.equal(errRes.ok, false);
     assert.equal(lockState.waitCalls, lockState.releaseCalls);
+  });
+
+  it('addFeedback maakt automatisch het tabblad Feedback aan en ondersteunt updateFeedback en deleteFeedback', () => {
+    const { sandbox, sheets } = createGasEnvironment();
+    assert.equal(sheets.Feedback, undefined);
+
+    const addRes = JSON.parse(
+      sandbox.doPost({
+        postData: {
+          contents: JSON.stringify({
+            token: 'test-secret-token',
+            action: 'addFeedback',
+            payload: {
+              id: 'fb-test-1',
+              page: 'Collectie',
+              category: 'Idee',
+              title: 'Export naar CSV',
+              description: 'Handig als backup',
+              author: 'Remco',
+              platform: 'Android App',
+            },
+          }),
+        },
+      }).getContent()
+    );
+    assert.equal(addRes.ok, true);
+    assert.ok(sheets.Feedback);
+    assert.equal(sheets.Feedback._grid[0][0], 'ID');
+    assert.equal(addRes.data.feedback.length, 1);
+    assert.equal(addRes.data.feedback[0].title, 'Export naar CSV');
+    assert.equal(addRes.data.feedback[0].status, 'open');
+
+    const updRes = JSON.parse(
+      sandbox.doPost({
+        postData: {
+          contents: JSON.stringify({
+            token: 'test-secret-token',
+            action: 'updateFeedback',
+            payload: { id: 'fb-test-1', status: 'done', votes: 5 },
+          }),
+        },
+      }).getContent()
+    );
+    assert.equal(updRes.ok, true);
+    assert.equal(updRes.data.feedback[0].status, 'done');
+    assert.equal(updRes.data.feedback[0].votes, 5);
+
+    const delRes = JSON.parse(
+      sandbox.doPost({
+        postData: {
+          contents: JSON.stringify({
+            token: 'test-secret-token',
+            action: 'deleteFeedback',
+            payload: { id: 'fb-test-1' },
+          }),
+        },
+      }).getContent()
+    );
+    assert.equal(delRes.ok, true);
+    assert.equal(delRes.data.feedback.length, 0);
   });
 });

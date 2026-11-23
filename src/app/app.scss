@@ -326,7 +326,7 @@
     margin-left: $sidebar-width;
     width: calc(100% - #{$sidebar-width});
     padding-top: 0;
-    padding-bottom: $space-xl;
+    padding-bottom: 5rem;
 
     &.is-quick-add {
       padding-bottom: 8rem;
@@ -595,6 +595,49 @@
     border-color: rgba($color-primary-container, 0.6);
     .toast__icon {
       color: $color-primary-container;
+    }
+  }
+}
+
+// ============================================================================
+// Desktop Feedback Floating Button (>= 768px; verborgen op mobiel)
+// ============================================================================
+.desktop-feedback-fab {
+  display: none;
+
+  @include mq-md {
+    @include pressable;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    position: fixed;
+    right: $space-lg;
+    bottom: $space-lg;
+    z-index: $z-nav;
+    min-height: 44px;
+    padding: 0.55rem 1rem;
+    border-radius: $radius-full;
+    background-color: $color-surface-high;
+    border: 1px solid rgba($color-primary-container, 0.45);
+    color: $color-on-surface;
+    font-size: 0.875rem;
+    font-weight: 600;
+    box-shadow: $shadow-elevated;
+    transition: transform 140ms ease, background-color 140ms ease, border-color 140ms ease;
+
+    .material-symbols-outlined {
+      font-size: 19px;
+      color: $color-primary-container;
+    }
+
+    &:hover {
+      background-color: $color-surface-highest;
+      border-color: $color-primary-container;
+      transform: translateY(-2px);
+    }
+
+    &.is-raised {
+      bottom: 5.5rem;
     }
   }
 }

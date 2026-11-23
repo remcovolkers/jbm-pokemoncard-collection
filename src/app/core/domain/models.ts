@@ -1,5 +1,39 @@
 export type BinderSlotsPerPage = 4 | 9 | 12 | 16;
 
+export type FeedbackStatus = 'open' | 'in_progress' | 'done';
+export type FeedbackCategory = 'Bug' | 'Idee' | 'Verbetering' | 'UI / Design';
+
+export const FEEDBACK_PAGES = [
+  'Algemeen / Hele app',
+  'Dashboard',
+  'Collectie',
+  'Snel Toevoegen',
+  'Pokédex Binder',
+  'Set Voortgang',
+  'Verlanglijst',
+  'Ruil & Verkoop',
+  'Instellingen',
+  'Feedback Hub',
+] as const;
+
+export type FeedbackPage = (typeof FEEDBACK_PAGES)[number];
+
+export interface FeedbackItem {
+  id: string;
+  rowIndex?: number;
+  createdAt: string;
+  page: FeedbackPage | string;
+  category: FeedbackCategory | string;
+  title: string;
+  description: string;
+  status: FeedbackStatus;
+  votes: number;
+  author: string;
+  platform: string;
+  source: 'github' | 'sheets' | 'local';
+  externalUrl?: string;
+}
+
 export interface CollectionCard {
   /** Rijnummer in Google Sheet (vanaf 2). Voor lokaal aangemaakte kaarten tijdelijk negatief. */
   rowIndex: number;
@@ -110,6 +144,7 @@ export interface AppSnapshot {
   binderSlotsPerPage: BinderSlotsPerPage;
   wishlist: WishlistItem[];
   trades: TradeEntry[];
+  feedback?: FeedbackItem[];
   settings: DropdownSettings;
   syncedAt: string;
 }
@@ -161,7 +196,10 @@ export interface PendingMutation {
     | 'updatePokedexSlot'
     | 'addWishlist'
     | 'markWishlistFound'
-    | 'logTrade';
+    | 'logTrade'
+    | 'addFeedback'
+    | 'updateFeedback'
+    | 'deleteFeedback';
   payload: Record<string, unknown>;
   createdAt: string;
   description: string;

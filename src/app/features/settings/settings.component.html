@@ -31,6 +31,37 @@
     </button>
   </section>
 
+  <!-- Feedback & Openbare To-Do Hub (op mobiel de centrale plek voor feedback geven) -->
+  <section class="pb-card feedback-card">
+    <div class="card-head">
+      <span class="material-symbols-outlined card-head__icon">feedback</span>
+      <div>
+        <h2>Feedback &amp; To-Do Hub</h2>
+        <p>
+          Geef feedback voor elke pagina via het keuzemenu of bekijk de openbare to-do lijst met
+          alle ideeën en gemelde bugs.
+        </p>
+      </div>
+    </div>
+
+    <div class="feedback-actions">
+      <button
+        type="button"
+        class="pb-btn pb-btn--primary"
+        (click)="feedback.openComposer('Algemeen / Hele app')"
+      >
+        <span class="material-symbols-outlined">add_comment</span>
+        <span>Feedback geven</span>
+      </button>
+
+      <a class="pb-btn pb-btn--secondary" routerLink="/meer/feedback">
+        <span class="material-symbols-outlined">checklist</span>
+        <span>Feedback Hub bekijken</span>
+        <span class="pb-pill pb-pill--secondary mono">{{ feedback.stats().active }} open</span>
+      </a>
+    </div>
+  </section>
+
   <!-- Google Apps Script Koppeling -->
   <section class="pb-card config-card">
     <div class="card-head">

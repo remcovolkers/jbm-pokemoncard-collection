@@ -47,6 +47,11 @@
         <span>Ruil &amp; Verkoop</span>
         <span class="sidebar__badge">{{ store.tradeBinderCards().length }}</span>
       </a>
+      <a class="sidebar__link" routerLink="/meer/feedback" routerLinkActive="is-active">
+        <span class="material-symbols-outlined">checklist</span>
+        <span>Feedback Hub</span>
+        <span class="sidebar__badge sidebar__badge--emerald">{{ feedback.stats().active }}</span>
+      </a>
       <a class="sidebar__link" routerLink="/meer/instellingen" routerLinkActive="is-active">
         <span class="material-symbols-outlined">tune</span>
         <span>Instellingen</span>
@@ -254,6 +259,21 @@
       </div>
     </nav>
   }
+
+  <!-- Desktop Feedback Knop (>= 768px op elke pagina; op mobiel alleen in Instellingen) -->
+  <button
+    type="button"
+    class="desktop-feedback-fab"
+    [class.is-raised]="isQuickAddRoute()"
+    aria-label="Feedback geven over deze pagina"
+    (click)="openPageFeedback()"
+  >
+    <span class="material-symbols-outlined">feedback</span>
+    <span>Feedback</span>
+  </button>
+
+  <!-- Globale Feedback Modal (met paginadropdown) -->
+  <pb-feedback-modal />
 
   <!-- Globale Toast Meldingen -->
   @if (store.toasts().length > 0) {

@@ -1,6 +1,7 @@
 import { Component, inject } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { CollectionStore } from '../../core/state/collection.store';
+import { FeedbackStore } from '../../core/state/feedback.store';
 
 @Component({
   selector: 'app-more-shell',
@@ -28,6 +29,14 @@ import { CollectionStore } from '../../core/state/collection.store';
             <span class="material-symbols-outlined">swap_horiz</span>
             <span>Ruil &amp; Verkoop</span>
             <span class="more-tab__badge mono">{{ store.tradeBinderCards().length }}</span>
+          </a>
+
+          <a routerLink="feedback" routerLinkActive="is-active" class="more-tab">
+            <span class="material-symbols-outlined">checklist</span>
+            <span>Feedback Hub</span>
+            <span class="more-tab__badge more-tab__badge--emerald mono">
+              {{ feedback.stats().active }}
+            </span>
           </a>
 
           <a routerLink="instellingen" routerLinkActive="is-active" class="more-tab">
@@ -60,7 +69,7 @@ import { CollectionStore } from '../../core/state/collection.store';
         z-index: $z-sticky;
         border-bottom: 1px solid rgba($color-outline-variant, 0.55);
 
-        // Op desktop staan alle 4 Meer-tools al direct in de linker zijbalk
+        // Op desktop staan alle 5 Meer-tools al direct in de linker zijbalk
         @include mq-md {
           display: none;
         }
@@ -132,6 +141,11 @@ import { CollectionStore } from '../../core/state/collection.store';
             background-color: rgba($color-primary-container, 0.2);
             color: $color-primary;
           }
+
+          &--emerald {
+            background-color: rgba($color-secondary, 0.16);
+            color: $color-secondary;
+          }
         }
       }
     `,
@@ -139,4 +153,5 @@ import { CollectionStore } from '../../core/state/collection.store';
 })
 export class MoreShellComponent {
   readonly store = inject(CollectionStore);
+  readonly feedback = inject(FeedbackStore);
 }

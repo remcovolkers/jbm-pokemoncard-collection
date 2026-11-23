@@ -1,5 +1,13 @@
 import { Injectable } from '@angular/core';
-import { AppConnectionConfig, AppSnapshot, CollectionCard, TradeEntry, WishlistItem } from '../domain/models';
+import {
+  AppConnectionConfig,
+  AppSnapshot,
+  CollectionCard,
+  FeedbackItem,
+  FeedbackStatus,
+  TradeEntry,
+  WishlistItem,
+} from '../domain/models';
 import {
   AddCardPayload,
   CollectionRepository,
@@ -100,6 +108,30 @@ export class AppsScriptSheetsAdapter implements CollectionRepository {
     payload: Omit<TradeEntry, 'rowIndex' | 'netResult'>
   ): Promise<AppSnapshot> {
     const res = await this.postAction(config, 'logTrade', payload as Record<string, unknown>);
+    return res.data!;
+  }
+
+  async addFeedback(
+    config: AppConnectionConfig,
+    payload: Omit<FeedbackItem, 'source' | 'rowIndex'>
+  ): Promise<AppSnapshot> {
+    const res = await this.postAction(config, 'addFeedback', payload as Record<string, unknown>);
+    return res.data!;
+  }
+
+  async updateFeedback(
+    config: AppConnectionConfig,
+    payload: { id: string; status?: FeedbackStatus; votes?: number }
+  ): Promise<AppSnapshot> {
+    const res = await this.postAction(config, 'updateFeedback', payload as Record<string, unknown>);
+    return res.data!;
+  }
+
+  async deleteFeedback(
+    config: AppConnectionConfig,
+    payload: { id: string }
+  ): Promise<AppSnapshot> {
+    const res = await this.postAction(config, 'deleteFeedback', payload as Record<string, unknown>);
     return res.data!;
   }
 

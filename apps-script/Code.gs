@@ -22,7 +22,8 @@ var SHEET_NAMES = {
   POKEDEX: 'Pokédex Binder',
   WISHLIST: 'Verlanglijst',
   TRADES: 'Ruil & Verkoop',
-  SETTINGS: 'Instellingen'
+  SETTINGS: 'Instellingen',
+  FEEDBACK: 'Feedback'
 };
 
 var TCGDEX_BASE_URL = 'https://api.tcgdex.net/v2/en';
@@ -270,6 +271,15 @@ function doPost(e) {
       case 'logTrade':
         result = handleLogTrade_(ss, payload);
         break;
+      case 'addFeedback':
+        result = handleAddFeedback_(ss, payload);
+        break;
+      case 'updateFeedback':
+        result = handleUpdateFeedback_(ss, payload);
+        break;
+      case 'deleteFeedback':
+        result = handleDeleteFeedback_(ss, payload);
+        break;
       case 'refreshPrices':
         result = refreshCollectionPrices_(ss);
         break;
@@ -317,6 +327,7 @@ function buildBootstrapPayload_(ss) {
     binderSlotsPerPage: readBinderSlotsPerPage_(ss),
     wishlist: readWishlist_(ss),
     trades: readTrades_(ss),
+    feedback: readFeedback_(ss),
     settings: readSettings_(ss),
     syncedAt: new Date().toISOString()
   };
@@ -804,6 +815,116 @@ function handleLogTrade_(ss, payload) {
   ]]);
 
   return { rowIndex: targetRow };
+}
+
+// ============================================================================
+// FEEDBACK HUB (TABBLAD "Feedback" — AUTOMATISCH AANGEMAAKT INDIEN NODIG)
+// ============================================================================
+
+function ensureFeedbackSheet_(ss) {
+  var sheet = ss.getSheetByName(SHEET_NAMES.FEEDBACK);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_NAMES.FEEDBACK);
+    sheet.getRange(1, 1, 1, 10).setValues([[
+      'ID', 'Datum', 'Pagina', 'Categorie', 'Titel', 'Beschrijving', 'Status', 'Stemmen', 'Auteur', 'Platform'
+    ]]);
+  }
+  return sheet;
+}
+
+function readFeedback_(ss) {
+  var sheet = ss.getSheetByName(SHEET_NAMES.FEEDBACK);
+  if (!sheet) return [];
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  var values = sheet.getRange(2, 1, lastRow - 1, 10).getValues();
+  var items = [];
+
+  for (var i = 0; i < values.length; i++) {
+    var row = values[i];
+    var id = String(row[0] || '').trim();
+    var title = String(row[4] || '').trim();
+    if (!id && !title) continue;
+    var rawStatus = String(row[6] || 'open').trim().toLowerCase();
+    var status = rawStatus === 'done' || rawStatus === 'afgerond'
+      ? 'done'
+      : rawStatus === 'in_progress' || rawStatus === 'bezig'
+        ? 'in_progress'
+        : 'open';
+
+    items.push({
+      rowIndex: i + 2,
+      id: id || ('fb-' + (i + 2)),
+      createdAt: formatDateCell_(row[1]),
+      page: String(row[2] || 'Algemeen / Hele app').trim(),
+      category: String(row[3] || 'Idee').trim(),
+      title: title,
+      description: String(row[5] || '').trim(),
+      status: status,
+      votes: Math.max(0, toNumber_(row[7], 1)),
+      author: String(row[8] || 'Verzamelaar').trim(),
+      platform: String(row[9] || 'Web App').trim(),
+      source: 'sheets'
+    });
+  }
+  return items;
+}
+
+function handleAddFeedback_(ss, payload) {
+  var sheet = ensureFeedbackSheet_(ss);
+  var targetRow = findFirstEmptyRow_(sheet, 2, [1, 5]);
+  var id = String(payload.id || ('fb-' + new Date().getTime())).trim();
+  var createdAt = String(payload.createdAt || new Date().toISOString()).trim();
+
+  sheet.getRange(targetRow, 1, 1, 10).setValues([[
+    id,
+    createdAt,
+    String(payload.page || 'Algemeen / Hele app').trim(),
+    String(payload.category || 'Idee').trim(),
+    String(payload.title || '').trim(),
+    String(payload.description || '').trim(),
+    String(payload.status || 'open').trim(),
+    Math.max(1, toNumber_(payload.votes, 1)),
+    String(payload.author || 'Verzamelaar').trim(),
+    String(payload.platform || 'Web App').trim()
+  ]]);
+  return { rowIndex: targetRow, id: id };
+}
+
+function handleUpdateFeedback_(ss, payload) {
+  var sheet = ss.getSheetByName(SHEET_NAMES.FEEDBACK);
+  if (!sheet) return { updated: false };
+  var rowIdx = findFeedbackRowById_(sheet, payload.id);
+  if (rowIdx < 2) return { updated: false };
+
+  if (payload.status !== undefined) {
+    sheet.getRange(rowIdx, 7).setValue(String(payload.status).trim());
+  }
+  if (payload.votes !== undefined) {
+    sheet.getRange(rowIdx, 8).setValue(Math.max(0, toNumber_(payload.votes, 1)));
+  }
+  return { updated: true, rowIndex: rowIdx };
+}
+
+function handleDeleteFeedback_(ss, payload) {
+  var sheet = ss.getSheetByName(SHEET_NAMES.FEEDBACK);
+  if (!sheet) return { deleted: false };
+  var rowIdx = findFeedbackRowById_(sheet, payload.id);
+  if (rowIdx < 2) return { deleted: false };
+  sheet.getRange(rowIdx, 1, 1, 10).clearContent();
+  return { deleted: true, rowIndex: rowIdx };
+}
+
+function findFeedbackRowById_(sheet, id) {
+  if (!id) return -1;
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return -1;
+  var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+  var target = String(id).trim();
+  for (var i = 0; i < ids.length; i++) {
+    if (String(ids[i][0] || '').trim() === target) return i + 2;
+  }
+  return -1;
 }
 
 // ============================================================================

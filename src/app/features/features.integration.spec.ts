@@ -2,13 +2,17 @@ import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { routes } from '../app.routes';
+import { App } from '../app';
 import { AppsScriptSheetsAdapter } from '../core/adapters/apps-script-sheets.adapter';
 import { CatalogCard, CatalogCardSummary } from '../core/domain/models';
 import { CARD_CATALOG_PORT, CardCatalogPort } from '../core/ports/card-catalog.port';
 import { COLLECTION_REPOSITORY } from '../core/ports/collection-repository.port';
 import { CollectionStore } from '../core/state/collection.store';
+import { FeedbackStore } from '../core/state/feedback.store';
+import { FeedbackModalComponent } from '../shared/feedback-modal/feedback-modal.component';
 import { CollectionComponent } from './collection/collection.component';
 import { DashboardComponent } from './dashboard/dashboard.component';
+import { FeedbackHubComponent } from './feedback-hub/feedback-hub.component';
 import { PokedexBinderComponent } from './pokedex-binder/pokedex-binder.component';
 import { QuickAddComponent } from './quick-add/quick-add.component';
 import { SetProgressComponent } from './set-progress/set-progress.component';
@@ -83,6 +87,7 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
     window.localStorage.clear();
     await TestBed.configureTestingModule({
       imports: [
+        App,
         DashboardComponent,
         CollectionComponent,
         QuickAddComponent,
@@ -91,6 +96,8 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
         WishlistComponent,
         TradesComponent,
         SettingsComponent,
+        FeedbackHubComponent,
+        FeedbackModalComponent,
       ],
       providers: [
         provideRouter(routes),
@@ -394,10 +401,11 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
       expect(comp.showLogSheet()).toBe(false);
     });
 
-    it('schakelt Demo-modus, test verbinding en beheert cache in SettingsComponent', async () => {
+    it('schakelt Demo-modus, test verbinding, beheert cache en biedt mobiele Feedback-knop in SettingsComponent', async () => {
       const fixture = TestBed.createComponent(SettingsComponent);
       const comp = fixture.componentInstance;
       const store = TestBed.inject(CollectionStore);
+      const feedback = TestBed.inject(FeedbackStore);
       fixture.detectChanges();
 
       expect(store.config().demoMode).toBe(true);
@@ -407,6 +415,95 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
 
       comp.clearCache();
       expect(store.pendingQueue().length).toBe(0);
+
+      const el = fixture.nativeElement as HTMLElement;
+      expect(el.textContent).toContain('Feedback & To-Do Hub');
+      expect(el.textContent).toContain('Feedback geven');
+      expect(el.textContent).toContain('Feedback Hub bekijken');
+
+      const fbBtn = Array.from(el.querySelectorAll('button')).find((b) =>
+        b.textContent?.includes('Feedback geven')
+      )!;
+      fbBtn.click();
+      expect(feedback.isComposerOpen()).toBe(true);
+      expect(feedback.composerDefaultPage()).toBe('Algemeen / Hele app');
+    });
+  });
+
+  describe('Feedback Modal, Desktop FAB & Feedback Hub To-Do Lijst', () => {
+    it('opent FeedbackModal met paginadropdown, laat pagina wijzigen (mobiel) en voegt item toe', async () => {
+      const feedback = TestBed.inject(FeedbackStore);
+      const fixture = TestBed.createComponent(FeedbackModalComponent);
+      const comp = fixture.componentInstance;
+
+      feedback.openComposer('Instellingen');
+      fixture.detectChanges();
+      expect(comp.selectedPage()).toBe('Instellingen');
+
+      // Gebruiker kiest via dropdown een andere pagina (zoals op mobiel vanuit Settings)
+      comp.selectedPage.set('Pokédex Binder');
+      comp.category.set('Verbetering');
+      comp.title.set('Filter op shiny kaarten');
+      comp.description.set('Handig voor master sets.');
+      await comp.submit(false);
+
+      expect(feedback.isComposerOpen()).toBe(false);
+      const saved = feedback.items().find((i) => i.title === 'Filter op shiny kaarten')!;
+      expect(saved).toBeDefined();
+      expect(saved.page).toBe('Pokédex Binder');
+      expect(saved.category).toBe('Verbetering');
+
+      // Escape sluit modal
+      feedback.openComposer('Dashboard');
+      comp.onEscapeKey();
+      expect(feedback.isComposerOpen()).toBe(false);
+    });
+
+    it('rendert publieke Feedback Hub to-do lijst met status-, pagina-, categorie- en zoekfilters', async () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+        new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } })
+      );
+
+      const feedback = TestBed.inject(FeedbackStore);
+      const fixture = TestBed.createComponent(FeedbackHubComponent);
+      const comp = fixture.componentInstance;
+      fixture.detectChanges();
+
+      expect(comp.filteredItems().length).toBeGreaterThanOrEqual(4);
+      expect((fixture.nativeElement as HTMLElement).textContent).toContain('Feedback Hub & To-Do Lijst');
+
+      comp.statusFilter.set('done');
+      expect(comp.filteredItems().every((i) => i.status === 'done')).toBe(true);
+
+      comp.statusFilter.set('all');
+      comp.pageFilter.set('Dashboard');
+      expect(comp.filteredItems().every((i) => i.page === 'Dashboard')).toBe(true);
+
+      comp.pageFilter.set('ALL');
+      comp.searchQuery.set('Widget');
+      expect(comp.filteredItems().length).toBe(1);
+
+      const target = comp.filteredItems()[0];
+      const beforeVotes = target.votes;
+      await feedback.toggleUpvote(target);
+      expect(feedback.items().find((i) => i.id === target.id)?.votes).toBe(beforeVotes + 1);
+    });
+
+    it('toont desktop feedback-knop in App shell die huidige route meegeeft aan de modal', async () => {
+      const router = TestBed.inject(Router);
+      const feedback = TestBed.inject(FeedbackStore);
+      const fixture = TestBed.createComponent(App);
+      await router.navigateByUrl('/pokedex');
+      fixture.detectChanges();
+
+      const fab = (fixture.nativeElement as HTMLElement).querySelector(
+        '.desktop-feedback-fab'
+      ) as HTMLButtonElement | null;
+      expect(fab).not.toBeNull();
+      fab!.click();
+
+      expect(feedback.isComposerOpen()).toBe(true);
+      expect(feedback.composerDefaultPage()).toBe('Pokédex Binder');
     });
   });
 });

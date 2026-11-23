@@ -14,7 +14,8 @@
   - **Set Voortgang:** Overzichtskaarten per set met voortgangsbalk en 1-klik filter naar `Collectie`.
   - **Verlanglijst:** Maandbudget-overzicht, filters op prioriteit en budgetstatus, nieuwe wens toevoegen met TCGdex-lookup en 1-klik `"Gevonden → Toevoegen aan Collectie"`.
   - **Ruil & Verkoop:** Live Trade Binder (kaarten met `Te ruil/verkoop = true` of `Aantal > 1`), totale ruilwaarde en transactielogboek voor verkopen/ruilen/inruilen.
-  - **Instellingen:** Google Apps Script Web App URL & persoonlijk API-token beheren, verbinding testen, handmatig volledig synchroniseren, Cardmarket-prijzen verversen, Demo-modus aan/uit en offline-cache legen.
+  - **Feedback Hub (`/feedback`):** Openbare interactieve to-do lijst voor ideeën, bugs en verbeteringen met stemknop, statusbeheer (`Open → Bezig → Afgerond`), voortgangsbalk en filters op status/pagina/categorie. Op desktop op elke pagina bereikbaar via de **Feedback**-knop (automatisch ingevuld met de huidige pagina); op mobiel netjes gecentraliseerd in **Instellingen** met een paginadropdown. Synchroniseert met publieke GitHub Issues (`label: feedback`), het automatische `Feedback`-tabblad in Google Sheets én lokale opslag.
+  - **Instellingen:** Google Apps Script Web App URL & persoonlijk API-token beheren, verbinding testen, handmatig volledig synchroniseren, Cardmarket-prijzen verversen, Demo-modus aan/uit, Feedback geven en offline-cache legen.
 - **Offline-first PWA:** Service Worker caching voor de app én TCGdex artwork/API, lokale snapshot-cache en een offline wijzigingswachtrij die automatisch synchroniseert zodra je weer online bent.
 
 ---
@@ -142,8 +143,8 @@ src/
     │   ├── domain/             # Pure TypeScript modellen, ROI, binder-posities, Pokédex regex
     │   ├── ports/              # Abstracte interfaces (CollectionRepository, CardCatalogPort)
     │   ├── adapters/           # TcgdexAdapter, AppsScriptSheetsAdapter, LocalCacheAdapter
-    │   └── state/              # CollectionStore (Angular Signals)
-    ├── shared/                 # Herbruikbare UI-componenten (o.a. CardArtwork)
+    │   └── state/              # CollectionStore & FeedbackStore (Angular Signals)
+    ├── shared/                 # Herbruikbare UI-componenten (CardArtwork, FeedbackModal)
     └── features/               # Standalone feature modules (dashboard, collection, quick-add,
-                                # pokedex-binder, set-progress, wishlist, trades, settings)
+                                # pokedex-binder, set-progress, wishlist, trades, feedback-hub, settings)
 ```
