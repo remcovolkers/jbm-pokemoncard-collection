@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -13,17 +14,84 @@ function argValue(flag, fallback = '') {
   return fallback;
 }
 
+function parseSemverTuple(raw) {
+  const clean = (raw || '').trim().replace(/^v/i, '').split(/[+-]/)[0] || '0.0.0';
+  const parts = clean.split('.').map((p) => {
+    const n = parseInt(p, 10);
+    return Number.isFinite(n) && n >= 0 ? n : 0;
+  });
+  return [parts[0] ?? 0, parts[1] ?? 0, parts[2] ?? 0];
+}
+
+function compareSemver(a, b) {
+  const pa = parseSemverTuple(a);
+  const pb = parseSemverTuple(b);
+  for (let i = 0; i < 3; i++) {
+    if (pa[i] !== pb[i]) {
+      return pa[i] > pb[i] ? 1 : -1;
+    }
+  }
+  return 0;
+}
+
+function getLatestReleaseTagVersion(cwd) {
+  try {
+    const output = execFileSync('git', ['tag', '--list', 'v*'], {
+      cwd,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    let best = '';
+    for (const line of output.split(/\r?\n/)) {
+      const match = line.trim().match(/^v?(\d+\.\d+\.\d+)$/);
+      if (!match) continue;
+      if (!best || compareSemver(match[1], best) > 0) {
+        best = match[1];
+      }
+    }
+    return best;
+  } catch {
+    return '';
+  }
+}
+
+function getCommitEpochSeconds(cwd) {
+  try {
+    const ts = execFileSync('git', ['show', '-s', '--format=%ct', 'HEAD'], {
+      cwd,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+    return /^\d+$/.test(ts) ? ts : '';
+  } catch {
+    return '';
+  }
+}
+
 const repoFull = argValue('--repo', process.env.GITHUB_REPOSITORY || 'remcovolkers/jbm-pokemoncard-collection');
 const [owner, repo] = repoFull.split('/');
-const nativeVersion = argValue('--native-version', pkg.version || '1.0.0').replace(/^v/i, '');
+
+const explicitNative = argValue('--native-version', '').replace(/^v/i, '');
+const pkgNative = (pkg.version || '1.0.0').replace(/^v/i, '');
+const latestTagNative = explicitNative ? '' : getLatestReleaseTagVersion(root);
+const nativeVersion = explicitNative
+  ? explicitNative
+  : latestTagNative && compareSemver(latestTagNative, pkgNative) > 0
+    ? latestTagNative
+    : pkgNative;
+
 const minNativeVersion = argValue(
   '--min-native-version',
   pkg.pokebinder?.minNativeVersion || '1.0.0'
 ).replace(/^v/i, '');
-const runNumber = process.env.GITHUB_RUN_NUMBER || '';
+
+const buildSeq =
+  (process.env.WEB_BUILD_NUMBER || '').trim() ||
+  getCommitEpochSeconds(root) ||
+  (process.env.GITHUB_RUN_NUMBER || '').trim();
 const webVersion = argValue(
   '--web-version',
-  runNumber ? `${nativeVersion}+${runNumber}` : nativeVersion
+  buildSeq ? `${nativeVersion}+${buildSeq}` : nativeVersion
 );
 const releaseNotes = argValue(
   '--notes',

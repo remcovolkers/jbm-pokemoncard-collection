@@ -21,6 +21,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-tags: true
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -36,6 +38,21 @@ jobs:
 
       - name: Refresh physical Pokémon TCG sets catalog
         run: node scripts/sync-sets-catalog.mjs || echo "Using committed public/sets-catalog.json fallback"
+
+      - name: Resolve consistent OTA build number
+        run: |
+          COMMIT_TS=$(git show -s --format=%ct HEAD 2>/dev/null || date +%s)
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            NOW_TS=$(date +%s)
+            if [ "${NOW_TS}" -gt "${COMMIT_TS}" ]; then
+              BUILD_NUM="${NOW_TS}"
+            else
+              BUILD_NUM="${COMMIT_TS}"
+            fi
+          else
+            BUILD_NUM="${COMMIT_TS}"
+          fi
+          echo "WEB_BUILD_NUMBER=${BUILD_NUM}" >> "$GITHUB_ENV"
 
       - name: Stamp release version for PWA & OTA bundle
         env:

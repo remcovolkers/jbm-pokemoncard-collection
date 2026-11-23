@@ -181,6 +181,8 @@
                 <span>
                   @if (updates.otaState() === 'downloading') {
                     Update wordt op de achtergrond binnengehaald…
+                  } @else if (platform.isNative() && updates.otaState() === 'ready') {
+                    Update staat klaar — wordt automatisch actief bij heropenen of tik op Nu bijwerken.
                   } @else {
                     {{ updates.releaseNotes() || 'Tik op bijwerken om direct de nieuwste versie te laden.' }}
                   }

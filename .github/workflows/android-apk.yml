@@ -66,8 +66,7 @@ jobs:
         run: |
           node scripts/write-version.mjs \
             --repo "${GITHUB_REPOSITORY}" \
-            --native-version "${{ steps.ver.outputs.version }}" \
-            --web-version "${{ steps.ver.outputs.version }}+${GITHUB_RUN_NUMBER}"
+            --native-version "${{ steps.ver.outputs.version }}"
           npm run build:capacitor
           npx cap sync android
 

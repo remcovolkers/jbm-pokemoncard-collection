@@ -37,9 +37,11 @@ export class AppUpdateService {
   readonly webUpdateAvailable = signal<boolean>(false);
   readonly latestWebVersion = signal<string>(APP_VERSION.webVersion);
   readonly otaState = signal<OtaDownloadState>('idle');
+  readonly otaError = signal<string | null>(null);
   readonly otaBundleUrl = signal<string>('');
   readonly otaBundleChecksum = signal<string>('');
   private readyBundleId: string | null = null;
+  private downloadedBundleVersion: string | null = null;
 
   // APK (Native) update state
   readonly apkUpdateAvailable = signal<boolean>(false);
@@ -70,6 +72,12 @@ export class AppUpdateService {
       await this.initNativeUpdater();
     } else {
       this.initPwaUpdater();
+    }
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('online', () => {
+        void this.checkForUpdates(true);
+      });
     }
 
     // Controleer stilletjes op updates bij opstarten (alleen als online)
@@ -204,7 +212,9 @@ export class AppUpdateService {
           this.platform.isNative() &&
           decision.bundleUrl &&
           decision.bundleChecksum &&
-          this.otaState() === 'idle'
+          this.otaState() !== 'downloading' &&
+          this.otaState() !== 'applying' &&
+          this.downloadedBundleVersion !== decision.latestWebVersion
         ) {
           void this.preloadNativeOtaBundle(
             decision.bundleUrl,
@@ -212,6 +222,8 @@ export class AppUpdateService {
             decision.bundleChecksum
           );
         }
+      } else if (this.platform.isNative()) {
+        this.webUpdateAvailable.set(false);
       }
 
       if (!silent) {
@@ -283,18 +295,33 @@ export class AppUpdateService {
 
   private async preloadNativeOtaBundle(url: string, version: string, checksum: string): Promise<void> {
     this.otaState.set('downloading');
+    this.otaError.set(null);
+    this.readyBundleId = null;
+    this.downloadedBundleVersion = null;
     try {
       const bundle = await CapacitorUpdater.download({ url, version, checksum });
       this.readyBundleId = bundle.id;
+      this.downloadedBundleVersion = version;
+      // Zet direct klaar als volgende bundle: bij achtergrond/heropenen past CapacitorUpdater deze automatisch toe
+      try {
+        await CapacitorUpdater.next({ id: bundle.id });
+      } catch {
+        // Handmatig toepassen via set() werkt nog steeds als fallback
+      }
       this.otaState.set('ready');
-    } catch {
+    } catch (err) {
       this.otaState.set('error');
+      this.otaError.set(err instanceof Error ? err.message : 'Download mislukt.');
     }
   }
 
   private async applyNativeOtaUpdate(): Promise<void> {
     try {
-      if (!this.readyBundleId && this.otaBundleUrl()) {
+      const targetVersion = this.latestWebVersion();
+      if (
+        (!this.readyBundleId || this.downloadedBundleVersion !== targetVersion) &&
+        this.otaBundleUrl()
+      ) {
         const checksum = this.otaBundleChecksum();
         if (!checksum) {
           this.otaState.set('error');
@@ -305,12 +332,14 @@ export class AppUpdateService {
           return;
         }
         this.otaState.set('downloading');
+        this.otaError.set(null);
         const bundle = await CapacitorUpdater.download({
           url: this.otaBundleUrl(),
-          version: this.latestWebVersion(),
+          version: targetVersion,
           checksum,
         });
         this.readyBundleId = bundle.id;
+        this.downloadedBundleVersion = targetVersion;
       }
 
       if (!this.readyBundleId) {
@@ -323,6 +352,7 @@ export class AppUpdateService {
     } catch (err) {
       this.otaState.set('error');
       const msg = err instanceof Error ? err.message : 'Kon update niet toepassen.';
+      this.otaError.set(msg);
       this.store.showToast(msg, 'error');
     }
   }
