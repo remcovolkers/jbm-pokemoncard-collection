@@ -60,16 +60,37 @@ function createFakeSheet(name, initialRows = []) {
     setDataValidation(rule) {
       validations.set(`${startRow}:${startCol}`, rule);
     },
+    getDataValidations() {
+      const out = [];
+      for (let r = 0; r < numRows; r++) {
+        const row = [];
+        for (let c = 0; c < numCols; c++) {
+          row.push(validations.get(`${startRow + r}:${startCol + c}`) ?? null);
+        }
+        out.push(row);
+      }
+      return out;
+    },
     clearDataValidations() {
       validations.delete(`${startRow}:${startCol}`);
     },
+    getSheet: () => sheetApi,
+    getRow: () => startRow,
+    getNumRows: () => numRows,
+    getColumn: () => startCol,
+    getNumColumns: () => numCols,
   });
 
-  return {
+  const sheetApi = {
     _grid: grid,
     _validations: validations,
     getName: () => name,
     getLastRow: () => grid.length,
+    clearContents() {
+      grid.length = 0;
+    },
+    setFrozenRows() {},
+    autoResizeColumns() {},
     getRange(a, b, c = 1, d = 1) {
       if (typeof a === 'string') {
         const match = a.match(/^([A-Z]+)(\d+)$/i);
@@ -80,6 +101,8 @@ function createFakeSheet(name, initialRows = []) {
       return rangeObj(a, b, c, d);
     },
   };
+
+  return sheetApi;
 }
 
 function createGasEnvironment(options = {}) {
@@ -168,6 +191,10 @@ function createGasEnvironment(options = {}) {
         waitLock: () => {
           lockState.waitCalls++;
         },
+        tryLock: () => {
+          lockState.waitCalls++;
+          return true;
+        },
         releaseLock: () => {
           lockState.releaseCalls++;
         },
@@ -216,6 +243,7 @@ function createGasEnvironment(options = {}) {
       },
     },
     SpreadsheetApp: {
+      DataValidationCriteria: { VALUE_IN_LIST: 'VALUE_IN_LIST' },
       getActiveSpreadsheet: () => ({
         getName: () => 'Pokémon Kaartencollectie Tracker',
         getSheetByName: (name) => sheets[name] ?? null,
@@ -224,9 +252,14 @@ function createGasEnvironment(options = {}) {
           sheets[name] = created;
           return created;
         },
+        toast: () => {},
       }),
       newDataValidation: () => {
-        const rule = { values: [] };
+        const rule = {
+          values: [],
+          getCriteriaType: () => 'VALUE_IN_LIST',
+          getCriteriaValues: () => [rule.values],
+        };
         return {
           requireValueInList(vals) {
             rule.values = vals;
@@ -505,5 +538,56 @@ describe('apps-script/Code.gs Backend API & Formule-integriteit', () => {
     );
     assert.equal(delRes.ok, true);
     assert.equal(delRes.data.feedback.length, 0);
+  });
+
+  it('handleSheetEdit ondersteunt two-way werken in Google Sheets (auto-fill, Set Voortgang, Cardmarket link, Pokédex I->D vinkje & holo-prijs)', () => {
+    const { sandbox, sheets, lockState } = createGasEnvironment({
+      tcgdexMock: () => ({
+        getResponseCode: () => 200,
+        getContentText: () =>
+          JSON.stringify({
+            id: 'sv03.5-151',
+            localId: '151',
+            name: 'Mew ex',
+            types: ['Psychic'],
+            rarity: 'Special Illustration Rare',
+            set: {
+              id: 'sv03.5',
+              name: '151',
+              serie: { name: 'Scarlet & Violet' },
+              cardCount: { official: 165, total: 207 },
+            },
+            pricing: { cardmarket: { trend: 11.4, 'trend-holo': 24.75 } },
+          }),
+      }),
+    });
+
+    // Mel vult Variant = "Reverse Holo" en typt Kaart-ID "MEW 151" in rij 2 van Collectie
+    sheets.Collectie.getRange(2, 8).setValue('Reverse Holo');
+    sheets.Collectie.getRange(2, 1).setValue('MEW 151');
+    sandbox.handleSheetEdit({
+      range: sheets.Collectie.getRange(2, 1, 1, 1),
+    });
+
+    const row = sheets.Collectie._grid[1];
+    assert.equal(row[0], 'sv03.5-151');
+    assert.equal(row[1], 'Mew ex');
+    assert.equal(row[4], 'EN');
+    assert.equal(row[6], 'Special Illustration Rare');
+    assert.equal(row[9], 'Raw');
+    assert.equal(row[11], 1);
+    assert.equal(row[16], 24.75); // Holo-prijs gekozen i.p.v. normale prijs!
+    assert.equal(row[17], '=FORMULA_TOTAL_VAL'); // R:T formules onaangeroerd
+    assert.match(row[21], /^https:\/\/www\.cardmarket\.com\//);
+    assert.equal(sheets['Set Voortgang']._grid[1][0], '151');
+    assert.equal(sheets['Pokédex Binder']._grid[10][3], true); // Mew (#151) aangevinkt
+
+    // Mel wist kolom I in Pokédex Binder voor Mew -> kolom D (In Binder?) wordt automatisch false
+    sheets['Pokédex Binder'].getRange(11, 9).setValue('');
+    sandbox.handleSheetEdit({
+      range: sheets['Pokédex Binder'].getRange(11, 9, 1, 1),
+    });
+    assert.equal(sheets['Pokédex Binder']._grid[10][3], false);
+    assert.equal(lockState.waitCalls, lockState.releaseCalls);
   });
 });

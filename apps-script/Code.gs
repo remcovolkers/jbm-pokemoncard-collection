@@ -23,8 +23,12 @@ var SHEET_NAMES = {
   WISHLIST: 'Verlanglijst',
   TRADES: 'Ruil & Verkoop',
   SETTINGS: 'Instellingen',
-  FEEDBACK: 'Feedback'
+  FEEDBACK: 'Feedback',
+  SETCODES: 'Setcodes'
 };
+
+var DEX_START_ROW = 8;
+var DEX_COUNT = 1025; // #0001 t/m #1025
 
 var TCGDEX_BASE_URL = 'https://api.tcgdex.net/v2/en';
 
@@ -112,18 +116,43 @@ var SET_CODE_ALIASES = {
 };
 
 // ============================================================================
-// GOOGLE SHEETS UI MENU & TRIGGERS
+// GOOGLE SHEETS UI MENU & TWO-WAY TRIGGERS (DIRECT WERKEN IN SHEETS + APP API)
 // ============================================================================
 
 function onOpen() {
   SpreadsheetApp.getUi()
-    .createMenu('PokéBinder')
-    .addItem('TCGdex info aanvullen voor geselecteerde rij', 'enrichSelectedRowFromMenu')
-    .addItem('Pokédex Binder volledig synchroniseren', 'syncPokedexBinderFromMenu')
-    .addItem('Cardmarket EUR-prijzen verversen', 'refreshAllPricesFromMenu')
+    .createMenu('⚡ Pokémon API / PokéBinder')
+    .addItem('⚙️ Auto-sync aanzetten (1x activeren)', 'installAutoTrigger')
     .addSeparator()
-    .addItem('API-token instellen / bekijken', 'configureApiTokenFromMenu')
+    .addItem('✨ Lege rijen met Kaart-ID aanvullen', 'fillMissingRows')
+    .addItem('📖 Pokédex Binder volledig synchroniseren', 'syncAllPokedexBinder')
+    .addItem('🔄 Alle marktprijzen verversen (Cardmarket EUR)', 'refreshAllPrices')
+    .addItem('📚 Setcodes-tabblad aanmaken / bijwerken', 'syncSetCodesSheet')
+    .addSeparator()
+    .addItem('🔑 PokéBinder App API-token instellen / bekijken', 'configureApiTokenFromMenu')
     .addToUi();
+}
+
+/**
+ * Installeert met 1 klik de onEdit-trigger zodat API-fetch + Set Voortgang + Pokédex-sync
+ * automatisch draaien wanneer iemand direct in Google Sheets werkt.
+ */
+function installAutoTrigger() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  ScriptApp.getProjectTriggers().forEach(function (trigger) {
+    var fn = trigger.getHandlerFunction();
+    if (fn === 'handleSheetEdit' || fn === 'autoFillOnEdit') {
+      ScriptApp.deleteTrigger(trigger);
+    }
+  });
+
+  ScriptApp.newTrigger('handleSheetEdit')
+    .forSpreadsheet(ss)
+    .onEdit()
+    .create();
+
+  ss.toast('Automatische API-aanvulling en Pokédex-sync staan nu aan!', '⚡ Auto-sync actief', 5);
 }
 
 function configureApiTokenFromMenu() {
@@ -145,6 +174,39 @@ function configureApiTokenFromMenu() {
   ui.alert('API-token opgeslagen!\n\nKopieer dit token naar PokéBinder → Meer → Instellingen:\n\n' + value);
 }
 
+/**
+ * Menuknop: Vult alle rijen in Collectie met een Kaart-ID maar lege naam aan + synct Set Voortgang & Pokédex.
+ */
+function fillMissingRows() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(SHEET_NAMES.COLLECTION);
+  if (!sheet) return;
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return;
+
+  var data = sheet.getRange(2, 1, lastRow - 1, 2).getValues();
+  var updated = 0;
+  var failed = [];
+
+  for (var i = 0; i < data.length; i++) {
+    var rawId = String(data[i][0] || '').trim();
+    var name = String(data[i][1] || '').trim();
+    if (rawId && !name) {
+      var card = fetchAndPopulateRow_(ss, sheet, i + 2, rawId, false);
+      if (card) updated++;
+      else failed.push('Rij ' + (i + 2) + ' (' + rawId + ')');
+      if (typeof Utilities !== 'undefined' && Utilities.sleep) Utilities.sleep(120);
+    }
+  }
+
+  syncPokedexBinder_(ss, null);
+
+  var msg = failed.length
+    ? updated + ' kaart(en) aangevuld & Pokédex gesynchroniseerd.\nNiet gevonden: ' + failed.join(', ')
+    : updated + ' kaart(en) aangevuld & Pokédex gesynchroniseerd!';
+  SpreadsheetApp.getUi().alert(msg);
+}
+
 function enrichSelectedRowFromMenu() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getActiveSheet();
@@ -155,42 +217,161 @@ function enrichSelectedRowFromMenu() {
   var row = sheet.getActiveCell().getRow();
   if (row < 2) return;
   enrichCollectionRow_(ss, sheet, row);
-  syncPokedexBinder_(ss);
-}
-
-function syncPokedexBinderFromMenu() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var result = syncPokedexBinder_(ss);
-  SpreadsheetApp.getUi().alert('Pokédex Binder gesynchroniseerd (' + result.updatedSlots + ' slots bijgewerkt).');
-}
-
-function refreshAllPricesFromMenu() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var result = refreshCollectionPrices_(ss);
-  SpreadsheetApp.getUi().alert(
-    'Prijzen bijgewerkt: ' + result.updated + ' van ' + result.total + ' kaarten ververst.'
-  );
+  syncPokedexBinder_(ss, null);
 }
 
 /**
- * Installeerbare onEdit-trigger voor direct werken in Google Sheets.
- * (Koppel via Triggers -> handleSheetEdit -> Bij bewerken)
+ * Menuknop: Synchroniseert de hele Pokédex Binder met de huidige Collectie.
+ */
+function syncAllPokedexBinder() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var summary = syncPokedexBinder_(ss, null);
+  ss.toast(summary.updatedSlots + ' Pokémon-rij(en) bijgewerkt in Pokédex Binder.', '📖 Pokédex Sync', 5);
+}
+
+function syncPokedexBinderFromMenu() {
+  syncAllPokedexBinder();
+}
+
+/**
+ * Menuknop: Ververst kolom Q (Huidige waarde p/s) voor alle kaarten met een geldig Kaart-ID.
+ */
+function refreshAllPrices() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var result = refreshCollectionPrices_(ss);
+  SpreadsheetApp.getUi().alert(
+    'Marktprijzen bijgewerkt voor ' + result.updated + ' van ' + result.total + ' kaart(en).'
+  );
+}
+
+function refreshAllPricesFromMenu() {
+  refreshAllPrices();
+}
+
+/**
+ * Menuknop: Maakt/ververst het overzichtstabblad "Setcodes" met alle officiële TCGdex set-ID's.
+ */
+function syncSetCodesSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(SHEET_NAMES.SETCODES);
+  if (!sheet) sheet = ss.insertSheet(SHEET_NAMES.SETCODES);
+
+  var res = UrlFetchApp.fetch(TCGDEX_BASE_URL + '/sets', { muteHttpExceptions: true });
+  if (res.getResponseCode() !== 200) {
+    SpreadsheetApp.getUi().alert('Kon sets niet ophalen van TCGdex.');
+    return;
+  }
+
+  var sets = JSON.parse(res.getContentText()).reverse();
+  var rows = [['TCGdex Set-ID', 'Setnaam', 'Officieel aantal', 'Totaal (incl. secrets)', 'Voorbeeld Kaart-ID']];
+
+  for (var i = 0; i < sets.length; i++) {
+    var s = sets[i];
+    var official = s.cardCount ? s.cardCount.official : '';
+    var total = s.cardCount ? s.cardCount.total : '';
+    rows.push([s.id, s.name, official, total, s.id + '-001']);
+  }
+
+  if (sheet.clearContents) sheet.clearContents();
+  sheet.getRange(1, 1, rows.length, rows[0].length).setValues(rows);
+  if (sheet.setFrozenRows) sheet.setFrozenRows(1);
+  if (sheet.autoResizeColumns) sheet.autoResizeColumns(1, 5);
+  SpreadsheetApp.getUi().alert(sets.length + ' sets geladen op het tabblad "' + SHEET_NAMES.SETCODES + '".');
+}
+
+/**
+ * Hoofd-trigger bij elke bewerking in de spreadsheet (two-way met de PokéBinder app).
+ * Ondersteunt:
+ *  - Collectie: Kaart-ID typen of plakken (ook meerdere rijen tegelijk) -> TCGdex verrijking,
+ *    Set Voortgang aanvullen & Pokédex Binder synchroniseren.
+ *  - Pokédex Binder: Kolom I (Gekozen Kaart / Art) wijzigen -> automatisch In Binder? (kolom D) vinken.
  */
 function handleSheetEdit(e) {
   if (!e || !e.range) return;
-  var sheet = e.range.getSheet();
-  if (sheet.getName() !== SHEET_NAMES.COLLECTION) return;
-  var row = e.range.getRow();
-  var col = e.range.getColumn();
-  if (row < 2) return;
 
-  var ss = e.source || SpreadsheetApp.getActiveSpreadsheet();
-  if (col === 1) {
-    // Kaart-ID ingevoerd in kolom A -> TCGdex verrijking + Set Voortgang + Pokédex sync
-    enrichCollectionRow_(ss, sheet, row);
-    syncPokedexBinder_(ss);
-  } else if (col === 2 || col === 3 || col === 8 || col === 12 || col === 13 || col === 14) {
-    syncPokedexBinder_(ss);
+  var lock = LockService.getDocumentLock();
+  var locked = lock.tryLock ? lock.tryLock(15000) : (lock.waitLock(15000), true);
+  if (!locked) return;
+
+  try {
+    var sheet = e.range.getSheet();
+    var sheetName = sheet.getName();
+    var ss = e.source || SpreadsheetApp.getActiveSpreadsheet();
+    var startRow = e.range.getRow();
+    var numRows = e.range.getNumRows ? e.range.getNumRows() : 1;
+    var startCol = e.range.getColumn();
+    var endCol = startCol + (e.range.getNumColumns ? e.range.getNumColumns() : 1) - 1;
+
+    // 1. Bewerking in Collectie
+    if (sheetName === SHEET_NAMES.COLLECTION && startRow + numRows - 1 >= 2) {
+      var firstDataRow = Math.max(2, startRow);
+      var lastDataRow = startRow + numRows - 1;
+      var touchedNames = [];
+      var fetchedCount = 0;
+
+      // Als kolom A (Kaart-ID) is ingevuld of geplakt -> direct ophalen via TCGdex API
+      if (startCol <= 1 && endCol >= 1) {
+        var ids = sheet.getRange(firstDataRow, 1, lastDataRow - firstDataRow + 1, 1).getValues();
+        for (var i = 0; i < ids.length; i++) {
+          var row = firstDataRow + i;
+          var rawId = String(ids[i][0] || '').trim();
+          if (!rawId) continue;
+
+          var card = fetchAndPopulateRow_(ss, sheet, row, rawId, false);
+          if (card && card.name) {
+            touchedNames.push(card.name);
+            fetchedCount++;
+          }
+          if (ids.length > 1 && typeof Utilities !== 'undefined' && Utilities.sleep) {
+            Utilities.sleep(100);
+          }
+        }
+      }
+
+      // Sync Pokédex Binder bij wijzigingen aan Kaart-ID, Naam, Set, Zeldzaamheid, Variant of Locatie
+      var affectsDex =
+        (startCol <= 3 && endCol >= 1) ||
+        (startCol <= 8 && endCol >= 7) ||
+        (startCol <= 14 && endCol >= 12);
+
+      if (affectsDex) {
+        var needsFullSync = touchedNames.length === 0;
+        var summary = syncPokedexBinder_(ss, needsFullSync ? null : touchedNames);
+
+        if (ss.toast) {
+          if (fetchedCount === 1 && touchedNames.length === 1) {
+            var msg = summary.multiMatches.length > 0
+              ? touchedNames[0] + ' aangevuld (' + summary.multiMatches[0] + '). Vervang eventueel in Pokédex Binder.'
+              : touchedNames[0] + ' aangevuld & automatisch opgenomen in Pokédex Binder!';
+            ss.toast(msg, '⚡ Pokémon API', 5);
+          } else if (fetchedCount > 1) {
+            ss.toast(
+              fetchedCount + ' kaarten aangevuld en gesynchroniseerd met Pokédex Binder.',
+              '⚡ Pokémon API',
+              5
+            );
+          }
+        }
+      }
+      return;
+    }
+
+    // 2. Bewerking in Pokédex Binder -> kolom I (Gekozen Kaart / Art)
+    if (sheetName === SHEET_NAMES.POKEDEX && startCol <= 9 && endCol >= 9) {
+      var firstDexRow = Math.max(DEX_START_ROW, startRow);
+      var lastDexRow = Math.min(DEX_START_ROW + DEX_COUNT - 1, startRow + numRows - 1);
+      if (firstDexRow > lastDexRow) return;
+
+      var chosenValues = sheet.getRange(firstDexRow, 9, lastDexRow - firstDexRow + 1, 1).getValues();
+      var checkboxRange = sheet.getRange(firstDexRow, 4, lastDexRow - firstDexRow + 1, 1);
+      var newChecks = [];
+      for (var d = 0; d < chosenValues.length; d++) {
+        newChecks.push([String(chosenValues[d][0] || '').trim() !== '']);
+      }
+      checkboxRange.setValues(newChecks);
+    }
+  } finally {
+    lock.releaseLock();
   }
 }
 
@@ -614,8 +795,9 @@ function handleAddCard_(ss, payload) {
       cardData.type = cardData.type || extractCardType_(fetched);
       cardData.rarity = cardData.rarity || mapTcgdexRarity_(fetched.rarity);
       if (!cardData.marketPrice) {
-        cardData.marketPrice = extractCardmarketEur_(fetched);
+        cardData.marketPrice = extractCardmarketEur_(fetched, cardData.variant || '');
       }
+      cardData.setId = (fetched.set && fetched.set.id) || cardData.setId || '';
       cardData.seriesName = (fetched.set && fetched.set.serie && fetched.set.serie.name) || cardData.seriesName || '';
       cardData.setTotalCards =
         (fetched.set && fetched.set.cardCount && (fetched.set.cardCount.official || fetched.set.cardCount.total)) ||
@@ -632,11 +814,12 @@ function handleAddCard_(ss, payload) {
       ss,
       cardData.setName,
       cardData.seriesName || '',
-      toNumber_(cardData.setTotalCards, 0)
+      toNumber_(cardData.setTotalCards, 0),
+      cardData.setId || ''
     );
   }
 
-  syncPokedexBinder_(ss);
+  syncPokedexBinder_(ss, cardData.name ? [cardData.name] : null);
   return { rowIndex: targetRow, cardId: cardData.cardId };
 }
 
@@ -931,7 +1114,7 @@ function findFeedbackRowById_(sheet, id) {
 // SET VOORTGANG & POKÉDEX BINDER SYNC
 // ============================================================================
 
-function ensureSetInProgress_(ss, setName, seriesName, totalCards) {
+function ensureSetInProgress_(ss, setName, seriesName, totalCards, setId) {
   if (!setName) return;
   var sheet = ss.getSheetByName(SHEET_NAMES.SET_PROGRESS);
   if (!sheet) return;
@@ -947,92 +1130,204 @@ function ensureSetInProgress_(ss, setName, seriesName, totalCards) {
     }
   }
 
+  var resolvedSeries = String(seriesName || '').trim();
+  var resolvedTotal = toNumber_(totalCards, 0);
+
+  // Vul Serie/Era en totaal aantal kaarten aan via TCGdex /sets/{id} indien nog niet aanwezig
+  if (setId && (!resolvedSeries || !resolvedTotal)) {
+    var res = UrlFetchApp.fetch(TCGDEX_BASE_URL + '/sets/' + encodeURIComponent(setId), {
+      muteHttpExceptions: true
+    });
+    if (res.getResponseCode() === 200) {
+      try {
+        var fullSet = JSON.parse(res.getContentText());
+        if (!resolvedSeries && fullSet.serie && fullSet.serie.name) {
+          resolvedSeries = String(fullSet.serie.name).trim();
+        }
+        if (!resolvedTotal && fullSet.cardCount) {
+          resolvedTotal = toNumber_(fullSet.cardCount.total || fullSet.cardCount.official, 0);
+        }
+      } catch (e) {
+        // Negeer parse-fout en ga door met bekende waarden
+      }
+    }
+  }
+
   var nextRow = findFirstEmptyRow_(sheet, 2, [1]);
   // Voeg uitsluitend kolommen A:C toe — behoud formules in D:H!
   sheet.getRange(nextRow, 1, 1, 3).setValues([[
     String(setName).trim(),
-    String(seriesName || '').trim(),
-    toNumber_(totalCards, 0)
+    resolvedSeries,
+    resolvedTotal
   ]]);
 }
 
-function syncPokedexBinder_(ss) {
+/**
+ * Synchroniseert dropdowns, automatische keuze en In Binder-vinkjes op "Pokédex Binder".
+ * - Behoudt eerder gekozen favoriete variant (op basis van cardId-prefix).
+ * - Ruimt oude dropdowns & auto-waarden (" | ") netjes op als een kaart verwijderd is,
+ *   maar laat handmatige notities met rust.
+ */
+function syncPokedexBinder_(ss, filterCardNames) {
   var pokedexSheet = ss.getSheetByName(SHEET_NAMES.POKEDEX);
-  if (!pokedexSheet) return { updatedSlots: 0 };
+  if (!pokedexSheet) return { updatedSlots: 0, multiMatches: [] };
 
   var collection = readCollection_(ss);
-  var lastRow = Math.min(pokedexSheet.getLastRow(), 1032);
-  if (lastRow < 8) return { updatedSlots: 0 };
+  var lastRow = Math.min(pokedexSheet.getLastRow(), DEX_START_ROW + DEX_COUNT - 1);
+  if (lastRow < DEX_START_ROW) return { updatedSlots: 0, multiMatches: [] };
 
-  var numRows = lastRow - 7;
-  var dexRows = pokedexSheet.getRange(8, 1, numRows, 10).getValues();
+  var numRows = lastRow - (DEX_START_ROW - 1);
+  var dexRows = pokedexSheet.getRange(DEX_START_ROW, 1, numRows, 10).getValues();
+  var valRange = pokedexSheet.getRange(DEX_START_ROW, 9, numRows, 1);
+  var dexValidations = valRange.getDataValidations ? valRange.getDataValidations() : null;
+
   var updatedSlots = 0;
+  var multiMatches = [];
 
   for (var i = 0; i < dexRows.length; i++) {
     var pokemonName = String(dexRows[i][2] || '').trim();
     if (!pokemonName) continue;
 
+    // Bij gerichte edit: sla Pokémon over die niet voorkomen in de zojuist gewijzigde kaartnamen
+    if (filterCardNames && filterCardNames.length > 0) {
+      var touched = false;
+      for (var f = 0; f < filterCardNames.length; f++) {
+        if (doesCardMatchPokemon_(filterCardNames[f], pokemonName)) {
+          touched = true;
+          break;
+        }
+      }
+      if (!touched) continue;
+    }
+
     var matches = [];
+    var seen = {};
     for (var c = 0; c < collection.length; c++) {
       if (doesCardMatchPokemon_(collection[c].name, pokemonName)) {
-        matches.push(formatBinderChoice_(collection[c]));
+        var label = formatBinderChoice_(collection[c]);
+        if (!seen[label]) {
+          seen[label] = true;
+          matches.push(label);
+        }
       }
     }
 
-    var rowNum = i + 8;
-    var currentInBinder = Boolean(dexRows[i][3]);
+    var rowNum = i + DEX_START_ROW;
+    var currentInBinder = dexRows[i][3] === true;
     var currentChoice = String(dexRows[i][8] || '').trim();
+    var currentRule = dexValidations && dexValidations[i] ? dexValidations[i][0] : null;
     var choiceCell = pokedexSheet.getRange(rowNum, 9);
+    var checkCell = pokedexSheet.getRange(rowNum, 4);
 
-    if (matches.length === 1) {
-      choiceCell.clearDataValidations();
-      if (currentChoice !== matches[0]) {
-        choiceCell.setValue(matches[0]);
-        updatedSlots++;
+    if (matches.length === 0) {
+      var cleared = false;
+      if (currentRule || !dexValidations) {
+        choiceCell.clearDataValidations();
+        if (currentRule) cleared = true;
       }
-      if (!currentInBinder) {
-        pokedexSheet.getRange(rowNum, 4).setValue(true);
-        updatedSlots++;
+      // Ruim alleen auto-gegenereerde waarden (" | ") op; laat handmatige notities staan
+      if (currentChoice.indexOf(' | ') !== -1) {
+        choiceCell.clearContent();
+        if (currentInBinder) checkCell.setValue(false);
+        cleared = true;
       }
-    } else if (matches.length >= 2) {
-      var rule = SpreadsheetApp.newDataValidation().requireValueInList(matches, true).setAllowInvalid(true).build();
-      choiceCell.setDataValidation(rule);
-      if (matches.indexOf(currentChoice) === -1) {
-        choiceCell.setValue(matches[0]);
-        updatedSlots++;
-      }
-      if (!currentInBinder) {
-        pokedexSheet.getRange(rowNum, 4).setValue(true);
-        updatedSlots++;
-      }
-    } else {
-      choiceCell.clearDataValidations();
+      if (cleared) updatedSlots++;
+      continue;
     }
+
+    // Behoud eerder gekozen favoriete variant (op basis van cardId-prefix vóór " | ")
+    var targetVal = matches[0];
+    if (currentChoice) {
+      var currentPrefix = currentChoice.split(' | ')[0].trim().toLowerCase();
+      for (var m = 0; m < matches.length; m++) {
+        if (matches[m].split(' | ')[0].trim().toLowerCase() === currentPrefix) {
+          targetVal = matches[m];
+          break;
+        }
+      }
+    }
+
+    if (matches.length >= 2) {
+      multiMatches.push(matches.length + 'x ' + pokemonName);
+    }
+
+    var rowChanged = false;
+    if (matches.length >= 2) {
+      var existingList =
+        currentRule &&
+        currentRule.getCriteriaType &&
+        SpreadsheetApp.DataValidationCriteria &&
+        currentRule.getCriteriaType() === SpreadsheetApp.DataValidationCriteria.VALUE_IN_LIST
+          ? currentRule.getCriteriaValues()[0]
+          : null;
+      var listChanged = !existingList || existingList.join('\n') !== matches.join('\n');
+      if (listChanged) {
+        var rule = SpreadsheetApp.newDataValidation()
+          .requireValueInList(matches, true)
+          .setAllowInvalid(true)
+          .build();
+        choiceCell.setDataValidation(rule);
+        rowChanged = true;
+      }
+    } else if (currentRule || !dexValidations) {
+      choiceCell.clearDataValidations();
+      if (currentRule) rowChanged = true;
+    }
+
+    if (currentChoice !== targetVal) {
+      choiceCell.setValue(targetVal);
+      rowChanged = true;
+    }
+    if (!currentInBinder) {
+      checkCell.setValue(true);
+      rowChanged = true;
+    }
+
+    if (rowChanged) updatedSlots++;
   }
 
-  return { updatedSlots: updatedSlots };
+  return { updatedSlots: updatedSlots, multiMatches: multiMatches };
 }
 
 function formatBinderChoice_(card) {
-  var detail = card.variant && card.variant !== 'Normal' ? card.variant : card.cardNumber || card.rarity || 'Kaart';
-  return card.cardId + ' | ' + card.setName + ' (' + detail + ')';
+  var labelKey = card.cardId || ((card.setName || '') + ' #' + (card.cardNumber || '')).trim();
+  var detail =
+    card.variant && card.variant !== 'Normal'
+      ? card.variant
+      : card.rarity || card.cardNumber || 'Kaart';
+  var setPart = String(card.setName || '').trim();
+  var label = detail ? labelKey + ' | ' + setPart + ' (' + detail + ')' : labelKey + ' | ' + setPart;
+  return label.replace(/\s+\|\s*$/, '');
 }
 
 /**
- * Exacte Pokédex naam-matching (voorkomt valse matches zoals Mew -> Mewtwo of Porygon -> Porygon-Z).
+ * Exacte Pokédex naam-matching (voorkomt valse matches zoals Mew -> Mewtwo of Porygon -> Porygon-Z,
+ * en ondersteunt zowel "Nidoran♀" als "Nidoran ♀").
  */
+function buildPokemonNameRegex_(pokemonName) {
+  var escaped = String(pokemonName || '').trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  escaped = escaped.replace(/([♀♂])/g, '\\s?$1');
+  return new RegExp(
+    '(^|[\\s\'’\\-])' + escaped + '(?=$|[\\s\'’,.!?]|-(?:EX|GX|V|VMAX|VSTAR|BREAK)\\b|\\s+(?:ex|EX|GX|V|VMAX|VSTAR|δ|★|☆|LV\\.X|BREAK|TAG TEAM))',
+    'i'
+  );
+}
+
 function doesCardMatchPokemon_(cardName, pokemonName) {
   if (!cardName || !pokemonName) return false;
   var cleanCard = String(cardName).trim();
   var cleanPoke = String(pokemonName).trim();
-  var escaped = cleanPoke.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  var regex = new RegExp('(^|[\\s\'’\\-])' + escaped + '(?=$|[\\s\'’,.!?]|\\s+(?:ex|EX|GX|V|VMAX|VSTAR|δ|★|☆|LV\\.X|BREAK|TAG TEAM))', 'i');
+  var regex = buildPokemonNameRegex_(cleanPoke);
   if (!regex.test(cleanCard)) return false;
 
-  // Extra bescherming tegen hyphen-evoluties zoals Porygon vs Porygon-Z en Ho-Oh
+  // Extra bescherming tegen hyphen-evoluties zoals Porygon vs Porygon-Z (maar wel Porygon-GX toestaan)
   var afterIdx = cleanCard.toLowerCase().indexOf(cleanPoke.toLowerCase()) + cleanPoke.length;
-  var nextChar = cleanCard.charAt(afterIdx);
-  if (nextChar === '-' || /[a-z0-9]/i.test(nextChar)) {
+  var remainder = cleanCard.slice(afterIdx);
+  var nextChar = remainder.charAt(0);
+  if (nextChar === '-' && !/^-(?:EX|GX|V|VMAX|VSTAR|BREAK)\b/i.test(remainder)) {
+    return false;
+  }
+  if (/[a-z0-9]/i.test(nextChar)) {
     return false;
   }
   return true;
@@ -1042,30 +1337,49 @@ function doesCardMatchPokemon_(cardName, pokemonName) {
 // TCGDEX ENRICHMENT & PRICE REFRESH
 // ============================================================================
 
-function enrichCollectionRow_(ss, sheet, row) {
-  var rawId = String(sheet.getRange(row, 1).getValue() || '').trim();
-  if (!rawId) return;
-  var normalized = normalizeCardId_(rawId);
+/**
+ * Haalt kaartdata op bij TCGdex en vult de rij in Collectie aan zonder persoonlijke velden
+ * of formule-kolommen (R:T) te overschrijven.
+ */
+function fetchAndPopulateRow_(ss, sheet, row, rawInput, priceOnly) {
+  var normalized = normalizeCardId_(rawInput);
   var card = fetchTcgdexCard_(normalized);
-  if (!card) return;
+  if (!card) return null;
 
-  var existing = sheet.getRange(row, 1, 1, 17).getValues()[0];
-  var setName = (card.set && card.set.name) || existing[2] || '';
+  var existingVariant = String(sheet.getRange(row, 8).getValue() || '');
+  var price = extractCardmarketEur_(card, existingVariant);
+
+  if (priceOnly) {
+    if (price > 0) sheet.getRange(row, 17).setValue(price);
+    return price > 0 ? card : null;
+  }
+
+  var setName = (card.set && card.set.name) || '';
   var cardNum = formatCardNumber_(card.localId, card.set && card.set.cardCount && card.set.cardCount.official);
-  var price = extractCardmarketEur_(card);
+  var cardType = extractCardType_(card);
+  var rarity = mapTcgdexRarity_(card.rarity);
 
-  sheet.getRange(row, 1, 1, 7).setValues([[
-    card.id || normalized,
-    card.name || existing[1] || '',
-    setName,
-    cardNum || existing[3] || '',
-    existing[4] || 'EN',
-    extractCardType_(card) || existing[5] || '',
-    mapTcgdexRarity_(card.rarity) || existing[6] || 'Rare'
-  ]]);
+  // Vaste kaartdata invullen (A, B, C, D, F, G)
+  sheet.getRange(row, 1).setValue(card.id || normalized);
+  sheet.getRange(row, 2).setValue(card.name || '');
+  sheet.getRange(row, 3).setValue(setName);
+  sheet.getRange(row, 4).setValue(cardNum);
+  sheet.getRange(row, 6).setValue(cardType);
+  if (rarity) sheet.getRange(row, 7).setValue(rarity);
+
+  // Defaults alleen als persoonlijke velden nog leeg zijn
+  if (!sheet.getRange(row, 5).getValue()) sheet.getRange(row, 5).setValue('EN');
+  if (!sheet.getRange(row, 10).getValue()) sheet.getRange(row, 10).setValue('Raw');
+  if (!sheet.getRange(row, 12).getValue()) sheet.getRange(row, 12).setValue(1);
 
   if (price > 0) {
     sheet.getRange(row, 17).setValue(price);
+  }
+
+  // Cardmarket zoeklink in kolom V (Notities) alleen als nog leeg
+  if (!sheet.getRange(row, 22).getValue()) {
+    var query = encodeURIComponent((card.name || '') + ' ' + (card.localId || ''));
+    sheet.getRange(row, 22).setValue('https://www.cardmarket.com/en/Pokemon/Products/Search?searchString=' + query);
   }
 
   if (setName) {
@@ -1073,9 +1387,18 @@ function enrichCollectionRow_(ss, sheet, row) {
       ss,
       setName,
       (card.set && card.set.serie && card.set.serie.name) || '',
-      (card.set && card.set.cardCount && (card.set.cardCount.official || card.set.cardCount.total)) || 0
+      (card.set && card.set.cardCount && (card.set.cardCount.total || card.set.cardCount.official)) || 0,
+      (card.set && card.set.id) || ''
     );
   }
+
+  return card;
+}
+
+function enrichCollectionRow_(ss, sheet, row) {
+  var rawId = String(sheet.getRange(row, 1).getValue() || '').trim();
+  if (!rawId) return;
+  fetchAndPopulateRow_(ss, sheet, row, rawId, false);
 }
 
 function refreshCollectionPrices_(ss) {
@@ -1085,6 +1408,7 @@ function refreshCollectionPrices_(ss) {
   if (lastRow < 2) return { updated: 0, total: 0 };
 
   var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+  var variants = sheet.getRange(2, 8, lastRow - 1, 1).getValues();
   var prices = sheet.getRange(2, 17, lastRow - 1, 1).getValues();
   var updated = 0;
   var total = 0;
@@ -1095,7 +1419,7 @@ function refreshCollectionPrices_(ss) {
     total++;
     var card = fetchTcgdexCard_(normalizeCardId_(rawId));
     if (card) {
-      var eur = extractCardmarketEur_(card);
+      var eur = extractCardmarketEur_(card, String(variants[i][0] || ''));
       if (eur > 0) {
         prices[i][0] = eur;
         updated++;
@@ -1151,11 +1475,22 @@ function fetchTcgdexCard_(cardId) {
   return null;
 }
 
-function extractCardmarketEur_(card) {
+/**
+ * Haalt Cardmarket EUR-prijs op; kiest holo-prijs als de variant een holo/reverse is.
+ */
+function extractCardmarketEur_(card, variant) {
   if (!card || !card.pricing || !card.pricing.cardmarket) return 0;
   var cm = card.pricing.cardmarket;
-  var val = cm.trend || cm.avg7 || cm.avg30 || cm.avg || cm.low || 0;
-  return Math.round(toNumber_(val, 0) * 100) / 100;
+  var isHolo = /holo/i.test(String(variant || ''));
+  var candidates = isHolo
+    ? [cm['trend-holo'], cm['avg7-holo'], cm['avg-holo'], cm.trend, cm.avg7, cm.avg30, cm.avg, cm.low]
+    : [cm.trend, cm.avg7, cm.avg30, cm.avg, cm['trend-holo'], cm['avg7-holo'], cm['avg-holo'], cm.low];
+
+  for (var i = 0; i < candidates.length; i++) {
+    var val = toNumber_(candidates[i], 0);
+    if (val > 0) return Math.round(val * 100) / 100;
+  }
+  return 0;
 }
 
 function extractCardType_(card) {
@@ -1166,10 +1501,24 @@ function extractCardType_(card) {
   return '';
 }
 
+/**
+ * Mapt TCGdex zeldzaamheden naar de dropdown-opties in tabblad Instellingen.
+ */
 function mapTcgdexRarity_(rarity) {
-  var r = String(rarity || '').trim();
-  if (!r) return 'Rare';
-  return r;
+  var raw = String(rarity || '').trim();
+  if (!raw) return 'Rare';
+  var r = raw.toLowerCase();
+  if (r.indexOf('special illustration') !== -1) return 'Special Illustration Rare';
+  if (r.indexOf('illustration') !== -1) return 'Illustration Rare';
+  if (r.indexOf('hyper') !== -1 || r.indexOf('secret') !== -1) return 'Hyper Rare';
+  if (r.indexOf('ultra') !== -1 || r.indexOf('full art') !== -1) return 'Ultra Rare';
+  if (r.indexOf('double') !== -1) return 'Double Rare';
+  if (r.indexOf('promo') !== -1) return 'Promo';
+  if (r.indexOf('holo') !== -1) return 'Vintage Holo';
+  if (r.indexOf('uncommon') !== -1) return 'Uncommon';
+  if (r.indexOf('common') !== -1) return 'Common';
+  if (r.indexOf('rare') !== -1) return 'Rare';
+  return raw;
 }
 
 function formatCardNumber_(localId, officialCount) {
