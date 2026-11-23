@@ -74,13 +74,20 @@ jobs:
       - name: Decode optional Android release keystore
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           if [ -n "${ANDROID_KEYSTORE_BASE64}" ]; then
-            echo "${ANDROID_KEYSTORE_BASE64}" | base64 -d > "${RUNNER_TEMP}/release.keystore"
+            if [ -z "${ANDROID_KEYSTORE_PASSWORD}" ] || [ -z "${ANDROID_KEY_ALIAS}" ] || [ -z "${ANDROID_KEY_PASSWORD}" ]; then
+              echo "::error::ANDROID_KEYSTORE_BASE64 is ingesteld, maar ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS of ANDROID_KEY_PASSWORD ontbreekt."
+              exit 1
+            fi
+            printf '%s' "${ANDROID_KEYSTORE_BASE64}" | tr -d '[:space:]' | base64 -d > "${RUNNER_TEMP}/release.keystore"
             echo "ANDROID_KEYSTORE_PATH=${RUNNER_TEMP}/release.keystore" >> "$GITHUB_ENV"
-            echo "Release keystore gedecodeerd."
+            echo "Vaste Android release keystore succesvol gedecodeerd ($(wc -c < "${RUNNER_TEMP}/release.keystore") bytes)."
           else
-            echo "Geen ANDROID_KEYSTORE_BASE64 ingesteld — standaard debug signing wordt gebruikt."
+            echo "::warning::ANDROID_KEYSTORE_BASE64 ontbreekt — APK wordt ondertekend met een tijdelijke CI debug keystore. In-place APK updates op Android kunnen daardoor mislukken met 'App not installed'!"
           fi
 
       - name: Build Android Release APK
@@ -101,6 +108,15 @@ jobs:
           echo "Found APK: ${APK_SRC}"
           cp "${APK_SRC}" pokebinder-release.apk
           ls -lh pokebinder-release.apk
+
+      - name: Verify APK signature
+        run: |
+          APKSIGNER=$(find "${ANDROID_HOME}/build-tools" -name "apksigner" | sort -V | tail -n 1)
+          if [ -z "${APKSIGNER}" ]; then
+            echo "::error::apksigner niet gevonden onder ${ANDROID_HOME}/build-tools"
+            exit 1
+          fi
+          "${APKSIGNER}" verify --verbose --print-certs pokebinder-release.apk
 
       - name: Upload APK workflow artifact
         uses: actions/upload-artifact@v4

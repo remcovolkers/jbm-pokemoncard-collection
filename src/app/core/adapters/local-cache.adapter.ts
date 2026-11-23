@@ -12,11 +12,6 @@ const STORAGE_KEYS = {
   BINDER_LAYOUT: 'pokebinder_binder_layout_v1',
 } as const;
 
-export interface BinderLayoutPreference {
-  slotsPerPage: BinderSlotsPerPage;
-  remoteAtSave?: number;
-}
-
 export interface PackOpeningDefaults {
   enabled: boolean;
   setCode: string;
@@ -125,22 +120,24 @@ export class LocalCacheAdapter {
     this.writeJson(STORAGE_KEYS.PACK_DEFAULTS, defaults);
   }
 
-  loadBinderLayoutPreference(): BinderLayoutPreference | null {
-    const saved = this.readJson<Partial<BinderLayoutPreference>>(STORAGE_KEYS.BINDER_LAYOUT);
-    const spp = saved?.slotsPerPage;
+  loadBinderLayoutPreference(): BinderSlotsPerPage | null {
+    const raw = this.readJson<unknown>(STORAGE_KEYS.BINDER_LAYOUT);
+    const spp =
+      typeof raw === 'number'
+        ? raw
+        : raw && typeof raw === 'object' && 'slotsPerPage' in raw
+          ? (raw as { slotsPerPage?: unknown }).slotsPerPage
+          : undefined;
     if (spp === 4 || spp === 9 || spp === 12 || spp === 16 || spp === 20) {
-      return {
-        slotsPerPage: spp,
-        remoteAtSave: typeof saved?.remoteAtSave === 'number' ? saved.remoteAtSave : undefined,
-      };
+      return spp;
     }
     return null;
   }
 
-  saveBinderLayoutPreference(pref: BinderLayoutPreference | null): void {
+  saveBinderLayoutPreference(slotsPerPage: BinderSlotsPerPage | null): void {
     const s = this.storage;
     if (!s) return;
-    if (!pref) {
+    if (!slotsPerPage) {
       try {
         s.removeItem(STORAGE_KEYS.BINDER_LAYOUT);
       } catch {
@@ -148,7 +145,7 @@ export class LocalCacheAdapter {
       }
       return;
     }
-    this.writeJson(STORAGE_KEYS.BINDER_LAYOUT, pref);
+    this.writeJson(STORAGE_KEYS.BINDER_LAYOUT, { slotsPerPage });
   }
 
   clearDataCaches(): void {

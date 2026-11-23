@@ -208,7 +208,7 @@ describe('CollectionStore (Signals, Optimistic UI & Offline Queue)', () => {
     expect(store.toasts().length).toBe(2);
   });
 
-  it('behoudt 5x4 (20) binder-indeling als remote Apps Script nog de oude H4-waarde (16) terugstuurt, en volgt pas bij expliciete Sheet-wijziging', async () => {
+  it('onthoudt de gekozen binder-indeling per device over syncs, profielswitches, cache wissen en herstart heen', async () => {
     const baseSnap = createDemoSnapshot();
     baseSnap.binderSlotsPerPage = 16;
 
@@ -223,20 +223,42 @@ describe('CollectionStore (Signals, Optimistic UI & Offline Queue)', () => {
     await store.syncFromRemote(true);
     expect(store.binderSlotsPerPage()).toBe(16);
 
-    // Gebruiker kiest 5x4 (20) terwijl remote Web App nog steeds 16 teruggeeft -> mag NIET terugspringen!
+    // Gebruiker kiest 5x4 (20) -> opgeslagen op device zonder remote H4-write, dus twee devices overschrijven elkaar niet
     await store.updatePokedexSlot({ slotsPerPage: 20 });
     expect(store.binderSlotsPerPage()).toBe(20);
     expect(store.pokedex()[19]).toMatchObject({ page: 1, position: 'P1 · R4K5' });
     expect(store.pokedex()[20]).toMatchObject({ page: 2, position: 'P2 · R1K1' });
+    expect(mockRepo.updatePokedexSlot).not.toHaveBeenCalled();
 
-    // Volgende sync waarbij remote nog steeds 16 stuurt -> 20 blijft behouden
+    // Zelfs als Google Sheets daarna 16 of 9 terugstuurt, behoudt dit device 5x4 (20)
     await store.syncFromRemote(true);
     expect(store.binderSlotsPerPage()).toBe(20);
 
-    // Expliciete wijziging rechtstreeks in Google Sheets (H4 -> 9) -> app neemt 9 netjes over
     vi.mocked(mockRepo.bootstrap).mockResolvedValueOnce({ ...baseSnap, binderSlotsPerPage: 9 });
     await store.syncFromRemote(true);
-    expect(store.binderSlotsPerPage()).toBe(9);
+    expect(store.binderSlotsPerPage()).toBe(20);
+
+    // Wisselen van spreadsheet-profiel of legen van cache behoudt eveneens de device-voorkeur
+    store.saveSheetProfile(
+      { name: 'Test Sheet', role: 'test', webAppUrl: 'https://script.google.com/macros/s/test2/exec', apiToken: 'tok2' },
+      { activate: true, disableDemo: true }
+    );
+    await store.syncFromRemote(true);
+    expect(store.binderSlotsPerPage()).toBe(20);
+
+    store.clearOfflineCache();
+    expect(store.binderSlotsPerPage()).toBe(20);
+
+    // Na app-update / herstart (nieuwe store-instantie) blijft 20 actief op dit device
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: COLLECTION_REPOSITORY, useValue: mockRepo },
+        { provide: CARD_CATALOG_PORT, useValue: mockCatalog },
+      ],
+    });
+    const restartedStore = TestBed.inject(CollectionStore);
+    expect(restartedStore.binderSlotsPerPage()).toBe(20);
   });
 
   it('beheert meerdere spreadsheet-profielen (Test vs Live) met strikte snapshot-isolatie', async () => {

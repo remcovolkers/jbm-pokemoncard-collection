@@ -33,7 +33,7 @@ import {
   createDemoSnapshot,
   createEmptySnapshot,
 } from '../adapters/demo-data';
-import { BinderLayoutPreference, LocalCacheAdapter, PackOpeningDefaults } from '../adapters/local-cache.adapter';
+import { LocalCacheAdapter, PackOpeningDefaults } from '../adapters/local-cache.adapter';
 
 export type SyncStatus = 'synced' | 'syncing' | 'offline' | 'demo' | 'unconfigured' | 'error';
 
@@ -43,7 +43,7 @@ export class CollectionStore {
   private readonly catalog = inject(CARD_CATALOG_PORT);
   private readonly cache = inject(LocalCacheAdapter);
 
-  private binderLayoutPref: BinderLayoutPreference | null = this.cache.loadBinderLayoutPreference();
+  private deviceBinderLayout: BinderSlotsPerPage | null = this.cache.loadBinderLayoutPreference();
 
   // Core Reactive Signals
   readonly config = signal<AppConnectionConfig>(this.cache.loadConfig());
@@ -183,13 +183,13 @@ export class CollectionStore {
         Array.isArray(demoCached.pokedex) &&
         demoCached.pokedex.length > 0
       ) {
-        return this.hydrateArtwork(demoCached);
+        return this.applyDeviceBinderLayout(this.hydrateArtwork(demoCached));
       }
-      return createDemoSnapshot();
+      return this.applyDeviceBinderLayout(createDemoSnapshot());
     }
 
     if (!cfg.webAppUrl?.trim() || !cfg.apiToken?.trim()) {
-      return createEmptySnapshot();
+      return this.applyDeviceBinderLayout(createEmptySnapshot());
     }
 
     const liveCached = this.cache.loadSnapshot(cfg.activeProfileId);
@@ -199,51 +199,28 @@ export class CollectionStore {
       Array.isArray(liveCached.pokedex) &&
       liveCached.pokedex.length > 0
     ) {
-      return this.applyBinderLayoutPrefIfNeeded(this.hydrateArtwork(liveCached));
+      return this.applyDeviceBinderLayout(this.hydrateArtwork(liveCached));
     }
-    return createEmptySnapshot();
+    return this.applyDeviceBinderLayout(createEmptySnapshot());
   }
 
-  private applyBinderLayoutPrefIfNeeded(snap: AppSnapshot): AppSnapshot {
-    const pref = this.binderLayoutPref;
-    if (!pref || snap.binderSlotsPerPage === pref.slotsPerPage) {
+  private applyDeviceBinderLayout(snap: AppSnapshot): AppSnapshot {
+    const spp = this.deviceBinderLayout;
+    if (!spp || snap.binderSlotsPerPage === spp) {
       return snap;
     }
     return {
       ...snap,
-      binderSlotsPerPage: pref.slotsPerPage,
+      binderSlotsPerPage: spp,
       pokedex: snap.pokedex.map((slot) => {
-        const pos = calculateBinderPosition(slot.dexNumber, pref.slotsPerPage);
+        const pos = calculateBinderPosition(slot.dexNumber, spp);
         return { ...slot, page: pos.page, position: pos.label };
       }),
     };
   }
 
   private reconcileRemoteSnapshot(remote: AppSnapshot): AppSnapshot {
-    const hydrated = this.hydrateArtwork(remote);
-    const pref = this.binderLayoutPref;
-    if (!pref) return hydrated;
-
-    const remoteSpp = hydrated.binderSlotsPerPage;
-
-    // Geval A: Google Sheets heeft de nieuwe voorkeur nu ook doorgevoerd
-    if (remoteSpp === pref.slotsPerPage) {
-      if (pref.remoteAtSave !== remoteSpp) {
-        this.binderLayoutPref = { ...pref, remoteAtSave: remoteSpp };
-        this.cache.saveBinderLayoutPreference(this.binderLayoutPref);
-      }
-      return hydrated;
-    }
-
-    // Geval B: Iemand heeft cel H4 rechtstreeks in Google Sheets gewijzigd -> neem Sheet-waarde over
-    if (pref.remoteAtSave !== undefined && remoteSpp !== pref.remoteAtSave) {
-      this.binderLayoutPref = null;
-      this.cache.saveBinderLayoutPreference(null);
-      return hydrated;
-    }
-
-    // Geval C: Oud Apps Script / H4-validatie negeerde de nieuwe indeling en stuurde oude waarde terug -> behoud lokale keuze
-    return this.applyBinderLayoutPrefIfNeeded(hydrated);
+    return this.applyDeviceBinderLayout(this.hydrateArtwork(remote));
   }
 
   private hydrateArtwork(snap: AppSnapshot): AppSnapshot {
@@ -274,12 +251,14 @@ export class CollectionStore {
 
     if (partial.demoMode === true && !prev.demoMode) {
       const demoCached = this.cache.loadDemoSnapshot();
-      this.snapshot.set(demoCached ? this.hydrateArtwork(demoCached) : createDemoSnapshot());
+      this.snapshot.set(
+        this.applyDeviceBinderLayout(demoCached ? this.hydrateArtwork(demoCached) : createDemoSnapshot())
+      );
       this.lastError.set(null);
       this.showToast('Demo-modus ingeschakeld met voorbeeldcollectie.', 'info');
     } else if (!next.demoMode && !hasSheet) {
       // Geen spreadsheet gekoppeld -> geen demodata tonen, maar schone lege staat
-      this.snapshot.set(createEmptySnapshot());
+      this.snapshot.set(this.applyDeviceBinderLayout(createEmptySnapshot()));
       this.lastError.set(null);
       if (partial.demoMode === false && prev.demoMode) {
         this.showToast(
@@ -290,7 +269,9 @@ export class CollectionStore {
     } else if (partial.demoMode === false && prev.demoMode && hasSheet) {
       const liveCached = this.cache.loadSnapshot(next.activeProfileId);
       this.snapshot.set(
-        liveCached ? this.applyBinderLayoutPrefIfNeeded(this.hydrateArtwork(liveCached)) : createEmptySnapshot()
+        liveCached
+          ? this.applyDeviceBinderLayout(this.hydrateArtwork(liveCached))
+          : this.applyDeviceBinderLayout(createEmptySnapshot())
       );
       void this.syncFromRemote();
     }
@@ -326,8 +307,6 @@ export class CollectionStore {
     if (activate) {
       const switched = prev.activeProfileId !== profile.id;
       if (switched) {
-        this.binderLayoutPref = null;
-        this.cache.saveBinderLayoutPreference(null);
         this.pendingQueue.set([]);
       }
       this.lastError.set(null);
@@ -345,7 +324,9 @@ export class CollectionStore {
 
       if (switched && !nextDemo) {
         const cached = this.cache.loadSnapshot(profile.id);
-        this.snapshot.set(cached ? this.hydrateArtwork(cached) : createEmptySnapshot());
+        this.snapshot.set(
+          this.applyDeviceBinderLayout(cached ? this.hydrateArtwork(cached) : createEmptySnapshot())
+        );
       }
     } else {
       this.config.set({
@@ -367,8 +348,6 @@ export class CollectionStore {
     if (!profile) return false;
 
     const changedProfile = prev.activeProfileId !== profile.id;
-    this.binderLayoutPref = null;
-    this.cache.saveBinderLayoutPreference(null);
     this.lastError.set(null);
     if (changedProfile) {
       this.pendingQueue.set([]);
@@ -384,7 +363,9 @@ export class CollectionStore {
     });
 
     const cached = this.cache.loadSnapshot(profile.id);
-    this.snapshot.set(cached ? this.hydrateArtwork(cached) : createEmptySnapshot());
+    this.snapshot.set(
+      this.applyDeviceBinderLayout(cached ? this.hydrateArtwork(cached) : createEmptySnapshot())
+    );
 
     this.showToast(
       `Overgeschakeld naar ${profile.name} (${profile.role === 'test' ? 'Test' : 'Live'}).`,
@@ -402,8 +383,6 @@ export class CollectionStore {
     this.cache.removeProfileSnapshot(profileId);
 
     if (prev.activeProfileId === profileId) {
-      this.binderLayoutPref = null;
-      this.cache.saveBinderLayoutPreference(null);
       this.pendingQueue.set([]);
       this.lastError.set(null);
 
@@ -419,7 +398,9 @@ export class CollectionStore {
         });
         if (!prev.demoMode) {
           const cached = this.cache.loadSnapshot(fallback.id);
-          this.snapshot.set(cached ? this.hydrateArtwork(cached) : createEmptySnapshot());
+          this.snapshot.set(
+            this.applyDeviceBinderLayout(cached ? this.hydrateArtwork(cached) : createEmptySnapshot())
+          );
           void this.syncFromRemote(true);
         }
       } else {
@@ -431,7 +412,7 @@ export class CollectionStore {
           apiToken: '',
         });
         if (!prev.demoMode) {
-          this.snapshot.set(createEmptySnapshot());
+          this.snapshot.set(this.applyDeviceBinderLayout(createEmptySnapshot()));
         }
       }
     } else {
@@ -533,9 +514,9 @@ export class CollectionStore {
     this.cache.clearDataCaches();
     this.pendingQueue.set([]);
     if (this.config().demoMode) {
-      this.snapshot.set(createDemoSnapshot());
+      this.snapshot.set(this.applyDeviceBinderLayout(createDemoSnapshot()));
     } else if (!this.isSheetConfigured()) {
-      this.snapshot.set(createEmptySnapshot());
+      this.snapshot.set(this.applyDeviceBinderLayout(createEmptySnapshot()));
     }
     this.showToast('Offline-cache geleegd.', 'info');
   }
@@ -649,16 +630,9 @@ export class CollectionStore {
     const current = this.snapshot();
     const nextSpp: BinderSlotsPerPage = payload.slotsPerPage ?? current.binderSlotsPerPage;
 
-    if (payload.slotsPerPage !== undefined && !this.config().demoMode) {
-      const lastKnownRemote =
-        this.binderLayoutPref?.remoteAtSave !== undefined
-          ? this.binderLayoutPref.remoteAtSave
-          : current.binderSlotsPerPage;
-      this.binderLayoutPref = {
-        slotsPerPage: payload.slotsPerPage,
-        remoteAtSave: lastKnownRemote,
-      };
-      this.cache.saveBinderLayoutPreference(this.binderLayoutPref);
+    if (payload.slotsPerPage !== undefined) {
+      this.deviceBinderLayout = payload.slotsPerPage;
+      this.cache.saveBinderLayoutPreference(payload.slotsPerPage);
     }
 
     const nextPokedex: PokedexSlot[] = current.pokedex.map((slot) => {
@@ -692,12 +666,14 @@ export class CollectionStore {
       syncedAt: new Date().toISOString(),
     });
 
-    await this.dispatchRemoteMutation(
-      'updatePokedexSlot',
-      payload as Record<string, unknown>,
-      payload.dexNumber ? `Pokédex #${payload.dexNumber} bijwerken` : `Binder layout: ${nextSpp} vakjes`,
-      () => this.repo.updatePokedexSlot(this.config(), payload)
-    );
+    if (payload.dexNumber !== undefined) {
+      await this.dispatchRemoteMutation(
+        'updatePokedexSlot',
+        payload as Record<string, unknown>,
+        `Pokédex #${payload.dexNumber} bijwerken`,
+        () => this.repo.updatePokedexSlot(this.config(), payload)
+      );
+    }
   }
 
   getCardsForPokemon(pokemonName: string): CollectionCard[] {
