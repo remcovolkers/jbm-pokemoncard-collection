@@ -207,4 +207,35 @@ describe('CollectionStore (Signals, Optimistic UI & Offline Queue)', () => {
     store.dismissToast(firstId);
     expect(store.toasts().length).toBe(2);
   });
+
+  it('behoudt 5x4 (20) binder-indeling als remote Apps Script nog de oude H4-waarde (16) terugstuurt, en volgt pas bij expliciete Sheet-wijziging', async () => {
+    const baseSnap = createDemoSnapshot();
+    baseSnap.binderSlotsPerPage = 16;
+
+    vi.mocked(mockRepo.bootstrap).mockImplementation(async () => ({ ...baseSnap, binderSlotsPerPage: 16 }));
+    vi.mocked(mockRepo.updatePokedexSlot).mockImplementation(async () => ({ ...baseSnap, binderSlotsPerPage: 16 }));
+
+    store.updateConfig({
+      demoMode: false,
+      webAppUrl: 'https://script.google.com/macros/s/test/exec',
+      apiToken: 'tok',
+    });
+    await store.syncFromRemote(true);
+    expect(store.binderSlotsPerPage()).toBe(16);
+
+    // Gebruiker kiest 5x4 (20) terwijl remote Web App nog steeds 16 teruggeeft -> mag NIET terugspringen!
+    await store.updatePokedexSlot({ slotsPerPage: 20 });
+    expect(store.binderSlotsPerPage()).toBe(20);
+    expect(store.pokedex()[19]).toMatchObject({ page: 1, position: 'P1 · R4K5' });
+    expect(store.pokedex()[20]).toMatchObject({ page: 2, position: 'P2 · R1K1' });
+
+    // Volgende sync waarbij remote nog steeds 16 stuurt -> 20 blijft behouden
+    await store.syncFromRemote(true);
+    expect(store.binderSlotsPerPage()).toBe(20);
+
+    // Expliciete wijziging rechtstreeks in Google Sheets (H4 -> 9) -> app neemt 9 netjes over
+    vi.mocked(mockRepo.bootstrap).mockResolvedValueOnce({ ...baseSnap, binderSlotsPerPage: 9 });
+    await store.syncFromRemote(true);
+    expect(store.binderSlotsPerPage()).toBe(9);
+  });
 });

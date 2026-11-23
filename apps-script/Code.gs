@@ -1116,7 +1116,34 @@ function handleUpdatePokedexSlot_(ss, payload) {
   if (payload.slotsPerPage !== undefined) {
     var spp = toNumber_(payload.slotsPerPage, 9);
     if (spp === 4 || spp === 9 || spp === 12 || spp === 16 || spp === 20) {
-      sheet.getRange('H4').setValue(spp);
+      var h4Range = sheet.getRange('H4');
+      // Upgrade oude dropdown-datavalidatie op H4 automatisch zodat 20 (5x4) altijd geaccepteerd wordt
+      if (spp === 20 && h4Range.getDataValidation && SpreadsheetApp.newDataValidation) {
+        try {
+          var existingRule = h4Range.getDataValidation();
+          if (
+            existingRule &&
+            existingRule.getCriteriaType &&
+            SpreadsheetApp.DataValidationCriteria &&
+            existingRule.getCriteriaType() === SpreadsheetApp.DataValidationCriteria.VALUE_IN_LIST
+          ) {
+            var listVals = existingRule.getCriteriaValues()[0] || [];
+            var has20 = listVals.some(function (v) {
+              return Number(v) === 20;
+            });
+            if (!has20) {
+              var upgradedRule = SpreadsheetApp.newDataValidation()
+                .requireValueInList(['4', '9', '12', '16', '20'], true)
+                .setAllowInvalid(true)
+                .build();
+              h4Range.setDataValidation(upgradedRule);
+            }
+          }
+        } catch (e) {
+          // Negeer als getDataValidation niet beschikbaar is
+        }
+      }
+      h4Range.setValue(spp);
     }
   }
 

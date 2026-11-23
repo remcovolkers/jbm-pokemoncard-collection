@@ -60,6 +60,9 @@ function createFakeSheet(name, initialRows = []) {
     setDataValidation(rule) {
       validations.set(`${startRow}:${startCol}`, rule);
     },
+    getDataValidation() {
+      return validations.get(`${startRow}:${startCol}`) ?? null;
+    },
     getDataValidations() {
       const out = [];
       for (let r = 0; r < numRows; r++) {
@@ -468,7 +471,9 @@ describe('apps-script/Code.gs Backend API & Formule-integriteit', () => {
     assert.equal(sheets['Pokédex Binder']._grid[8][9], true);
     assert.equal(sheets['Pokédex Binder']._grid[8][4], '=E9');
 
-    // 5x4 bulk binder indeling (20 vakjes) opslaan en via bootstrap teruggeven
+    // 5x4 bulk binder indeling (20 vakjes) opslaan, oude H4 dropdown automatisch uitbreiden en via bootstrap teruggeven
+    const oldRule = sandbox.SpreadsheetApp.newDataValidation().requireValueInList(['4', '9', '12', '16'], true).build();
+    sheets['Pokédex Binder'].getRange('H4').setDataValidation(oldRule);
     const res20 = JSON.parse(
       sandbox.doPost({
         postData: {
@@ -483,6 +488,7 @@ describe('apps-script/Code.gs Backend API & Formule-integriteit', () => {
     assert.equal(res20.ok, true);
     assert.equal(sheets['Pokédex Binder']._grid[3][7], 20);
     assert.equal(res20.data.binderSlotsPerPage, 20);
+    assert.ok(sheets['Pokédex Binder'].getRange('H4').getDataValidation().getCriteriaValues()[0].includes('20'));
 
     // Onbekende actie moet netjes lock vrijgeven
     const errRes = JSON.parse(

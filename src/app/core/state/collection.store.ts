@@ -32,7 +32,7 @@ import {
   createDemoSnapshot,
   createEmptySnapshot,
 } from '../adapters/demo-data';
-import { LocalCacheAdapter, PackOpeningDefaults } from '../adapters/local-cache.adapter';
+import { BinderLayoutPreference, LocalCacheAdapter, PackOpeningDefaults } from '../adapters/local-cache.adapter';
 
 export type SyncStatus = 'synced' | 'syncing' | 'offline' | 'demo' | 'unconfigured' | 'error';
 
@@ -41,6 +41,8 @@ export class CollectionStore {
   private readonly repo = inject(COLLECTION_REPOSITORY);
   private readonly catalog = inject(CARD_CATALOG_PORT);
   private readonly cache = inject(LocalCacheAdapter);
+
+  private binderLayoutPref: BinderLayoutPreference | null = this.cache.loadBinderLayoutPreference();
 
   // Core Reactive Signals
   readonly config = signal<AppConnectionConfig>(this.cache.loadConfig());
@@ -178,9 +180,51 @@ export class CollectionStore {
       Array.isArray(liveCached.pokedex) &&
       liveCached.pokedex.length > 0
     ) {
-      return this.hydrateArtwork(liveCached);
+      return this.applyBinderLayoutPrefIfNeeded(this.hydrateArtwork(liveCached));
     }
     return createEmptySnapshot();
+  }
+
+  private applyBinderLayoutPrefIfNeeded(snap: AppSnapshot): AppSnapshot {
+    const pref = this.binderLayoutPref;
+    if (!pref || snap.binderSlotsPerPage === pref.slotsPerPage) {
+      return snap;
+    }
+    return {
+      ...snap,
+      binderSlotsPerPage: pref.slotsPerPage,
+      pokedex: snap.pokedex.map((slot) => {
+        const pos = calculateBinderPosition(slot.dexNumber, pref.slotsPerPage);
+        return { ...slot, page: pos.page, position: pos.label };
+      }),
+    };
+  }
+
+  private reconcileRemoteSnapshot(remote: AppSnapshot): AppSnapshot {
+    const hydrated = this.hydrateArtwork(remote);
+    const pref = this.binderLayoutPref;
+    if (!pref) return hydrated;
+
+    const remoteSpp = hydrated.binderSlotsPerPage;
+
+    // Geval A: Google Sheets heeft de nieuwe voorkeur nu ook doorgevoerd
+    if (remoteSpp === pref.slotsPerPage) {
+      if (pref.remoteAtSave !== remoteSpp) {
+        this.binderLayoutPref = { ...pref, remoteAtSave: remoteSpp };
+        this.cache.saveBinderLayoutPreference(this.binderLayoutPref);
+      }
+      return hydrated;
+    }
+
+    // Geval B: Iemand heeft cel H4 rechtstreeks in Google Sheets gewijzigd -> neem Sheet-waarde over
+    if (pref.remoteAtSave !== undefined && remoteSpp !== pref.remoteAtSave) {
+      this.binderLayoutPref = null;
+      this.cache.saveBinderLayoutPreference(null);
+      return hydrated;
+    }
+
+    // Geval C: Oud Apps Script / H4-validatie negeerde de nieuwe indeling en stuurde oude waarde terug -> behoud lokale keuze
+    return this.applyBinderLayoutPrefIfNeeded(hydrated);
   }
 
   private hydrateArtwork(snap: AppSnapshot): AppSnapshot {
@@ -263,7 +307,7 @@ export class CollectionStore {
     try {
       await this.flushOfflineQueue(true);
       const remote = await this.repo.bootstrap(cfg);
-      this.snapshot.set(this.hydrateArtwork(remote));
+      this.snapshot.set(this.reconcileRemoteSnapshot(remote));
       if (!silent) this.showToast('Google Sheets succesvol gesynchroniseerd!', 'success');
       return true;
     } catch (err) {
@@ -309,7 +353,7 @@ export class CollectionStore {
       }
 
       const result = await this.repo.refreshPrices(cfg);
-      this.snapshot.set(this.hydrateArtwork(result.snapshot));
+      this.snapshot.set(this.reconcileRemoteSnapshot(result.snapshot));
       this.showToast(`${result.updated} van ${result.total} kaartprijzen bijgewerkt in Google Sheets.`, 'success');
     } catch (err) {
       this.showToast(err instanceof Error ? err.message : 'Prijzen verversen mislukt.', 'error');
@@ -436,6 +480,18 @@ export class CollectionStore {
   async updatePokedexSlot(payload: UpdatePokedexSlotPayload): Promise<void> {
     const current = this.snapshot();
     const nextSpp: BinderSlotsPerPage = payload.slotsPerPage ?? current.binderSlotsPerPage;
+
+    if (payload.slotsPerPage !== undefined && !this.config().demoMode) {
+      const lastKnownRemote =
+        this.binderLayoutPref?.remoteAtSave !== undefined
+          ? this.binderLayoutPref.remoteAtSave
+          : current.binderSlotsPerPage;
+      this.binderLayoutPref = {
+        slotsPerPage: payload.slotsPerPage,
+        remoteAtSave: lastKnownRemote,
+      };
+      this.cache.saveBinderLayoutPreference(this.binderLayoutPref);
+    }
 
     const nextPokedex: PokedexSlot[] = current.pokedex.map((slot) => {
       const pos = calculateBinderPosition(slot.dexNumber, nextSpp);
@@ -661,7 +717,7 @@ export class CollectionStore {
             break;
         }
         if (updatedSnap) {
-          this.snapshot.set(this.hydrateArtwork(updatedSnap));
+          this.snapshot.set(this.reconcileRemoteSnapshot(updatedSnap));
         }
       } catch {
         remaining.push(item);
@@ -750,7 +806,7 @@ export class CollectionStore {
     this.lastError.set(null);
     try {
       const updated = await remoteCall();
-      this.snapshot.set(this.hydrateArtwork(updated));
+      this.snapshot.set(this.reconcileRemoteSnapshot(updated));
     } catch (err) {
       this.enqueueMutation(action, payload, description);
       const msg = err instanceof Error ? err.message : 'Kon wijziging niet direct naar Sheets sturen.';

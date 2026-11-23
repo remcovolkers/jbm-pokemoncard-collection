@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { AppConnectionConfig, AppSnapshot, PendingMutation } from '../domain/models';
+import { AppConnectionConfig, AppSnapshot, BinderSlotsPerPage, PendingMutation } from '../domain/models';
 
 const STORAGE_KEYS = {
   SNAPSHOT: 'pokebinder_snapshot_v1',
@@ -9,7 +9,13 @@ const STORAGE_KEYS = {
   ARTWORK_CACHE: 'pokebinder_artwork_cache_v1',
   CARDMARKET_ID_CACHE: 'pokebinder_cm_product_ids_v1',
   PACK_DEFAULTS: 'pokebinder_pack_defaults_v1',
+  BINDER_LAYOUT: 'pokebinder_binder_layout_v1',
 } as const;
+
+export interface BinderLayoutPreference {
+  slotsPerPage: BinderSlotsPerPage;
+  remoteAtSave?: number;
+}
 
 export interface PackOpeningDefaults {
   enabled: boolean;
@@ -100,6 +106,32 @@ export class LocalCacheAdapter {
 
   savePackDefaults(defaults: PackOpeningDefaults): void {
     this.writeJson(STORAGE_KEYS.PACK_DEFAULTS, defaults);
+  }
+
+  loadBinderLayoutPreference(): BinderLayoutPreference | null {
+    const saved = this.readJson<Partial<BinderLayoutPreference>>(STORAGE_KEYS.BINDER_LAYOUT);
+    const spp = saved?.slotsPerPage;
+    if (spp === 4 || spp === 9 || spp === 12 || spp === 16 || spp === 20) {
+      return {
+        slotsPerPage: spp,
+        remoteAtSave: typeof saved?.remoteAtSave === 'number' ? saved.remoteAtSave : undefined,
+      };
+    }
+    return null;
+  }
+
+  saveBinderLayoutPreference(pref: BinderLayoutPreference | null): void {
+    const s = this.storage;
+    if (!s) return;
+    if (!pref) {
+      try {
+        s.removeItem(STORAGE_KEYS.BINDER_LAYOUT);
+      } catch {
+        // Negeer opslagfout
+      }
+      return;
+    }
+    this.writeJson(STORAGE_KEYS.BINDER_LAYOUT, pref);
   }
 
   clearDataCaches(): void {
