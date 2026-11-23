@@ -35,11 +35,16 @@
         <button
           type="button"
           class="pb-btn pb-btn--secondary"
-          [disabled]="feedback.isLoadingPublic()"
-          (click)="feedback.refreshPublicIssues(false)"
-          aria-label="Publieke feedback verversen"
+          [disabled]="feedback.isLoadingHub() || feedback.isLoadingPublic()"
+          (click)="refreshAll()"
+          aria-label="Feedback Hub verversen"
         >
-          <span class="material-symbols-outlined" [class.pb-spin]="feedback.isLoadingPublic()">sync</span>
+          <span
+            class="material-symbols-outlined"
+            [class.pb-spin]="feedback.isLoadingHub() || feedback.isLoadingPublic()"
+          >
+            sync
+          </span>
           <span>Verversen</span>
         </button>
       </div>
@@ -234,6 +239,21 @@
               <p class="todo-item__desc">{{ item.description }}</p>
             }
 
+            @if (item.screenshotUrl) {
+              <button
+                type="button"
+                class="todo-shot-thumb"
+                (click)="openLightbox(item)"
+                title="Klik om screenshot groot te bekijken"
+              >
+                <img [src]="item.screenshotUrl" [alt]="'Screenshot bij ' + item.title" loading="lazy" />
+                <span class="todo-shot-thumb__badge mono">
+                  <span class="material-symbols-outlined">zoom_in</span>
+                  <span>Screenshot</span>
+                </span>
+              </button>
+            }
+
             <div class="todo-item__foot">
               <span class="mono todo-item__meta">
                 {{ item.author }} · {{ formatDate(item.createdAt) }} · {{ sourceLabel(item.source) }}
@@ -309,6 +329,48 @@
           </div>
         </article>
       }
+    </div>
+  }
+
+  <!-- Screenshot Lightbox Modal -->
+  @if (activeLightboxItem(); as shotItem) {
+    <div
+      class="pb-sheet-backdrop hub-lightbox-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Screenshot voorbeeld"
+      (click)="closeLightbox()"
+    >
+      <div class="pb-card hub-lightbox" (click)="$event.stopPropagation()">
+        <div class="hub-lightbox__head">
+          <div>
+            <h3>{{ shotItem.title }}</h3>
+            <span class="mono">{{ shotItem.page }} · {{ shotItem.author }}</span>
+          </div>
+          <button type="button" class="pb-btn pb-btn--icon" aria-label="Sluiten" (click)="closeLightbox()">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+
+        <img
+          [src]="shotItem.screenshotUrl"
+          [alt]="'Screenshot bij ' + shotItem.title"
+          class="hub-lightbox__img"
+        />
+
+        <div class="hub-lightbox__foot">
+          <a
+            class="pb-btn pb-btn--secondary"
+            [href]="buildDriveViewUrl(shotItem.screenshotFileId, shotItem.screenshotUrl)"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <span class="material-symbols-outlined">open_in_new</span>
+            <span>Open in Google Drive</span>
+          </a>
+          <button type="button" class="pb-btn pb-btn--primary" (click)="closeLightbox()">Sluiten</button>
+        </div>
+      </div>
     </div>
   }
 </div>

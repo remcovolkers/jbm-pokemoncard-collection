@@ -25,6 +25,7 @@ export class App implements OnInit {
   ngOnInit(): void {
     void this.platform.initializeNativeShell();
     void this.updates.initialize();
+    void this.feedback.refreshHub(true);
   }
 
   readonly currentUrl = toSignal(

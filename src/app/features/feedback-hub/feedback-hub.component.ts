@@ -1,5 +1,6 @@
-import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, HostListener, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { buildDriveViewUrl } from '../../core/domain/image-compress.utils';
 import {
   FEEDBACK_PAGES,
   FeedbackCategory,
@@ -24,12 +25,14 @@ export class FeedbackHubComponent implements OnInit, OnDestroy {
 
   readonly pages = FEEDBACK_PAGES;
   readonly categories: FeedbackCategory[] = ['Bug', 'Idee', 'Verbetering', 'UI / Design'];
+  readonly buildDriveViewUrl = buildDriveViewUrl;
 
   readonly statusFilter = signal<StatusFilter>('all');
   readonly pageFilter = signal<string>('ALL');
   readonly categoryFilter = signal<string>('ALL');
   readonly searchQuery = signal<string>('');
   readonly copiedKey = signal<string | null>(null);
+  readonly activeLightboxItem = signal<FeedbackItem | null>(null);
 
   private copyResetTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -63,11 +66,35 @@ export class FeedbackHubComponent implements OnInit, OnDestroy {
   });
 
   ngOnInit(): void {
+    void this.feedback.refreshHub(true);
     void this.feedback.refreshPublicIssues(true);
   }
 
   ngOnDestroy(): void {
     if (this.copyResetTimer) clearTimeout(this.copyResetTimer);
+  }
+
+  async refreshAll(): Promise<void> {
+    await Promise.all([
+      this.feedback.refreshHub(false),
+      this.feedback.refreshPublicIssues(true),
+    ]);
+  }
+
+  openLightbox(item: FeedbackItem): void {
+    if (!item.screenshotUrl) return;
+    this.activeLightboxItem.set(item);
+  }
+
+  closeLightbox(): void {
+    this.activeLightboxItem.set(null);
+  }
+
+  @HostListener('document:keydown.escape')
+  onEscapeKey(): void {
+    if (this.activeLightboxItem()) {
+      this.closeLightbox();
+    }
   }
 
   openNewFeedback(): void {
@@ -90,6 +117,8 @@ export class FeedbackHubComponent implements OnInit, OnDestroy {
 
   sourceLabel(source: FeedbackItem['source']): string {
     switch (source) {
+      case 'hub':
+        return 'PokéBinder Hub';
       case 'github':
         return 'Publiek (GitHub)';
       case 'sheets':
@@ -115,6 +144,9 @@ export class FeedbackHubComponent implements OnInit, OnDestroy {
     ];
     if (item.description?.trim()) {
       lines.push('', item.description.trim());
+    }
+    if (item.screenshotUrl?.trim()) {
+      lines.push('', `Screenshot: ${item.screenshotUrl.trim()}`);
     }
     return lines.join('\n');
   }

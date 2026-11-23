@@ -8,6 +8,9 @@ on:
       - 'apps-script/Code.gs'
       - 'apps-script/appsscript.json'
       - 'apps-script/.claspignore'
+      - 'apps-script-feedback/Code.gs'
+      - 'apps-script-feedback/appsscript.json'
+      - 'apps-script-feedback/.claspignore'
       - 'scripts/deploy-gas.mjs'
       - '.github/workflows/deploy-gas.yml'
   workflow_dispatch:
@@ -21,6 +24,7 @@ on:
           - all
           - test
           - live
+          - feedback
 
 concurrency:
   group: gas-deploy
@@ -59,12 +63,12 @@ jobs:
           node -e "
             const fs = require('node:fs');
             const cfg = JSON.parse(process.env.GAS_TARGETS_JSON);
-            for (const name of ['test', 'live']) {
+            for (const name of ['test', 'live', 'feedback']) {
               const entry = cfg[name];
               if (entry && entry.scriptId) {
                 const claspCfg = {
                   scriptId: String(entry.scriptId).trim(),
-                  rootDir: 'apps-script',
+                  rootDir: entry.rootDir || (name === 'feedback' ? 'apps-script-feedback' : 'apps-script'),
                   ...(entry.deploymentId ? { deploymentId: String(entry.deploymentId).trim() } : {})
                 };
                 fs.writeFileSync('.clasp.' + name + '.json', JSON.stringify(claspCfg, null, 2) + '\n');
@@ -76,10 +80,12 @@ jobs:
             npm run gas:deploy -- --target test
           elif [ "${INPUT_TARGET}" = "live" ]; then
             npm run gas:deploy -- --target live
+          elif [ "${INPUT_TARGET}" = "feedback" ]; then
+            npm run gas:deploy -- --target feedback
           else
             npm run gas:deploy:all
           fi
 
       - name: Cleanup clasp credentials & target configs
         if: always()
-        run: rm -f "$HOME/.clasprc.json" .clasp.test.json .clasp.live.json
+        run: rm -f "$HOME/.clasprc.json" .clasp.test.json .clasp.live.json .clasp.feedback.json

@@ -1,9 +1,11 @@
 import { Injectable, computed, effect, inject, signal } from '@angular/core';
+import { FeedbackHubAdapter } from '../adapters/feedback-hub.adapter';
 import {
   FEEDBACK_PAGES,
   FeedbackCategory,
   FeedbackItem,
   FeedbackPage,
+  FeedbackScreenshotUpload,
   FeedbackStatus,
 } from '../domain/models';
 import { APP_VERSION } from '../platform/app-version';
@@ -35,6 +37,7 @@ interface GitHubIssueDto {
 export class FeedbackStore {
   private readonly collectionStore = inject(CollectionStore);
   private readonly repo = inject(COLLECTION_REPOSITORY);
+  private readonly hub = inject(FeedbackHubAdapter);
   private readonly platform = inject(PlatformService);
 
   // Composer Modal state (gedeeld over elke pagina)
@@ -43,27 +46,37 @@ export class FeedbackStore {
   readonly editingItem = signal<FeedbackItem | null>(null);
 
   // Data signals
+  readonly hubItems = signal<FeedbackItem[]>([]);
   readonly localItems = signal<FeedbackItem[]>(this.loadLocalItems());
   readonly githubItems = signal<FeedbackItem[]>([]);
   readonly upvotedIds = signal<string[]>(this.loadUpvotedIds());
   readonly savedAuthor = signal<string>(this.loadSavedAuthor());
+  readonly isLoadingHub = signal<boolean>(false);
   readonly isLoadingPublic = signal<boolean>(false);
+  readonly lastSyncedHubAt = signal<string | null>(null);
   readonly lastSyncedPublicAt = signal<string | null>(null);
 
   /**
-   * Gecombineerde to-do lijst zichtbaar voor iedereen:
-   *  1. Publieke GitHub Issues (label `feedback`) — zichtbaar voor elke bezoeker zonder login
-   *  2. Google Sheets `Feedback`-tabblad (wanneer live gekoppeld)
-   *  3. Lokale feedback-items (of initieel roadmap-overzicht wanneer nog leeg)
+   * Gecombineerde to-do lijst onafhankelijk van collectie-spreadsheets:
+   *  1. Centrale PokéBinder Feedback Hub (vast gekoppeld aan app + Google Drive screenshots)
+   *  2. Publieke GitHub Issues (label `feedback`)
+   *  3. Eventuele oudere Google Sheets `Feedback`-items
+   *  4. Lokale / offline wachtrij-items
    */
   readonly items = computed<FeedbackItem[]>(() => {
+    const hub = this.hubItems();
     const sheetsItems = this.collectionStore.snapshot().feedback ?? [];
     const gh = this.githubItems();
     const local = this.localItems();
 
     const merged = new Map<string, FeedbackItem>();
     for (const item of gh) merged.set(item.id, item);
-    for (const item of sheetsItems) merged.set(item.id, { ...item, source: 'sheets' });
+    for (const item of sheetsItems) {
+      if (!merged.has(item.id)) {
+        merged.set(item.id, { ...item, source: 'sheets' });
+      }
+    }
+    for (const item of hub) merged.set(item.id, { ...item, source: 'hub' });
     for (const item of local) {
       if (!merged.has(item.id)) {
         merged.set(item.id, item);
@@ -141,6 +154,33 @@ export class FeedbackStore {
     return 'Algemeen / Hele app';
   }
 
+  async refreshHub(silent = true): Promise<void> {
+    if (!this.hub.isConfigured() || this.isLoadingHub() || !this.collectionStore.isOnline()) return;
+    this.isLoadingHub.set(true);
+    try {
+      const items = await this.hub.listItems();
+      this.hubItems.set(items);
+      const syncedIds = new Set(items.map((i) => i.id));
+      this.localItems.update((list) => list.filter((i) => !syncedIds.has(i.id)));
+      this.lastSyncedHubAt.set(new Date().toISOString());
+      if (!silent) {
+        this.collectionStore.showToast(
+          `Centrale Feedback Hub gesynchroniseerd (${items.length} items).`,
+          'info'
+        );
+      }
+    } catch {
+      if (!silent) {
+        this.collectionStore.showToast(
+          'Kon centrale Feedback Hub niet laden — controleer internet of autorisatie.',
+          'warning'
+        );
+      }
+    } finally {
+      this.isLoadingHub.set(false);
+    }
+  }
+
   async refreshPublicIssues(silent = true): Promise<void> {
     if (this.isLoadingPublic() || !this.collectionStore.isOnline()) return;
     this.isLoadingPublic.set(true);
@@ -180,12 +220,14 @@ export class FeedbackStore {
     description: string;
     author?: string;
     openGitHubIssue?: boolean;
+    screenshot?: FeedbackScreenshotUpload | null;
   }): Promise<FeedbackItem> {
     const author = (input.author || '').trim() || 'Verzamelaar';
     if (input.author?.trim()) {
       this.savedAuthor.set(input.author.trim());
     }
 
+    const useHub = this.hub.isConfigured();
     const item: FeedbackItem = {
       id: `fb-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       createdAt: new Date().toISOString(),
@@ -197,15 +239,17 @@ export class FeedbackStore {
       votes: 1,
       author,
       platform: `${this.platform.runtimeLabel()} · v${APP_VERSION.webVersion}`,
-      source: this.isSheetsLive() ? 'sheets' : 'local',
+      source: useHub ? 'hub' : this.isSheetsLive() ? 'sheets' : 'local',
+      screenshotUrl: input.screenshot?.dataUrl,
     };
 
-    this.localItems.update((list) => [item, ...list]);
     this.upvotedIds.update((ids) => (ids.includes(item.id) ? ids : [...ids, item.id]));
 
-    if (this.isSheetsLive() && this.repo.addFeedback) {
+    let resultItem = item;
+    if (useHub && this.collectionStore.isOnline()) {
+      this.hubItems.update((list) => [item, ...list]);
       try {
-        const snap = await this.repo.addFeedback(this.collectionStore.config(), {
+        const res = await this.hub.addItem({
           id: item.id,
           createdAt: item.createdAt,
           page: item.page,
@@ -216,20 +260,64 @@ export class FeedbackStore {
           votes: item.votes,
           author: item.author,
           platform: item.platform,
+          screenshot: input.screenshot
+            ? {
+                base64: input.screenshot.base64,
+                mimeType: input.screenshot.mimeType,
+                fileName: input.screenshot.fileName,
+              }
+            : undefined,
         });
-        this.collectionStore.snapshot.set(snap);
+        this.hubItems.set(res.items);
+        this.localItems.update((list) => list.filter((i) => i.id !== item.id));
+        resultItem = res.item;
+        this.collectionStore.showToast(
+          input.screenshot
+            ? 'Feedback + screenshot opgeslagen in centrale Feedback Hub!'
+            : 'Bedankt! Je feedback staat in de centrale Feedback Hub.',
+          'success'
+        );
       } catch {
-        // Lokaal item blijft behouden
+        this.hubItems.update((list) => list.filter((i) => i.id !== item.id));
+        const fallbackLocal: FeedbackItem = { ...item, source: 'local' };
+        this.localItems.update((list) => [fallbackLocal, ...list]);
+        resultItem = fallbackLocal;
+        this.collectionStore.showToast(
+          'Feedback lokaal bewaard (centrale Hub reageerde niet — controleer verbinding).',
+          'warning'
+        );
       }
+    } else {
+      this.localItems.update((list) => [item, ...list]);
+
+      if (!useHub && this.isSheetsLive() && this.repo.addFeedback) {
+        try {
+          const snap = await this.repo.addFeedback(this.collectionStore.config(), {
+            id: item.id,
+            createdAt: item.createdAt,
+            page: item.page,
+            category: item.category,
+            title: item.title,
+            description: item.description,
+            status: item.status,
+            votes: item.votes,
+            author: item.author,
+            platform: item.platform,
+          });
+          this.collectionStore.snapshot.set(snap);
+        } catch {
+          // Lokaal item blijft behouden
+        }
+      }
+      this.collectionStore.showToast('Bedankt! Je feedback staat op de Feedback Hub to-do lijst.', 'success');
     }
 
     if (input.openGitHubIssue) {
-      const ghUrl = this.buildGitHubIssueUrl(item);
+      const ghUrl = this.buildGitHubIssueUrl(resultItem);
       await this.platform.openExternalUrl(ghUrl);
     }
 
-    this.collectionStore.showToast('Bedankt! Je feedback staat op de Feedback Hub to-do lijst.', 'success');
-    return item;
+    return resultItem;
   }
 
   async editFeedback(
@@ -240,12 +328,20 @@ export class FeedbackStore {
       title: string;
       description: string;
       author?: string;
+      screenshot?: FeedbackScreenshotUpload | null;
+      removeScreenshot?: boolean;
     }
   ): Promise<FeedbackItem> {
     const nextAuthor = (input.author || '').trim() || item.author || 'Verzamelaar';
     if (input.author?.trim()) {
       this.savedAuthor.set(input.author.trim());
     }
+
+    const nextScreenshotUrl = input.screenshot
+      ? input.screenshot.dataUrl
+      : input.removeScreenshot
+        ? undefined
+        : item.screenshotUrl;
 
     const updated: FeedbackItem = {
       ...item,
@@ -254,7 +350,38 @@ export class FeedbackStore {
       title: input.title.trim(),
       description: input.description.trim(),
       author: nextAuthor,
+      screenshotUrl: nextScreenshotUrl,
+      screenshotFileId: input.removeScreenshot ? undefined : item.screenshotFileId,
     };
+
+    if (item.source === 'hub') {
+      this.hubItems.update((list) => list.map((i) => (i.id === item.id ? updated : i)));
+      if (this.hub.isConfigured() && this.collectionStore.isOnline()) {
+        try {
+          const syncedList = await this.hub.updateItem({
+            id: item.id,
+            page: updated.page,
+            category: updated.category,
+            title: updated.title,
+            description: updated.description,
+            author: updated.author,
+            screenshot: input.screenshot
+              ? {
+                  base64: input.screenshot.base64,
+                  mimeType: input.screenshot.mimeType,
+                  fileName: input.screenshot.fileName,
+                }
+              : undefined,
+            removeScreenshot: input.removeScreenshot,
+          });
+          this.hubItems.set(syncedList);
+        } catch {
+          // Optimistische update blijft zichtbaar
+        }
+      }
+      this.collectionStore.showToast('Feedback-item bijgewerkt!', 'success');
+      return this.hubItems().find((i) => i.id === item.id) ?? updated;
+    }
 
     if (item.source === 'sheets') {
       this.collectionStore.snapshot.update((snap) => ({
@@ -296,6 +423,21 @@ export class FeedbackStore {
       this.githubItems.update((list) =>
         list.map((i) => (i.id === item.id ? { ...i, status: nextStatus } : i))
       );
+      return;
+    }
+
+    if (item.source === 'hub') {
+      this.hubItems.update((list) =>
+        list.map((i) => (i.id === item.id ? { ...i, status: nextStatus } : i))
+      );
+      if (this.hub.isConfigured() && this.collectionStore.isOnline()) {
+        try {
+          const syncedList = await this.hub.updateItem({ id: item.id, status: nextStatus });
+          this.hubItems.set(syncedList);
+        } catch {
+          // Blijft optimistisch bijgewerkt
+        }
+      }
       return;
     }
 
@@ -354,6 +496,21 @@ export class FeedbackStore {
       return;
     }
 
+    if (item.source === 'hub') {
+      this.hubItems.update((list) =>
+        list.map((i) => (i.id === item.id ? { ...i, votes: nextVotes } : i))
+      );
+      if (this.hub.isConfigured() && this.collectionStore.isOnline()) {
+        try {
+          const syncedList = await this.hub.updateItem({ id: item.id, votes: nextVotes });
+          this.hubItems.set(syncedList);
+        } catch {
+          // Blijft optimistisch bijgewerkt
+        }
+      }
+      return;
+    }
+
     if (item.source === 'sheets') {
       this.collectionStore.snapshot.update((snap) => ({
         ...snap,
@@ -386,6 +543,19 @@ export class FeedbackStore {
 
   async deleteItem(item: FeedbackItem): Promise<void> {
     this.localItems.update((list) => list.filter((i) => i.id !== item.id));
+    if (item.source === 'hub') {
+      this.hubItems.update((list) => list.filter((i) => i.id !== item.id));
+      if (this.hub.isConfigured() && this.collectionStore.isOnline()) {
+        try {
+          const syncedList = await this.hub.deleteItem(item.id);
+          this.hubItems.set(syncedList);
+        } catch {
+          // Negeer
+        }
+      }
+      this.collectionStore.showToast('Feedback-item verwijderd.', 'info');
+      return;
+    }
     if (item.source === 'sheets') {
       this.collectionStore.snapshot.update((snap) => ({
         ...snap,

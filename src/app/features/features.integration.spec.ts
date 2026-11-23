@@ -7,6 +7,7 @@ import { AppsScriptSheetsAdapter } from '../core/adapters/apps-script-sheets.ada
 import { CatalogCard, CatalogCardSummary } from '../core/domain/models';
 import { CARD_CATALOG_PORT, CardCatalogPort } from '../core/ports/card-catalog.port';
 import { COLLECTION_REPOSITORY } from '../core/ports/collection-repository.port';
+import { FEEDBACK_HUB_ENDPOINT } from '../core/platform/feedback-hub-config';
 import { CollectionStore } from '../core/state/collection.store';
 import { FeedbackStore } from '../core/state/feedback.store';
 import { FeedbackModalComponent } from '../shared/feedback-modal/feedback-modal.component';
@@ -123,6 +124,7 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
       ],
       providers: [
         provideRouter(routes),
+        { provide: FEEDBACK_HUB_ENDPOINT, useValue: { endpointUrl: '', appKey: '' } },
         { provide: COLLECTION_REPOSITORY, useExisting: AppsScriptSheetsAdapter },
         { provide: CARD_CATALOG_PORT, useClass: MockCardCatalogAdapter },
       ],
@@ -736,6 +738,27 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
       expect(comp.copiedKey()).toBe(itemA.id);
       await comp.copyFilteredPrompt();
       expect(comp.copiedKey()).toBe('bulk');
+
+      // Screenshot thumbnail + lightbox + prompt URL
+      const itemWithShot = await feedback.submitFeedback({
+        page: 'Collectie',
+        category: 'Bug',
+        title: 'Uitlijning screenshot',
+        description: 'Met Drive preview',
+        screenshot: {
+          base64: 'YWJj',
+          mimeType: 'image/webp',
+          fileName: 'shot.webp',
+          dataUrl: 'data:image/webp;base64,YWJj',
+          sizeKb: 4,
+        },
+      });
+      fixture.detectChanges();
+      expect(comp.formatItemAsPrompt(itemWithShot)).toContain('Screenshot: data:image/webp;base64,YWJj');
+      comp.openLightbox(itemWithShot);
+      expect(comp.activeLightboxItem()?.id).toBe(itemWithShot.id);
+      comp.onEscapeKey();
+      expect(comp.activeLightboxItem()).toBeNull();
     });
 
     it('toont desktop feedback-knop in App shell die huidige route meegeeft aan de modal', async () => {

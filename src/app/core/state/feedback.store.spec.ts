@@ -2,12 +2,17 @@ import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppsScriptSheetsAdapter } from '../adapters/apps-script-sheets.adapter';
 import { createDemoSnapshot } from '../adapters/demo-data';
+import { FeedbackHubAdapter } from '../adapters/feedback-hub.adapter';
+import { FeedbackItem } from '../domain/models';
 import { TcgdexAdapter } from '../adapters/tcgdex.adapter';
+import { FEEDBACK_HUB_ENDPOINT } from '../platform/feedback-hub-config';
 import { PlatformService } from '../platform/platform.service';
 import { CARD_CATALOG_PORT } from '../ports/card-catalog.port';
 import { COLLECTION_REPOSITORY, CollectionRepository } from '../ports/collection-repository.port';
 import { CollectionStore } from './collection.store';
 import { FeedbackStore } from './feedback.store';
+
+const DISABLED_HUB = { provide: FEEDBACK_HUB_ENDPOINT, useValue: { endpointUrl: '', appKey: '' } };
 
 describe('FeedbackStore', () => {
   let store: FeedbackStore;
@@ -18,6 +23,7 @@ describe('FeedbackStore', () => {
     window.localStorage.clear();
     TestBed.configureTestingModule({
       providers: [
+        DISABLED_HUB,
         { provide: COLLECTION_REPOSITORY, useExisting: AppsScriptSheetsAdapter },
         { provide: CARD_CATALOG_PORT, useExisting: TcgdexAdapter },
       ],
@@ -46,6 +52,7 @@ describe('FeedbackStore', () => {
     TestBed.resetTestingModule();
     TestBed.configureTestingModule({
       providers: [
+        DISABLED_HUB,
         { provide: COLLECTION_REPOSITORY, useExisting: AppsScriptSheetsAdapter },
         { provide: CARD_CATALOG_PORT, useExisting: TcgdexAdapter },
       ],
@@ -256,6 +263,7 @@ describe('FeedbackStore', () => {
     window.localStorage.clear();
     TestBed.configureTestingModule({
       providers: [
+        DISABLED_HUB,
         { provide: COLLECTION_REPOSITORY, useValue: repoMock },
         { provide: CARD_CATALOG_PORT, useExisting: TcgdexAdapter },
       ],
@@ -354,6 +362,7 @@ describe('FeedbackStore', () => {
     window.localStorage.clear();
     TestBed.configureTestingModule({
       providers: [
+        DISABLED_HUB,
         { provide: COLLECTION_REPOSITORY, useValue: repoMock },
         { provide: CARD_CATALOG_PORT, useExisting: TcgdexAdapter },
       ],
@@ -404,5 +413,123 @@ describe('FeedbackStore', () => {
     expect(liveFeedback.items().find((i) => i.id === 'fb-sheet-1')?.title).toBe(
       'Aankoopwaarde niet automatisch vullen'
     );
+  });
+
+  it('draait onafhankelijk van collectie-spreadsheets (ook in Demo-modus) en uploadt/vervangt Drive-screenshots via centrale Hub', async () => {
+    let serverList: FeedbackItem[] = [
+      {
+        id: 'fb-remote-1',
+        createdAt: '2026-11-23T12:00:00Z',
+        page: 'Dashboard',
+        category: 'Idee',
+        title: 'Bestaand Hub item',
+        description: 'Centraal opgeslagen',
+        status: 'open',
+        votes: 3,
+        author: 'Remco',
+        platform: 'Web App',
+        source: 'hub',
+      },
+    ];
+
+    const hubMock: Partial<FeedbackHubAdapter> = {
+      isConfigured: () => true,
+      listItems: vi.fn(async () => serverList),
+      addItem: vi.fn(async (payload) => {
+        const created = {
+          id: payload.id,
+          createdAt: payload.createdAt,
+          page: payload.page,
+          category: payload.category,
+          title: payload.title,
+          description: payload.description,
+          status: 'open' as const,
+          votes: payload.votes,
+          author: payload.author,
+          platform: payload.platform,
+          source: 'hub' as const,
+          screenshotUrl: 'https://drive.google.com/thumbnail?id=drive123&sz=w1600',
+          screenshotFileId: 'drive123',
+        };
+        serverList = [created, ...serverList];
+        return { item: created, items: serverList };
+      }),
+      updateItem: vi.fn(async (payload) => {
+        serverList = serverList.map((i) =>
+          i.id === payload.id
+            ? {
+                ...i,
+                title: payload.title ?? i.title,
+                status: (payload.status as 'open' | 'in_progress' | 'done') ?? i.status,
+                votes: payload.votes ?? i.votes,
+                screenshotUrl: payload.removeScreenshot ? '' : i.screenshotUrl,
+                screenshotFileId: payload.removeScreenshot ? '' : i.screenshotFileId,
+              }
+            : i
+        );
+        return serverList;
+      }),
+      deleteItem: vi.fn(async (id) => {
+        serverList = serverList.filter((i) => i.id !== id);
+        return serverList;
+      }),
+    };
+
+    TestBed.resetTestingModule();
+    window.localStorage.clear();
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: FeedbackHubAdapter, useValue: hubMock },
+        { provide: COLLECTION_REPOSITORY, useExisting: AppsScriptSheetsAdapter },
+        { provide: CARD_CATALOG_PORT, useExisting: TcgdexAdapter },
+      ],
+    });
+
+    const demoCol = TestBed.inject(CollectionStore);
+    const hubStore = TestBed.inject(FeedbackStore);
+    expect(demoCol.config().demoMode).toBe(true); // Demo-modus staat AAN (geen collectie-sheet gekoppeld)
+
+    await hubStore.refreshHub(true);
+    expect(hubStore.items().some((i) => i.id === 'fb-remote-1' && i.source === 'hub')).toBe(true);
+
+    const created = await hubStore.submitFeedback({
+      page: 'Collectie',
+      category: 'Bug',
+      title: 'Kaartmodaal screenshot',
+      description: 'Zie bijlage',
+      author: 'Melli',
+      screenshot: {
+        base64: 'YWJj',
+        mimeType: 'image/webp',
+        fileName: 'bug.webp',
+        dataUrl: 'data:image/webp;base64,YWJj',
+        sizeKb: 12,
+      },
+    });
+    expect(created.source).toBe('hub');
+    expect(created.screenshotUrl).toContain('drive123');
+    expect(hubMock.addItem).toHaveBeenCalledWith(
+      expect.objectContaining({
+        screenshot: { base64: 'YWJj', mimeType: 'image/webp', fileName: 'bug.webp' },
+      })
+    );
+
+    await hubStore.editFeedback(created, {
+      page: 'Collectie',
+      category: 'Bug',
+      title: 'Aangepaste titel',
+      description: 'Screenshot verwijderd',
+      author: 'Melli',
+      removeScreenshot: true,
+    });
+    expect(hubMock.updateItem).toHaveBeenCalledWith(
+      expect.objectContaining({ id: created.id, title: 'Aangepaste titel', removeScreenshot: true })
+    );
+
+    await hubStore.setStatus(created, 'done');
+    expect(hubStore.items().find((i) => i.id === created.id)?.status).toBe('done');
+
+    await hubStore.deleteItem(created);
+    expect(hubStore.items().some((i) => i.id === created.id)).toBe(false);
   });
 });

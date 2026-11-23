@@ -49,6 +49,8 @@ Thumbs.db
 .clasprc.json
 apps-script/.clasp.json
 apps-script/.clasp.*.json
+apps-script-feedback/.clasp.json
+apps-script-feedback/.clasp.*.json
 
 # Android Release Keystore (nooit in Git opslaan!)
 android/keystore/

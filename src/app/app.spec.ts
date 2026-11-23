@@ -3,6 +3,7 @@ import { provideRouter } from '@angular/router';
 import { describe, expect, it } from 'vitest';
 import { AppsScriptSheetsAdapter } from './core/adapters/apps-script-sheets.adapter';
 import { TcgdexAdapter } from './core/adapters/tcgdex.adapter';
+import { FEEDBACK_HUB_ENDPOINT } from './core/platform/feedback-hub-config';
 import { CARD_CATALOG_PORT } from './core/ports/card-catalog.port';
 import { COLLECTION_REPOSITORY } from './core/ports/collection-repository.port';
 import { App } from './app';
@@ -13,6 +14,7 @@ describe('App', () => {
       imports: [App],
       providers: [
         provideRouter([]),
+        { provide: FEEDBACK_HUB_ENDPOINT, useValue: { endpointUrl: '', appKey: '' } },
         { provide: COLLECTION_REPOSITORY, useExisting: AppsScriptSheetsAdapter },
         { provide: CARD_CATALOG_PORT, useExisting: TcgdexAdapter },
       ],

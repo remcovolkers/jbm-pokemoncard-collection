@@ -101,11 +101,75 @@
           />
         </div>
 
+        <!-- Screenshot Upload (Klembord / Bestand / Drag & Drop -> Google Drive) -->
+        <div class="pb-field">
+          <span class="pb-label">Screenshot toevoegen (optioneel · Drive)</span>
+
+          @if (activeScreenshotPreviewUrl(); as previewUrl) {
+            <div class="fb-shot-preview">
+              <img [src]="previewUrl" alt="Voorbeeld screenshot" class="fb-shot-preview__img" />
+              <div class="fb-shot-preview__meta">
+                @if (pendingScreenshot(); as pending) {
+                  <span class="mono">{{ pending.fileName }} · {{ pending.sizeKb }} KB</span>
+                } @else {
+                  <span class="mono">Bestaande Drive-screenshot gekoppeld</span>
+                }
+                <div class="fb-shot-preview__btns">
+                  <label class="pb-btn pb-btn--secondary fb-shot-btn">
+                    <span class="material-symbols-outlined">swap_horiz</span>
+                    <span>Vervangen</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      class="sr-only"
+                      (change)="onFileSelected($event)"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    class="pb-btn pb-btn--danger fb-shot-btn"
+                    (click)="clearScreenshot()"
+                  >
+                    <span class="material-symbols-outlined">delete</span>
+                    <span>Verwijderen</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          } @else {
+            <label
+              class="fb-dropzone"
+              [class.is-drag-over]="isDragOver()"
+              (dragover)="onDragOver($event)"
+              (dragleave)="onDragLeave()"
+              (drop)="onDrop($event)"
+            >
+              <input
+                id="fb-screenshot-input"
+                type="file"
+                accept="image/*"
+                class="sr-only"
+                (change)="onFileSelected($event)"
+              />
+              <span class="material-symbols-outlined fb-dropzone__icon">
+                {{ isCompressingImage() ? 'progress_activity' : 'add_photo_alternate' }}
+              </span>
+              <span class="fb-dropzone__text">
+                {{
+                  isCompressingImage()
+                    ? 'Screenshot comprimeren…'
+                    : 'Klik om een screenshot te kiezen, sleep hem hierheen of plak met Ctrl+V'
+                }}
+              </span>
+            </label>
+          }
+        </div>
+
         <div class="fb-actions">
           <button
             type="submit"
             class="pb-btn pb-btn--primary pb-btn--full"
-            [disabled]="!title().trim() || isSubmitting()"
+            [disabled]="!title().trim() || isSubmitting() || isCompressingImage()"
           >
             <span class="material-symbols-outlined">{{ isEditMode() ? 'save' : 'send' }}</span>
             <span>{{ isEditMode() ? 'Wijzigingen opslaan' : 'Opslaan in Feedback Hub' }}</span>

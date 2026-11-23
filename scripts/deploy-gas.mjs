@@ -47,11 +47,15 @@ function runClasp(claspArgs) {
   return result.status ?? 0;
 }
 
+function getDefaultRootDir(target) {
+  return target === 'feedback' ? 'apps-script-feedback' : 'apps-script';
+}
+
 function readClaspConfig(configPath) {
   if (!fs.existsSync(configPath)) {
     console.error(`Configuratiebestand niet gevonden: ${path.basename(configPath)}`);
     console.error('Maak eerst een koppeling aan met:');
-    console.error('  npm run gas:init -- <SCRIPT_ID> [DEPLOYMENT_ID] [--target test|mel]');
+    console.error('  npm run gas:init -- <SCRIPT_ID> [DEPLOYMENT_ID] [--target test|live|feedback]');
     process.exit(1);
   }
   return JSON.parse(fs.readFileSync(configPath, 'utf8'));
@@ -62,11 +66,11 @@ function printHelp() {
 
 Gebruik:
   npm run gas:login
-  npm run gas:init -- <SCRIPT_ID> [DEPLOYMENT_ID] [--target test|live]
-  npm run gas:push -- [--target test|live]
-  npm run gas:deploy -- [--target test|live]
+  npm run gas:init -- <SCRIPT_ID> [DEPLOYMENT_ID] [--target test|live|feedback]
+  npm run gas:push -- [--target test|live|feedback]
+  npm run gas:deploy -- [--target test|live|feedback]
   npm run gas:deploy:all
-  npm run gas:deployments -- [--target test|live]
+  npm run gas:deployments -- [--target test|live|feedback]
 `);
 }
 
@@ -107,12 +111,12 @@ function main() {
       const scriptId = (args[0] || '').trim();
       const deploymentId = (args[1] || '').trim();
       if (!scriptId) {
-        console.error('Gebruik: npm run gas:init -- <SCRIPT_ID> [DEPLOYMENT_ID] [--target test|live]');
+        console.error('Gebruik: npm run gas:init -- <SCRIPT_ID> [DEPLOYMENT_ID] [--target test|live|feedback]');
         process.exit(1);
       }
       const cfg = {
         scriptId,
-        rootDir: 'apps-script',
+        rootDir: getDefaultRootDir(target),
       };
       if (deploymentId) {
         cfg.deploymentId = deploymentId;
@@ -135,7 +139,7 @@ function main() {
     }
 
     case 'deploy-all': {
-      const targets = ['test', 'live'].filter((t) => fs.existsSync(getConfigPath(t)));
+      const targets = ['test', 'live', 'feedback'].filter((t) => fs.existsSync(getConfigPath(t)));
       if (targets.length === 0) {
         console.error('Geen .clasp.test.json of .clasp.live.json gevonden.');
         console.error('Koppel eerst met: npm run gas:init -- <SCRIPT_ID> [DEPLOYMENT_ID] --target test|live');

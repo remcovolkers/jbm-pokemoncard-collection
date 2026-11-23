@@ -1,7 +1,14 @@
 import { Component, HostListener, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { FEEDBACK_PAGES, FeedbackCategory, FeedbackPage } from '../../core/domain/models';
+import { compressScreenshotFile } from '../../core/domain/image-compress.utils';
+import {
+  FEEDBACK_PAGES,
+  FeedbackCategory,
+  FeedbackPage,
+  FeedbackScreenshotUpload,
+} from '../../core/domain/models';
+import { CollectionStore } from '../../core/state/collection.store';
 import { FeedbackStore } from '../../core/state/feedback.store';
 
 @Component({
@@ -13,6 +20,7 @@ import { FeedbackStore } from '../../core/state/feedback.store';
 })
 export class FeedbackModalComponent {
   readonly feedback = inject(FeedbackStore);
+  private readonly collectionStore = inject(CollectionStore);
   private readonly router = inject(Router);
 
   readonly pages = FEEDBACK_PAGES;
@@ -43,22 +51,42 @@ export class FeedbackModalComponent {
   readonly author = signal(this.feedback.savedAuthor());
   readonly isSubmitting = signal(false);
 
+  readonly pendingScreenshot = signal<FeedbackScreenshotUpload | null>(null);
+  readonly existingScreenshotUrl = signal<string>('');
+  readonly removeExistingScreenshot = signal<boolean>(false);
+  readonly isCompressingImage = signal<boolean>(false);
+  readonly isDragOver = signal<boolean>(false);
+
+  readonly activeScreenshotPreviewUrl = computed(() => {
+    const pending = this.pendingScreenshot();
+    if (pending) return pending.dataUrl;
+    if (!this.removeExistingScreenshot() && this.existingScreenshotUrl()) {
+      return this.existingScreenshotUrl();
+    }
+    return '';
+  });
+
   constructor() {
     effect(() => {
       if (!this.feedback.isComposerOpen()) return;
       const editing = this.feedback.editingItem();
+      this.pendingScreenshot.set(null);
+      this.removeExistingScreenshot.set(false);
+      this.isDragOver.set(false);
       if (editing) {
         this.selectedPage.set(editing.page || 'Algemeen / Hele app');
         this.category.set(editing.category || 'Idee');
         this.title.set(editing.title || '');
         this.description.set(editing.description || '');
         this.author.set(editing.author || this.feedback.savedAuthor());
+        this.existingScreenshotUrl.set(editing.screenshotUrl || '');
       } else {
         this.selectedPage.set(this.feedback.composerDefaultPage());
         this.category.set('Idee');
         this.title.set('');
         this.description.set('');
         this.author.set(this.feedback.savedAuthor());
+        this.existingScreenshotUrl.set('');
       }
     });
   }
@@ -72,8 +100,80 @@ export class FeedbackModalComponent {
     void this.router.navigateByUrl('/meer/feedback');
   }
 
+  async onFileSelected(event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement | null;
+    const file = input?.files?.[0];
+    if (input) input.value = '';
+    if (file) {
+      await this.attachImageFile(file);
+    }
+  }
+
+  onDragOver(event: DragEvent): void {
+    event.preventDefault();
+    this.isDragOver.set(true);
+  }
+
+  onDragLeave(): void {
+    this.isDragOver.set(false);
+  }
+
+  async onDrop(event: DragEvent): Promise<void> {
+    event.preventDefault();
+    this.isDragOver.set(false);
+    const file = event.dataTransfer?.files?.[0];
+    if (file) {
+      await this.attachImageFile(file);
+    }
+  }
+
+  @HostListener('window:paste', ['$event'])
+  async onWindowPaste(event: ClipboardEvent): Promise<void> {
+    if (!this.feedback.isComposerOpen()) return;
+    const items = event.clipboardData?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+      const entry = items[i];
+      if (entry.type.startsWith('image/')) {
+        const file = entry.getAsFile();
+        if (file) {
+          event.preventDefault();
+          await this.attachImageFile(file);
+          return;
+        }
+      }
+    }
+  }
+
+  async attachImageFile(file: File): Promise<void> {
+    this.isCompressingImage.set(true);
+    try {
+      const compressed = await compressScreenshotFile(file);
+      this.pendingScreenshot.set(compressed);
+      this.removeExistingScreenshot.set(false);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Kon screenshot niet verwerken.';
+      this.collectionStore.showToast(msg, 'warning');
+    } finally {
+      this.isCompressingImage.set(false);
+    }
+  }
+
+  clearScreenshot(): void {
+    if (this.pendingScreenshot()) {
+      this.pendingScreenshot.set(null);
+      if (!this.existingScreenshotUrl()) {
+        this.removeExistingScreenshot.set(false);
+      }
+      return;
+    }
+    if (this.existingScreenshotUrl()) {
+      this.removeExistingScreenshot.set(true);
+    }
+  }
+
   async submit(openGitHubIssue: boolean): Promise<void> {
-    if (!this.title().trim() || this.isSubmitting()) return;
+    if (!this.title().trim() || this.isSubmitting() || this.isCompressingImage()) return;
 
     this.isSubmitting.set(true);
     try {
@@ -85,6 +185,8 @@ export class FeedbackModalComponent {
           title: this.title(),
           description: this.description(),
           author: this.author(),
+          screenshot: this.pendingScreenshot(),
+          removeScreenshot: this.removeExistingScreenshot(),
         });
       } else {
         await this.feedback.submitFeedback({
@@ -94,10 +196,14 @@ export class FeedbackModalComponent {
           description: this.description(),
           author: this.author(),
           openGitHubIssue,
+          screenshot: this.pendingScreenshot(),
         });
       }
       this.title.set('');
       this.description.set('');
+      this.pendingScreenshot.set(null);
+      this.existingScreenshotUrl.set('');
+      this.removeExistingScreenshot.set(false);
       this.close();
     } finally {
       this.isSubmitting.set(false);

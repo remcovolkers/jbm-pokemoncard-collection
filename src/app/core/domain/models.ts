@@ -30,8 +30,18 @@ export interface FeedbackItem {
   votes: number;
   author: string;
   platform: string;
-  source: 'github' | 'sheets' | 'local';
+  source: 'hub' | 'github' | 'sheets' | 'local';
   externalUrl?: string;
+  screenshotUrl?: string;
+  screenshotFileId?: string;
+}
+
+export interface FeedbackScreenshotUpload {
+  base64: string;
+  mimeType: string;
+  fileName: string;
+  dataUrl: string;
+  sizeKb: number;
 }
 
 export interface CollectionCard {
