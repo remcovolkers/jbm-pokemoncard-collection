@@ -230,7 +230,8 @@ export class CollectionComponent implements OnInit {
     const draft = this.editDraft();
     if (!orig || !draft) return;
 
-    await this.store.updateCard(orig.rowIndex, orig.cardId, {
+    const cardName = draft.name;
+    const patch: Partial<CollectionCard> = {
       quantity: draft.quantity,
       variant: draft.variant,
       condition: draft.condition,
@@ -243,16 +244,18 @@ export class CollectionComponent implements OnInit {
       acquisitionMethod: (draft.acquisitionMethod ?? '').trim(),
       forTrade: draft.forTrade,
       notes: draft.notes,
-    });
-    this.store.showToast(`${draft.name} bijgewerkt.`, 'success');
+    };
+
     this.closeDetail();
+    this.store.showToast(`${cardName} bijgewerkt.`, 'success');
+    await this.store.updateCard(orig.rowIndex, orig.cardId, patch);
   }
 
   async deleteActiveCard(): Promise<void> {
     const card = this.activeCard();
     if (!card) return;
-    await this.store.deleteCard(card);
     this.closeDetail();
+    await this.store.deleteCard(card);
   }
 
   isHoloCard(card: CollectionCard): boolean {

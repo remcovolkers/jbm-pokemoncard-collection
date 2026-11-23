@@ -229,7 +229,21 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
       comp.openDetail(venusaur);
       comp.adjustDraftQty(1);
       await comp.saveDraft();
+      expect(comp.activeCard()).toBeNull();
+      expect(comp.editDraft()).toBeNull();
       expect(store.collection().find((c) => c.cardId === 'sv03.5-198')?.quantity).toBe(initialQty + 1);
+
+      // Sluit ook direct voordat een trage remote sync (pending Promise) afgerond is
+      let resolvePendingUpdate!: () => void;
+      vi.spyOn(store, 'updateCard').mockImplementationOnce(
+        () => new Promise<void>((resolve) => { resolvePendingUpdate = resolve; })
+      );
+      comp.openDetail(store.collection().find((c) => c.cardId === 'sv03.5-198')!);
+      const pendingSave = comp.saveDraft();
+      expect(comp.activeCard()).toBeNull();
+      expect(comp.editDraft()).toBeNull();
+      resolvePendingUpdate();
+      await pendingSave;
 
       // Verwijderen vanuit Detail Sheet
       const toDelete = store.collection().find((c) => c.cardId === 'base1-44')!;

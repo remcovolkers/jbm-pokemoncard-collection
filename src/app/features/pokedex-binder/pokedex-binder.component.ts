@@ -315,17 +315,20 @@ export class PokedexBinderComponent implements OnInit {
   async confirmSlotSelection(): Promise<void> {
     const slot = this.activeSlot();
     if (!slot) return;
-    await this.store.updatePokedexSlot({
+
+    const payload = {
       dexNumber: slot.dexNumber,
       inBinder: this.draftInBinder(),
       selectedCard: this.draftSelectedCard(),
       upgradeWanted: this.draftUpgradeWanted(),
-    });
+    };
+
+    this.closeSlotSheet();
     this.store.showToast(
       `${formatDexNumber(slot.dexNumber)} ${slot.pokemonName} bijgewerkt in Pokédex Binder.`,
       'success'
     );
-    this.closeSlotSheet();
+    await this.store.updatePokedexSlot(payload);
   }
 
   async quickPlaceReadySlot(slot: PokedexSlot): Promise<void> {
