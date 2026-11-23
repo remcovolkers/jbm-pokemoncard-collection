@@ -2,13 +2,18 @@
 @use 'mixins' as *;
 
 .shell {
-  min-height: 100dvh;
+  height: 100dvh;
+  overflow: hidden;
+  overscroll-behavior: none;
   display: flex;
   flex-direction: column;
   background-color: $color-surface;
   color: $color-on-surface;
 
   @include mq-md {
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
     flex-direction: row;
   }
 }
@@ -149,14 +154,14 @@
 // ============================================================================
 .topbar {
   @include surface-glass;
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
+  position: relative;
+  flex-shrink: 0;
   z-index: $z-header;
   padding-top: env(safe-area-inset-top, 0px);
   border-bottom: 1px solid rgba($color-outline-variant, 0.45);
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.45);
+  touch-action: none;
+  overscroll-behavior: none;
 
   @include mq-md {
     display: none;
@@ -318,18 +323,25 @@
 // Hoofdinhoud
 // ============================================================================
 .shell__main {
-  flex: 1;
+  flex: 1 1 auto;
+  min-height: 0;
   width: 100%;
-  padding-top: calc(#{$header-height} + env(safe-area-inset-top, 0px));
-  padding-bottom: calc(#{$bottom-nav-height} + 1.5rem + env(safe-area-inset-bottom, 0px));
+  overflow-y: auto;
+  overflow-x: clip;
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+  padding-top: 0;
+  padding-bottom: 1.5rem;
 
   &.is-quick-add {
-    padding-bottom: calc(9.5rem + env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(8.5rem + env(safe-area-inset-bottom, 0px));
   }
 
   @include mq-md {
     margin-left: $sidebar-width;
     width: calc(100% - #{$sidebar-width});
+    min-height: auto;
+    overflow: visible;
     padding-top: 0;
     padding-bottom: 5rem;
 
@@ -447,14 +459,14 @@
 // ============================================================================
 .bottom-nav {
   @include surface-glass;
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
+  position: relative;
+  flex-shrink: 0;
   z-index: $z-nav;
   padding-bottom: env(safe-area-inset-bottom, 0px);
   border-top: 1px solid rgba($color-outline-variant, 0.5);
   box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.55);
+  touch-action: none;
+  overscroll-behavior: none;
 
   @include mq-md {
     display: none;

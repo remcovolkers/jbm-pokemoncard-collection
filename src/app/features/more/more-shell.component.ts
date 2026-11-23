@@ -73,7 +73,7 @@ import { FeedbackStore } from '../../core/state/feedback.store';
       .more-tabs {
         @include surface-glass;
         position: sticky;
-        top: calc(#{$header-height} + env(safe-area-inset-top, 0px));
+        top: 0;
         z-index: $z-sticky;
         border-bottom: 1px solid rgba($color-outline-variant, 0.55);
 

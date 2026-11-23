@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { Router, provideRouter } from '@angular/router';
 import { describe, expect, it } from 'vitest';
 import { AppsScriptSheetsAdapter } from './core/adapters/apps-script-sheets.adapter';
 import { TcgdexAdapter } from './core/adapters/tcgdex.adapter';
@@ -9,17 +9,21 @@ import { COLLECTION_REPOSITORY } from './core/ports/collection-repository.port';
 import { App } from './app';
 
 describe('App', () => {
-  it('maakt de PokéBinder app-shell aan met navigatie', async () => {
+  it('maakt de PokéBinder app-shell aan met navigatie en reset scroll bij routewissel', async () => {
     await TestBed.configureTestingModule({
       imports: [App],
       providers: [
-        provideRouter([]),
+        provideRouter([
+          { path: 'dashboard', component: App },
+          { path: 'collectie', component: App },
+        ]),
         { provide: FEEDBACK_HUB_ENDPOINT, useValue: { endpointUrl: '', appKey: '' } },
         { provide: COLLECTION_REPOSITORY, useExisting: AppsScriptSheetsAdapter },
         { provide: CARD_CATALOG_PORT, useExisting: TcgdexAdapter },
       ],
     }).compileComponents();
 
+    const router = TestBed.inject(Router);
     const fixture = TestBed.createComponent(App);
     fixture.detectChanges();
     const el = fixture.nativeElement as HTMLElement;
@@ -27,5 +31,13 @@ describe('App', () => {
     expect(el.textContent).toContain('Dashboard');
     expect(el.textContent).toContain('Collectie');
     expect(el.textContent).toContain('Pokédex');
+
+    const mainEl = el.querySelector('.shell__main') as HTMLElement;
+    expect(mainEl).not.toBeNull();
+    mainEl.scrollTop = 240;
+
+    await router.navigateByUrl('/collectie');
+    fixture.detectChanges();
+    expect(mainEl.scrollTop).toBe(0);
   });
 });

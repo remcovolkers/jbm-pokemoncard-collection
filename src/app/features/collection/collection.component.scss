@@ -10,7 +10,7 @@
 .controls {
   @include surface-glass;
   position: sticky;
-  top: calc(#{$header-height} + env(safe-area-inset-top, 0px));
+  top: 0;
   z-index: $z-sticky;
   padding: $space-sm $margin-mobile;
   border-bottom: 1px solid rgba($color-outline-variant, 0.5);

@@ -666,6 +666,7 @@ export class QuickAddComponent implements OnDestroy {
       this.focusTimer = setTimeout(() => {
         try {
           window.scrollTo?.({ top: 0, behavior: 'smooth' });
+          document.querySelector('.shell__main')?.scrollTo?.({ top: 0, behavior: 'smooth' });
         } catch {
           // Negeer in omgevingen zonder scrollTo-implementatie (bijv. jsdom)
         }

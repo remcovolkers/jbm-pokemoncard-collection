@@ -1,4 +1,4 @@
-import { Component, OnInit, computed, inject } from '@angular/core';
+import { Component, ElementRef, OnInit, computed, effect, inject } from '@angular/core';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { filter, map, startWith } from 'rxjs';
@@ -21,6 +21,17 @@ export class App implements OnInit {
   readonly platform = inject(PlatformService);
   readonly updates = inject(AppUpdateService);
   private readonly router = inject(Router);
+  private readonly hostEl = inject(ElementRef<HTMLElement>);
+
+  constructor() {
+    effect(() => {
+      this.currentUrl();
+      const mainEl = this.hostEl.nativeElement.querySelector('.shell__main') as HTMLElement | null;
+      if (mainEl) {
+        mainEl.scrollTop = 0;
+      }
+    });
+  }
 
   ngOnInit(): void {
     void this.platform.initializeNativeShell();
