@@ -47,8 +47,8 @@ function setupFeedbackHub() {
   var info = {
     spreadsheetUrl: ss.getUrl ? ss.getUrl() : '',
     sheetName: sheet.getName(),
-    folderId: folder.getId(),
-    folderUrl: folder.getUrl ? folder.getUrl() : 'https://drive.google.com/drive/folders/' + folder.getId()
+    folderId: folder.id,
+    folderUrl: folder.webViewLink || 'https://drive.google.com/drive/folders/' + folder.id
   };
 
   if (typeof Logger !== 'undefined' && Logger.log) {
@@ -192,8 +192,8 @@ function ensureScreenshotFolder_() {
 
   if (savedId) {
     try {
-      var existing = DriveApp.getFolderById(savedId);
-      if (existing && (!existing.isTrashed || !existing.isTrashed())) {
+      var existing = Drive.Files.get(savedId, { fields: 'id, name, webViewLink, trashed' });
+      if (existing && existing.id && !existing.trashed) {
         return existing;
       }
     } catch (e) {
@@ -201,10 +201,31 @@ function ensureScreenshotFolder_() {
     }
   }
 
-  var iter = DriveApp.getFoldersByName ? DriveApp.getFoldersByName(SCREENSHOT_FOLDER_NAME) : null;
-  var folder = iter && iter.hasNext() ? iter.next() : DriveApp.createFolder(SCREENSHOT_FOLDER_NAME);
+  var safeName = SCREENSHOT_FOLDER_NAME.replace(/'/g, "\\'");
+  var query =
+    "name = '" +
+    safeName +
+    "' and mimeType = 'application/vnd.google-apps.folder' and trashed = false";
+  var listResult = Drive.Files.list({
+    q: query,
+    fields: 'files(id, name, webViewLink)',
+    spaces: 'drive',
+    pageSize: 1
+  });
+  var folder =
+    listResult && listResult.files && listResult.files.length > 0
+      ? listResult.files[0]
+      : Drive.Files.create(
+          {
+            name: SCREENSHOT_FOLDER_NAME,
+            mimeType: 'application/vnd.google-apps.folder'
+          },
+          null,
+          { fields: 'id, name, webViewLink' }
+        );
+
   try {
-    props.setProperty('SCREENSHOT_FOLDER_ID', folder.getId());
+    props.setProperty('SCREENSHOT_FOLDER_ID', folder.id);
   } catch (e) {
     // Negeer als read-only
   }
@@ -236,23 +257,29 @@ function uploadScreenshotToDrive_(screenshot, itemId) {
 
   var folder = ensureScreenshotFolder_();
   var blob = Utilities.newBlob(bytes, mimeType, fileName);
-  var file = folder.createFile(blob);
-  if (file.setSharing && DriveApp.Access && DriveApp.Permission) {
-    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-  }
+  var file = Drive.Files.create(
+    {
+      name: fileName,
+      mimeType: mimeType,
+      parents: [folder.id]
+    },
+    blob,
+    { fields: 'id' }
+  );
 
-  var fileId = file.getId();
+  Drive.Permissions.create({ role: 'reader', type: 'anyone' }, file.id);
+
   return {
-    fileId: fileId,
-    url: 'https://drive.google.com/thumbnail?id=' + encodeURIComponent(fileId) + '&sz=w1600'
+    fileId: file.id,
+    url: 'https://drive.google.com/thumbnail?id=' + encodeURIComponent(file.id) + '&sz=w1600'
   };
 }
 
 function trashDriveFileSafe_(fileId) {
   var clean = String(fileId || '').trim();
-  if (!clean || typeof DriveApp === 'undefined' || !DriveApp.getFileById) return;
+  if (!clean || typeof Drive === 'undefined' || !Drive.Files || !Drive.Files.update) return;
   try {
-    DriveApp.getFileById(clean).setTrashed(true);
+    Drive.Files.update({ trashed: true }, clean);
   } catch (e) {
     // Negeer als bestand al verwijderd of niet toegankelijk is
   }

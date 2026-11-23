@@ -89,35 +89,7 @@ function createFeedbackEnv() {
 
   const lockState = { waits: 0, releases: 0 };
 
-  const createFolderObj = (id, name) => ({
-    getId: () => id,
-    getName: () => name,
-    getUrl: () => `https://drive.google.com/drive/folders/${id}`,
-    isTrashed: () => false,
-    createFile(blob) {
-      const fileId = `drive-file-${++fileSeq}`;
-      const record = {
-        id: fileId,
-        name: blob.name,
-        mimeType: blob.mimeType,
-        size: blob.bytes.length,
-        access: null,
-        permission: null,
-        trashed: false,
-      };
-      driveFiles.set(fileId, record);
-      return {
-        getId: () => fileId,
-        setSharing(access, permission) {
-          record.access = access;
-          record.permission = permission;
-        },
-        setTrashed(flag) {
-          record.trashed = flag;
-        },
-      };
-    },
-  });
+  const FOLDER_MIME = 'application/vnd.google-apps.folder';
 
   const sandbox = {
     console,
@@ -162,29 +134,69 @@ function createFeedbackEnv() {
       base64Decode: (b64) => Array.from(Buffer.from(b64, 'base64')),
       newBlob: (bytes, mimeType, name) => ({ bytes, mimeType, name }),
     },
-    DriveApp: {
-      Access: { ANYONE_WITH_LINK: 'ANYONE_WITH_LINK' },
-      Permission: { VIEW: 'VIEW' },
-      getFoldersByName(name) {
-        const match = Array.from(driveFolders.values()).filter((f) => f.getName() === name);
-        let idx = 0;
-        return { hasNext: () => idx < match.length, next: () => match[idx++] };
+    Drive: {
+      Files: {
+        get(id) {
+          const folder = driveFolders.get(id);
+          if (folder) return folder;
+          const file = driveFiles.get(id);
+          if (file) return file;
+          throw new Error('File not found');
+        },
+        list(params = {}) {
+          const q = String(params.q || '');
+          const nameMatch = q.match(/name = '([^']+)'/);
+          const wantedName = nameMatch ? nameMatch[1].replace(/\\'/g, "'") : null;
+          const wantsFolder = q.includes(`mimeType = '${FOLDER_MIME}'`);
+          const wantsNotTrashed = q.includes('trashed = false');
+          const matches = Array.from(driveFolders.values()).filter((f) => {
+            if (wantsFolder && f.mimeType !== FOLDER_MIME) return false;
+            if (wantsNotTrashed && f.trashed) return false;
+            if (wantedName && f.name !== wantedName) return false;
+            return true;
+          });
+          return { files: matches };
+        },
+        create(resource, blob) {
+          if (resource.mimeType === FOLDER_MIME) {
+            const id = `drive-folder-${++folderSeq}`;
+            const folder = {
+              id,
+              name: resource.name,
+              mimeType: FOLDER_MIME,
+              webViewLink: `https://drive.google.com/drive/folders/${id}`,
+              trashed: false,
+            };
+            driveFolders.set(id, folder);
+            return folder;
+          }
+          const fileId = `drive-file-${++fileSeq}`;
+          const record = {
+            id: fileId,
+            name: resource.name,
+            mimeType: resource.mimeType,
+            parents: resource.parents ?? [],
+            size: blob ? blob.bytes.length : 0,
+            permission: null,
+            trashed: false,
+          };
+          driveFiles.set(fileId, record);
+          return { id: fileId, name: record.name, mimeType: record.mimeType };
+        },
+        update(resource, fileId) {
+          const rec = driveFiles.get(fileId) || driveFolders.get(fileId);
+          if (!rec) throw new Error('File not found');
+          Object.assign(rec, resource);
+          return rec;
+        },
       },
-      createFolder(name) {
-        const id = `drive-folder-${++folderSeq}`;
-        const f = createFolderObj(id, name);
-        driveFolders.set(id, f);
-        return f;
-      },
-      getFolderById: (id) => driveFolders.get(id) ?? null,
-      getFileById(id) {
-        const rec = driveFiles.get(id);
-        if (!rec) throw new Error('File not found');
-        return {
-          setTrashed(flag) {
-            rec.trashed = flag;
-          },
-        };
+      Permissions: {
+        create(permission, fileId) {
+          const rec = driveFiles.get(fileId);
+          if (!rec) throw new Error('File not found');
+          rec.permission = permission;
+          return permission;
+        },
       },
     },
     SpreadsheetApp: {
@@ -202,6 +214,7 @@ describe('apps-script-feedback/Code.gs Centrale Feedback Hub + Drive Screenshots
   it('richt tijdens setupFeedbackHub automatisch tabblad en Drive-map in en weigert ongeldige appKey', () => {
     const { sandbox, ssApi, driveFolders } = createFeedbackEnv();
     const info = sandbox.setupFeedbackHub();
+    assert.equal(/\bDriveApp\b/.test(CODE_GS_SOURCE), false);
     assert.equal(info.sheetName, 'Feedback');
     assert.equal(driveFolders.size, 1);
     assert.equal(ssApi.getSheetByName('Feedback')._grid[0][10], 'Screenshot URL');
@@ -253,8 +266,10 @@ describe('apps-script-feedback/Code.gs Centrale Feedback Hub + Drive Screenshots
     assert.equal(addRes.items[0].source, 'hub');
     assert.equal(addRes.items[0].screenshotFileId, 'drive-file-1');
     assert.equal(addRes.items[0].screenshotUrl, 'https://drive.google.com/thumbnail?id=drive-file-1&sz=w1600');
-    assert.equal(driveFiles.get('drive-file-1').access, 'ANYONE_WITH_LINK');
-    assert.equal(driveFiles.get('drive-file-1').permission, 'VIEW');
+    assert.equal(driveFiles.get('drive-file-1').parents.length, 1);
+    assert.equal(driveFiles.get('drive-file-1').parents[0], 'drive-folder-1');
+    assert.equal(driveFiles.get('drive-file-1').permission.role, 'reader');
+    assert.equal(driveFiles.get('drive-file-1').permission.type, 'anyone');
 
     // Weigert ongeldig MIME type of te groot bestand
     const badMime = JSON.parse(
