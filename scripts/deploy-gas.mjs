@@ -28,9 +28,13 @@ function getConfigPath(target) {
 
 function runClasp(claspArgs) {
   const isWin = process.platform === 'win32';
+  const rawArgs = ['--yes', '@google/clasp', ...claspArgs];
+  const safeArgs = isWin
+    ? rawArgs.map((a) => (/\s/.test(a) ? `"${a.replace(/"/g, '\\"')}"` : a))
+    : rawArgs;
   const result = spawnSync(
     isWin ? 'npx.cmd' : 'npx',
-    ['--yes', '@google/clasp', ...claspArgs],
+    safeArgs,
     {
       cwd: root,
       stdio: 'inherit',
@@ -108,8 +112,8 @@ function main() {
       const pushStatus = runClasp(['-P', configPath, 'push', '--force']);
       if (pushStatus !== 0) process.exit(pushStatus);
 
-      const stamp = new Date().toISOString().slice(0, 16).replace('T', ' ');
-      const deployArgs = ['-P', configPath, 'deploy', '-d', `PokéBinder ${stamp}`];
+      const stamp = new Date().toISOString().slice(0, 16);
+      const deployArgs = ['-P', configPath, 'deploy', '-d', `PokeBinder-${stamp}`];
       if (cfg.deploymentId) {
         deployArgs.push('-i', cfg.deploymentId);
         console.log(`\nBestaande Web App deployment bijwerken (${cfg.deploymentId}) zodat /exec-URL gelijk blijft…`);
