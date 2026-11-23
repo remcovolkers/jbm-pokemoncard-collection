@@ -18,6 +18,17 @@ html {
 }
 
 html,
+body,
+a,
+button,
+article,
+input,
+select,
+textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
 body {
   margin: 0;
   padding: 0;
@@ -31,9 +42,18 @@ body {
   html,
   body {
     height: 100%;
-    height: 100dvh;
+    height: var(--pb-viewport-height, 100dvh);
     overflow: hidden;
     overscroll-behavior: none;
+  }
+
+  html.pb-keyboard-open .bottom-nav,
+  html.pb-keyboard-open .qa-dock {
+    display: none !important;
+  }
+
+  html.pb-keyboard-open .shell__main.is-quick-add {
+    padding-bottom: 1.5rem;
   }
 }
 
@@ -132,13 +152,22 @@ img {
   }
 }
 
-@keyframes pb-slide-up {
+@keyframes pb-fade-in {
   from {
-    transform: translateY(24px);
     opacity: 0;
   }
   to {
-    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes pb-slide-up {
+  from {
+    transform: translate3d(0, 28px, 0);
+    opacity: 0;
+  }
+  to {
+    transform: translate3d(0, 0, 0);
     opacity: 1;
   }
 }
@@ -158,21 +187,9 @@ html:has(.pb-sheet-backdrop, [aria-modal='true']) {
     padding-right: var(--pb-scrollbar-comp, 0px);
   }
 
-  .shell__main {
-    overflow: hidden;
-  }
-
   .sync-pill__dot,
   .pb-dot--pulse {
     animation-play-state: paused;
-  }
-
-  .controls,
-  .dex-controls,
-  .topbar,
-  .bottom-nav {
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
   }
 }
 

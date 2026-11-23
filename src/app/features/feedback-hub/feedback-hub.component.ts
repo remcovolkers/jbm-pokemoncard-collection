@@ -41,7 +41,7 @@ export class FeedbackHubComponent implements OnInit, OnDestroy {
   private copyResetTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
-    this.scrollLock.bind(() => this.isLightboxOpen());
+    this.scrollLock.bind(() => this.isLightboxOpen(), () => this.closeLightbox());
   }
 
   readonly filteredItems = computed(() => {

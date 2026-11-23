@@ -139,8 +139,8 @@
 
   <!-- Bottom Sheet: Transactie Loggen -->
   @if (showLogSheet()) {
-    <div class="pb-sheet-backdrop" role="dialog" aria-modal="true" (click)="showLogSheet.set(false)">
-      <div class="pb-sheet" (click)="$event.stopPropagation()">
+    <div class="pb-sheet-backdrop" role="dialog" aria-modal="true" (click)="closeLogSheet()">
+      <div class="pb-sheet" (pbSheetDismiss)="closeLogSheet()" (click)="$event.stopPropagation()">
         <div class="pb-sheet__handle"></div>
         <div class="pb-sheet__header">
           <div>
@@ -151,7 +151,7 @@
             type="button"
             class="pb-btn pb-btn--icon"
             aria-label="Sluiten"
-            (click)="showLogSheet.set(false)"
+            (click)="closeLogSheet()"
           >
             <span class="material-symbols-outlined">close</span>
           </button>

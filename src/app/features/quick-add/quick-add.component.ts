@@ -13,6 +13,9 @@ import {
 import { NATIONAL_DEX_NAMES } from '../../core/domain/national-dex.data';
 import { doesCardMatchPokemon } from '../../core/domain/pokedex-matching.utils';
 import { CARD_CATALOG_PORT } from '../../core/ports/card-catalog.port';
+import { MobileViewportService } from '../../core/platform/mobile-viewport.service';
+import { ModalScrollLockService } from '../../core/platform/modal-scroll-lock.service';
+import { PlatformService } from '../../core/platform/platform.service';
 import { CollectionStore } from '../../core/state/collection.store';
 import { CardArtworkComponent } from '../../shared/card-artwork/card-artwork.component';
 
@@ -57,6 +60,13 @@ export class QuickAddComponent implements OnDestroy {
   private readonly catalog = inject(CARD_CATALOG_PORT);
   private readonly router = inject(Router);
   private readonly hostEl = inject(ElementRef<HTMLElement>);
+  private readonly scrollLock = inject(ModalScrollLockService);
+  private readonly mobileViewport = inject(MobileViewportService);
+  private readonly platform = inject(PlatformService);
+
+  constructor() {
+    this.scrollLock.registerDismissHandler(() => this.isSetDropdownOpen(), () => this.closeSetDropdown());
+  }
 
   readonly formatEur = formatEur;
   readonly formatPercent = formatPercent;
@@ -431,8 +441,11 @@ export class QuickAddComponent implements OnDestroy {
       if (this.setSearchFocusTimer) clearTimeout(this.setSearchFocusTimer);
       this.setSearchFocusTimer = setTimeout(() => {
         const input = document.getElementById('qa-set-search-input') as HTMLInputElement | null;
-        input?.focus();
-        input?.select();
+        if (input) {
+          this.mobileViewport.ensureElementVisible(input);
+          input.focus();
+          input.select();
+        }
       }, 0);
     }
   }
@@ -678,7 +691,7 @@ export class QuickAddComponent implements OnDestroy {
   }
 
   closePage(): void {
-    void this.router.navigateByUrl('/collectie');
+    this.platform.goBackFromStack();
   }
 
   shortCondCode(cond: string): string {

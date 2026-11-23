@@ -337,7 +337,7 @@
       aria-labelledby="dex-sheet-title"
       (click)="closeSlotSheet()"
     >
-      <div class="pb-sheet" (click)="$event.stopPropagation()">
+      <div class="pb-sheet" (pbSheetDismiss)="closeSlotSheet()" (click)="$event.stopPropagation()">
         <div class="pb-sheet__handle"></div>
 
         <div class="pb-sheet__header">

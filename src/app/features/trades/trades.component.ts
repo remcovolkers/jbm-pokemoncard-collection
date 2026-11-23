@@ -6,11 +6,12 @@ import { CollectionCard } from '../../core/domain/models';
 import { ModalScrollLockService } from '../../core/platform/modal-scroll-lock.service';
 import { CollectionStore } from '../../core/state/collection.store';
 import { CardArtworkComponent } from '../../shared/card-artwork/card-artwork.component';
+import { PbSheetDismissDirective } from '../../shared/directives/sheet-dismiss.directive';
 
 @Component({
   selector: 'app-trades',
   standalone: true,
-  imports: [FormsModule, CardArtworkComponent],
+  imports: [FormsModule, CardArtworkComponent, PbSheetDismissDirective],
   templateUrl: './trades.component.html',
   styleUrl: './trades.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -25,7 +26,7 @@ export class TradesComponent {
   readonly showLogSheet = signal(false);
 
   constructor() {
-    this.scrollLock.bind(() => this.showLogSheet());
+    this.scrollLock.bind(() => this.showLogSheet(), () => this.closeLogSheet());
   }
 
   // Formuliervelden voor nieuwe transactie
@@ -70,6 +71,10 @@ export class TradesComponent {
     this.counterparty.set('');
     this.notes.set('');
     this.showLogSheet.set(true);
+  }
+
+  closeLogSheet(): void {
+    this.showLogSheet.set(false);
   }
 
   async submitTrade(): Promise<void> {

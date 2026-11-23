@@ -18,13 +18,14 @@ import { ModalScrollLockService } from '../../core/platform/modal-scroll-lock.se
 import { CARD_CATALOG_PORT } from '../../core/ports/card-catalog.port';
 import { CollectionStore } from '../../core/state/collection.store';
 import { CardArtworkComponent } from '../../shared/card-artwork/card-artwork.component';
+import { PbSheetDismissDirective } from '../../shared/directives/sheet-dismiss.directive';
 
 type SortOption = 'value_desc' | 'value_asc' | 'number_asc' | 'name_asc' | 'qty_desc';
 
 @Component({
   selector: 'app-collection',
   standalone: true,
-  imports: [FormsModule, RouterLink, CardArtworkComponent],
+  imports: [FormsModule, RouterLink, CardArtworkComponent, PbSheetDismissDirective],
   templateUrl: './collection.component.html',
   styleUrl: './collection.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -54,7 +55,7 @@ export class CollectionComponent implements OnInit {
   readonly confirmDelete = signal(false);
 
   constructor() {
-    this.scrollLock.bind(() => this.isDetailOpen());
+    this.scrollLock.bind(() => this.isDetailOpen(), () => this.closeDetail());
   }
 
   readonly activeCardmarketUrl = computed(() => {

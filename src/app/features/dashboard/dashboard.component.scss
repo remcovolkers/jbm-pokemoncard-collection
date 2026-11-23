@@ -471,9 +471,11 @@
     flex: initial;
   }
 
-  &:hover {
-    border-color: rgba($color-primary-container, 0.5);
-    box-shadow: $shadow-holo;
+  @media (hover: hover) and (pointer: fine) {
+    &:hover {
+      border-color: rgba($color-primary-container, 0.5);
+      box-shadow: $shadow-holo;
+    }
   }
 
   &__badge {
@@ -569,8 +571,10 @@
   flex-direction: column;
   gap: 0.65rem;
 
-  &:hover {
-    border-color: rgba($color-secondary, 0.45);
+  @media (hover: hover) and (pointer: fine) {
+    &:hover {
+      border-color: rgba($color-secondary, 0.45);
+    }
   }
 
   &__top {

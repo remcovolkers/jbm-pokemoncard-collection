@@ -120,7 +120,7 @@
             <span class="material-symbols-outlined">arrow_back</span>
           </button>
         }
-        <a routerLink="/dashboard" class="topbar__brand">
+        <a routerLink="/dashboard" [replaceUrl]="true" class="topbar__brand">
           <img src="icons/pokebinder-logo.svg" alt="PokéBinder Logo" class="topbar__logo" />
           <div class="topbar__titles">
             <span class="topbar__title">PokéBinder</span>
@@ -146,6 +146,7 @@
 
         <a
           routerLink="/meer/instellingen"
+          [replaceUrl]="true"
           class="topbar__profile-btn"
           aria-label="Instellingen"
         >
@@ -240,6 +241,7 @@
         <a
           class="bottom-nav__item"
           routerLink="/dashboard"
+          [replaceUrl]="true"
           routerLinkActive="is-active"
         >
           <span class="material-symbols-outlined bottom-nav__icon">dashboard</span>
@@ -249,6 +251,7 @@
         <a
           class="bottom-nav__item"
           routerLink="/collectie"
+          [replaceUrl]="true"
           routerLinkActive="is-active"
         >
           <span class="material-symbols-outlined bottom-nav__icon">style</span>
@@ -269,6 +272,7 @@
         <a
           class="bottom-nav__item"
           routerLink="/pokedex"
+          [replaceUrl]="true"
           routerLinkActive="is-active"
         >
           <span class="material-symbols-outlined bottom-nav__icon">menu_book</span>
@@ -278,6 +282,7 @@
         <a
           class="bottom-nav__item"
           routerLink="/meer"
+          [replaceUrl]="true"
           routerLinkActive="is-active"
         >
           <span class="material-symbols-outlined bottom-nav__icon">more_horiz</span>

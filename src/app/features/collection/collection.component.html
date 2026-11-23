@@ -282,7 +282,7 @@
       aria-labelledby="detail-sheet-title"
       (click)="closeDetail()"
     >
-      <div class="pb-sheet" (click)="$event.stopPropagation()">
+      <div class="pb-sheet" (pbSheetDismiss)="closeDetail()" (click)="$event.stopPropagation()">
         <div class="pb-sheet__handle"></div>
 
         <div class="pb-sheet__header">

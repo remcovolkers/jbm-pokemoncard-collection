@@ -291,13 +291,12 @@
   flex-direction: column;
   gap: 0.5rem;
   cursor: pointer;
-  contain: layout style;
-  content-visibility: auto;
-  contain-intrinsic-size: auto 290px;
 
-  &:hover {
-    border-color: rgba($color-primary-container, 0.5);
-    transform: translateY(-2px);
+  @media (hover: hover) and (pointer: fine) {
+    &:hover {
+      border-color: rgba($color-primary-container, 0.5);
+      transform: translateY(-2px);
+    }
   }
 
   &--holo {
@@ -448,12 +447,11 @@
   display: flex;
   align-items: center;
   gap: 0.85rem;
-  contain: layout style;
-  content-visibility: auto;
-  contain-intrinsic-size: auto 84px;
 
-  &:hover {
-    border-color: rgba($color-primary-container, 0.45);
+  @media (hover: hover) and (pointer: fine) {
+    &:hover {
+      border-color: rgba($color-primary-container, 0.45);
+    }
   }
 
   &__thumb {

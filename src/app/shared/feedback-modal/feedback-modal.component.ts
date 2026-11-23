@@ -11,11 +11,12 @@ import {
 import { ModalScrollLockService } from '../../core/platform/modal-scroll-lock.service';
 import { CollectionStore } from '../../core/state/collection.store';
 import { FeedbackStore } from '../../core/state/feedback.store';
+import { PbSheetDismissDirective } from '../directives/sheet-dismiss.directive';
 
 @Component({
   selector: 'pb-feedback-modal',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, PbSheetDismissDirective],
   templateUrl: './feedback-modal.component.html',
   styleUrl: './feedback-modal.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -70,7 +71,7 @@ export class FeedbackModalComponent {
   });
 
   constructor() {
-    this.scrollLock.bind(() => this.feedback.isComposerOpen());
+    this.scrollLock.bind(() => this.feedback.isComposerOpen(), () => this.close());
 
     effect(() => {
       if (!this.feedback.isComposerOpen()) return;

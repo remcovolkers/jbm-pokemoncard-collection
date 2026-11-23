@@ -15,13 +15,14 @@ import {
 import { ModalScrollLockService } from '../../core/platform/modal-scroll-lock.service';
 import { CollectionStore } from '../../core/state/collection.store';
 import { CardArtworkComponent } from '../../shared/card-artwork/card-artwork.component';
+import { PbSheetDismissDirective } from '../../shared/directives/sheet-dismiss.directive';
 
 type StatusFilter = 'all' | 'missing' | 'in_collection' | 'in_binder' | 'upgrade';
 
 @Component({
   selector: 'app-pokedex-binder',
   standalone: true,
-  imports: [FormsModule, CardArtworkComponent],
+  imports: [FormsModule, CardArtworkComponent, PbSheetDismissDirective],
   templateUrl: './pokedex-binder.component.html',
   styleUrl: './pokedex-binder.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -50,7 +51,7 @@ export class PokedexBinderComponent implements OnInit {
   readonly draftUpgradeWanted = signal<boolean>(false);
 
   constructor() {
-    this.scrollLock.bind(() => this.isSheetOpen());
+    this.scrollLock.bind(() => this.isSheetOpen(), () => this.closeSlotSheet());
   }
 
   readonly slotsPerPage = computed(() => this.store.binderSlotsPerPage());

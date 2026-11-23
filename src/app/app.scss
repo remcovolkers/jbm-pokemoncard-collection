@@ -3,6 +3,7 @@
 
 .shell {
   height: 100dvh;
+  height: var(--pb-viewport-height, 100dvh);
   overflow: hidden;
   overscroll-behavior: none;
   display: flex;

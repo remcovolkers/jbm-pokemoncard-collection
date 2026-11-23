@@ -6,13 +6,14 @@ import { ModalScrollLockService } from '../../core/platform/modal-scroll-lock.se
 import { CARD_CATALOG_PORT } from '../../core/ports/card-catalog.port';
 import { CollectionStore } from '../../core/state/collection.store';
 import { CardArtworkComponent } from '../../shared/card-artwork/card-artwork.component';
+import { PbSheetDismissDirective } from '../../shared/directives/sheet-dismiss.directive';
 
 type WishlistFilter = 'open' | 'high' | 'in_budget' | 'found';
 
 @Component({
   selector: 'app-wishlist',
   standalone: true,
-  imports: [FormsModule, CardArtworkComponent],
+  imports: [FormsModule, CardArtworkComponent, PbSheetDismissDirective],
   templateUrl: './wishlist.component.html',
   styleUrl: './wishlist.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -29,7 +30,7 @@ export class WishlistComponent {
   readonly showAddSheet = signal(false);
 
   constructor() {
-    this.scrollLock.bind(() => this.showAddSheet());
+    this.scrollLock.bind(() => this.showAddSheet(), () => this.closeAddModal());
     effect(() => {
       const items = this.store.wishlist();
       if (items.some((w) => !w.imageUrl || !w.cardId)) {
@@ -122,6 +123,10 @@ export class WishlistComponent {
     this.newNotes.set('');
     this.newImageUrl.set(undefined);
     this.showAddSheet.set(true);
+  }
+
+  closeAddModal(): void {
+    this.showAddSheet.set(false);
   }
 
   async lookupCardForWishlist(): Promise<void> {

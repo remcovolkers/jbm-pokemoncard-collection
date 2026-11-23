@@ -6,7 +6,7 @@
     aria-labelledby="fb-modal-title"
     (click)="close()"
   >
-    <div class="pb-sheet fb-sheet" (click)="$event.stopPropagation()">
+    <div class="pb-sheet fb-sheet" (pbSheetDismiss)="close()" (click)="$event.stopPropagation()">
       <div class="pb-sheet__handle"></div>
 
       <div class="pb-sheet__header">

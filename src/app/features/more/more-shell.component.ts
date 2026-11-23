@@ -11,7 +11,7 @@ import { FeedbackStore } from '../../core/state/feedback.store';
     <div class="more-shell">
       <nav class="more-tabs" aria-label="Tools navigatie">
         <div class="more-tabs__inner">
-          <a routerLink="sets" routerLinkActive="is-active" class="more-tab">
+          <a routerLink="sets" [replaceUrl]="true" routerLinkActive="is-active" class="more-tab">
             <span class="material-symbols-outlined">fact_check</span>
             <span>Set Voortgang</span>
             @if (store.activeSets().length > 0) {
@@ -19,7 +19,7 @@ import { FeedbackStore } from '../../core/state/feedback.store';
             }
           </a>
 
-          <a routerLink="verlanglijst" routerLinkActive="is-active" class="more-tab">
+          <a routerLink="verlanglijst" [replaceUrl]="true" routerLinkActive="is-active" class="more-tab">
             <span class="material-symbols-outlined">star</span>
             <span>Verlanglijst</span>
             @if (store.portfolio().openWishlistCount > 0) {
@@ -29,7 +29,7 @@ import { FeedbackStore } from '../../core/state/feedback.store';
             }
           </a>
 
-          <a routerLink="ruil-verkoop" routerLinkActive="is-active" class="more-tab">
+          <a routerLink="ruil-verkoop" [replaceUrl]="true" routerLinkActive="is-active" class="more-tab">
             <span class="material-symbols-outlined">swap_horiz</span>
             <span>Ruil &amp; Verkoop</span>
             @if (store.tradeBinderCards().length > 0) {
@@ -37,7 +37,7 @@ import { FeedbackStore } from '../../core/state/feedback.store';
             }
           </a>
 
-          <a routerLink="feedback" routerLinkActive="is-active" class="more-tab">
+          <a routerLink="feedback" [replaceUrl]="true" routerLinkActive="is-active" class="more-tab">
             <span class="material-symbols-outlined">checklist</span>
             <span>Feedback Hub</span>
             @if (feedback.stats().active > 0) {
@@ -47,7 +47,7 @@ import { FeedbackStore } from '../../core/state/feedback.store';
             }
           </a>
 
-          <a routerLink="instellingen" routerLinkActive="is-active" class="more-tab">
+          <a routerLink="instellingen" [replaceUrl]="true" routerLinkActive="is-active" class="more-tab">
             <span class="material-symbols-outlined">tune</span>
             <span>Instellingen</span>
           </a>

@@ -3,6 +3,7 @@ import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } fro
 import { toSignal } from '@angular/core/rxjs-interop';
 import { filter, map, startWith } from 'rxjs';
 import { AppUpdateService } from './core/platform/app-update.service';
+import { MobileViewportService } from './core/platform/mobile-viewport.service';
 import { PlatformService } from './core/platform/platform.service';
 import { CollectionStore } from './core/state/collection.store';
 import { FeedbackStore } from './core/state/feedback.store';
@@ -20,6 +21,7 @@ export class App implements OnInit {
   readonly feedback = inject(FeedbackStore);
   readonly platform = inject(PlatformService);
   readonly updates = inject(AppUpdateService);
+  private readonly mobileViewport = inject(MobileViewportService);
   private readonly router = inject(Router);
   private readonly hostEl = inject(ElementRef<HTMLElement>);
 
@@ -34,6 +36,8 @@ export class App implements OnInit {
   }
 
   ngOnInit(): void {
+    this.platform.initializeNavigationTracking();
+    this.mobileViewport.initialize();
     void this.platform.initializeNativeShell();
     void this.updates.initialize();
     void this.feedback.refreshHub(true);
@@ -86,10 +90,6 @@ export class App implements OnInit {
   }
 
   goBack(): void {
-    if (typeof window !== 'undefined' && window.history.length > 1) {
-      window.history.back();
-    } else {
-      void this.router.navigateByUrl('/dashboard');
-    }
+    this.platform.goBackFromStack();
   }
 }
