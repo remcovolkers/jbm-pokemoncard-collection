@@ -1,14 +1,17 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   SET_CODE_ALIASES,
+  buildCardmarketProductUrl,
   buildCardmarketSearchUrl,
   buildTcgdexAssetUrl,
+  extractCardmarketUrlFromNotes,
   getDisplaySetCode,
   hasKnownSetCode,
   inferTcgdexSeriesFolder,
   parseCardIdInput,
   registerDynamicSetCodes,
   resetDynamicSetCodesForTests,
+  resolveCardmarketUrl,
 } from './card-id.utils';
 
 describe('card-id.utils', () => {
@@ -181,6 +184,57 @@ describe('card-id.utils', () => {
       expect(buildCardmarketSearchUrl('Pikachu')).toBe(
         'https://www.cardmarket.com/en/Pokemon/Products/Singles?searchString=Pikachu'
       );
+    });
+
+    it('bouwt directe Cardmarket productlinks via idProduct en herkent geldige directe links in notities', () => {
+      expect(buildCardmarketProductUrl(274057)).toBe(
+        'https://www.cardmarket.com/en/Pokemon/Products?idProduct=274057'
+      );
+
+      expect(
+        extractCardmarketUrlFromNotes('Sleeve: Dragon Shield · https://www.cardmarket.com/en/Pokemon/Products?idProduct=274057')
+      ).toBe('https://www.cardmarket.com/en/Pokemon/Products?idProduct=274057');
+
+      expect(
+        extractCardmarketUrlFromNotes('https://www.cardmarket.com/en/Pokemon/Products/Singles/Team-Rocket/Dark-Charizard-TR4')
+      ).toBe('https://www.cardmarket.com/en/Pokemon/Products/Singles/Team-Rocket/Dark-Charizard-TR4');
+
+      // Oude generieke zoeklinks mogen NIET worden opgepikt als directe productlink
+      expect(
+        extractCardmarketUrlFromNotes('https://www.cardmarket.com/en/Pokemon/Products/Search?searchString=Charizard')
+      ).toBeNull();
+      expect(
+        extractCardmarketUrlFromNotes('https://www.cardmarket.com/en/Pokemon/Products/Singles?searchString=Charizard')
+      ).toBeNull();
+
+      // Prioriteit: 1) cardmarketProductId -> 2) directe URL in notes -> 3) Singles-zoeklink
+      expect(
+        resolveCardmarketUrl({
+          name: 'Dark Charizard',
+          setName: 'Team Rocket',
+          cardNumber: '4/82',
+          cardmarketProductId: 274057,
+          notes: 'https://www.cardmarket.com/en/Pokemon/Products/Singles/Team-Rocket/Dark-Charizard-TR4',
+        })
+      ).toBe('https://www.cardmarket.com/en/Pokemon/Products?idProduct=274057');
+
+      expect(
+        resolveCardmarketUrl({
+          name: 'Dark Charizard',
+          setName: 'Team Rocket',
+          cardNumber: '4/82',
+          notes: 'https://www.cardmarket.com/en/Pokemon/Products/Singles/Team-Rocket/Dark-Charizard-TR4',
+        })
+      ).toBe('https://www.cardmarket.com/en/Pokemon/Products/Singles/Team-Rocket/Dark-Charizard-TR4');
+
+      expect(
+        resolveCardmarketUrl({
+          name: 'Dark Charizard',
+          setName: 'Team Rocket',
+          cardNumber: '4/82',
+          notes: 'https://www.cardmarket.com/en/Pokemon/Products/Search?searchString=Dark%20Charizard',
+        })
+      ).toBe('https://www.cardmarket.com/en/Pokemon/Products/Singles?searchString=Dark%20Charizard%204');
     });
   });
 });

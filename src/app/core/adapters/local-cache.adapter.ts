@@ -7,6 +7,7 @@ const STORAGE_KEYS = {
   CONFIG: 'pokebinder_config_v1',
   OFFLINE_QUEUE: 'pokebinder_offline_queue_v1',
   ARTWORK_CACHE: 'pokebinder_artwork_cache_v1',
+  CARDMARKET_ID_CACHE: 'pokebinder_cm_product_ids_v1',
   PACK_DEFAULTS: 'pokebinder_pack_defaults_v1',
 } as const;
 
@@ -84,6 +85,14 @@ export class LocalCacheAdapter {
     this.writeJson(STORAGE_KEYS.ARTWORK_CACHE, map);
   }
 
+  loadCardmarketIdCache(): Record<string, number> {
+    return this.readJson<Record<string, number>>(STORAGE_KEYS.CARDMARKET_ID_CACHE) ?? {};
+  }
+
+  saveCardmarketIdCache(map: Record<string, number>): void {
+    this.writeJson(STORAGE_KEYS.CARDMARKET_ID_CACHE, map);
+  }
+
   loadPackDefaults(): PackOpeningDefaults {
     const saved = this.readJson<Partial<PackOpeningDefaults>>(STORAGE_KEYS.PACK_DEFAULTS);
     return { ...DEFAULT_PACK, ...(saved ?? {}) };
@@ -100,6 +109,7 @@ export class LocalCacheAdapter {
     s.removeItem(STORAGE_KEYS.DEMO_SNAPSHOT);
     s.removeItem(STORAGE_KEYS.OFFLINE_QUEUE);
     s.removeItem(STORAGE_KEYS.ARTWORK_CACHE);
+    s.removeItem(STORAGE_KEYS.CARDMARKET_ID_CACHE);
   }
 
   getEstimatedCacheSizeKb(): number {

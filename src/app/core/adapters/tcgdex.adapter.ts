@@ -60,6 +60,7 @@ interface TcgdexCardResponse {
   pricing?: {
     cardmarket?: {
       unit?: string;
+      idProduct?: number | null;
       trend?: number | null;
       avg?: number | null;
       avg1?: number | null;
@@ -109,9 +110,11 @@ export class TcgdexAdapter implements CardCatalogPort {
   private memoryAllSets: CatalogSetSummary[] | null = null;
   private staticCatalogAttempted = false;
   private readonly artworkMap: Record<string, string>;
+  private readonly cardmarketIdMap: Record<string, number>;
 
   constructor() {
     this.artworkMap = this.cache.loadArtworkCache();
+    this.cardmarketIdMap = this.cache.loadCardmarketIdCache();
   }
 
   async lookupByCardId(rawInput: string): Promise<CatalogCard | null> {
@@ -151,6 +154,12 @@ export class TcgdexAdapter implements CardCatalogPort {
 
       if (mapped.imageUrl) {
         this.rememberArtwork(mapped.id, mapped.imageUrl);
+      }
+      if (mapped.cardmarketProductId) {
+        this.rememberCardmarketProductId(mapped.id, mapped.cardmarketProductId);
+        if (cleanId.toLowerCase() !== mapped.id.toLowerCase()) {
+          this.rememberCardmarketProductId(cleanId, mapped.cardmarketProductId);
+        }
       }
       return mapped;
     } catch {
@@ -198,6 +207,13 @@ export class TcgdexAdapter implements CardCatalogPort {
     if (!key) return '';
     if (this.artworkMap[key]) return this.artworkMap[key];
     return buildTcgdexAssetUrl(cardId, 'high');
+  }
+
+  getCachedCardmarketProductId(cardId: string): number | undefined {
+    const key = cardId.trim().toLowerCase();
+    if (!key) return undefined;
+    const val = this.cardmarketIdMap[key];
+    return typeof val === 'number' && val > 0 ? val : undefined;
   }
 
   /**
@@ -376,6 +392,16 @@ export class TcgdexAdapter implements CardCatalogPort {
     }
   }
 
+  rememberCardmarketProductId(cardId: string, productId: number): void {
+    const key = cardId.trim().toLowerCase();
+    const id = Math.floor(productId);
+    if (!key || !Number.isFinite(id) || id <= 0) return;
+    if (this.cardmarketIdMap[key] !== id) {
+      this.cardmarketIdMap[key] = id;
+      this.cache.saveCardmarketIdCache(this.cardmarketIdMap);
+    }
+  }
+
   private mapFullCard(raw: TcgdexCardResponse): CatalogCard {
     const official = raw.set?.cardCount?.official ?? 0;
     const total = raw.set?.cardCount?.total ?? official;
@@ -386,6 +412,8 @@ export class TcgdexAdapter implements CardCatalogPort {
     const lowImageUrl = imageBase ? `${imageBase}/low.webp` : buildTcgdexAssetUrl(raw.id, 'low');
 
     const { marketPriceEur, lowPriceEur, highPriceEur, trendPercent } = this.extractCardmarketPrices(raw);
+    const rawProductId = this.positiveNumber(raw.pricing?.cardmarket?.idProduct);
+    const cardmarketProductId = rawProductId > 0 ? Math.floor(rawProductId) : undefined;
 
     return {
       id: raw.id,
@@ -403,6 +431,7 @@ export class TcgdexAdapter implements CardCatalogPort {
       imageUrl,
       lowImageUrl,
       marketPriceEur,
+      cardmarketProductId,
       lowPriceEur,
       highPriceEur,
       trendPercent,

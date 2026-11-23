@@ -446,6 +446,37 @@ export function buildTcgdexAssetUrl(
   return `https://assets.tcgdex.net/en/${series}/${setId}/${localId}/${quality}.webp`;
 }
 
+export function buildCardmarketProductUrl(productId: number): string {
+  return `https://www.cardmarket.com/en/Pokemon/Products?idProduct=${Math.floor(productId)}`;
+}
+
+/**
+ * Haalt een eventueel al opgeslagen directe Cardmarket-productlink uit de kaartnotities
+ * (negeert oude generieke /Search?searchString= of /Singles?searchString= links).
+ */
+export function extractCardmarketUrlFromNotes(notes?: string): string | null {
+  if (!notes) return null;
+  const idMatch = notes.match(/https:\/\/(?:www\.)?cardmarket\.com\/[a-z]{2}\/Pokemon\/Products\?idProduct=\d+/i);
+  if (idMatch) return idMatch[0];
+  const slugMatch = notes.match(/https:\/\/(?:www\.)?cardmarket\.com\/[a-z]{2}\/Pokemon\/Products\/Singles\/[^\s?#]+/i);
+  return slugMatch ? slugMatch[0] : null;
+}
+
+export function resolveCardmarketUrl(opts: {
+  name: string;
+  setName?: string;
+  cardNumber?: string;
+  cardmarketProductId?: number;
+  notes?: string;
+}): string {
+  if (opts.cardmarketProductId && Number.isFinite(opts.cardmarketProductId) && opts.cardmarketProductId > 0) {
+    return buildCardmarketProductUrl(opts.cardmarketProductId);
+  }
+  const stored = extractCardmarketUrlFromNotes(opts.notes);
+  if (stored) return stored;
+  return buildCardmarketSearchUrl(opts.name, opts.setName, opts.cardNumber);
+}
+
 export function buildCardmarketSearchUrl(cardName: string, _setName?: string, cardNumber?: string): string {
   const cleanName = (cardName || '').trim();
   const rawNum = (cardNumber || '').split('/')[0].trim();

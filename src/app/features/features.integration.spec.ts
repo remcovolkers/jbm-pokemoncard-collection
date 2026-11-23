@@ -35,6 +35,7 @@ const MOCK_CATALOG_CARD: CatalogCard = {
   imageUrl: 'https://assets.tcgdex.net/en/sv/sv03/125/high.webp',
   lowImageUrl: 'https://assets.tcgdex.net/en/sv/sv03/125/low.webp',
   marketPriceEur: 9.5,
+  cardmarketProductId: 733794,
   lowPriceEur: 6.0,
   highPriceEur: 14.0,
   trendPercent: 4.2,
@@ -218,6 +219,10 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
 
       comp.openDetail(venusaur);
       expect(comp.activeCard()?.cardId).toBe('sv03.5-198');
+      await new Promise((r) => setTimeout(r, 0));
+      expect(comp.activeCardmarketUrl()).toBe(
+        'https://www.cardmarket.com/en/Pokemon/Products?idProduct=733794'
+      );
       comp.onEscapeKey();
       expect(comp.activeCard()).toBeNull();
 

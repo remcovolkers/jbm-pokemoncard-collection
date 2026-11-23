@@ -1585,12 +1585,9 @@ function fetchAndPopulateRow_(ss, sheet, row, rawInput, priceOnly) {
     sheet.getRange(row, 17).setValue(price);
   }
 
-  // Cardmarket Singles-zoeklink in kolom V (Notities) alleen als nog leeg
+  // Cardmarket productlink in kolom V (Notities) alleen als nog leeg
   if (!sheet.getRange(row, 22).getValue()) {
-    var rawLocal = String(card.localId || '').trim();
-    var cleanLocal = /^\d+$/.test(rawLocal) ? String(parseInt(rawLocal, 10)) : rawLocal;
-    var query = encodeURIComponent(((card.name || '') + ' ' + cleanLocal).trim());
-    sheet.getRange(row, 22).setValue('https://www.cardmarket.com/en/Pokemon/Products/Singles?searchString=' + query);
+    sheet.getRange(row, 22).setValue(buildCardmarketUrl_(card));
   }
 
   if (setName) {
@@ -1779,6 +1776,18 @@ function fetchTcgdexCard_(rawInputOrId, ss) {
     }
   }
   return null;
+}
+
+function buildCardmarketUrl_(card) {
+  var cm = card && card.pricing && card.pricing.cardmarket;
+  var productId = cm ? toNumber_(cm.idProduct, 0) : 0;
+  if (productId > 0) {
+    return 'https://www.cardmarket.com/en/Pokemon/Products?idProduct=' + Math.floor(productId);
+  }
+  var rawLocal = String((card && card.localId) || '').trim();
+  var cleanLocal = /^\d+$/.test(rawLocal) ? String(parseInt(rawLocal, 10)) : rawLocal;
+  var query = encodeURIComponent((((card && card.name) || '') + ' ' + cleanLocal).trim());
+  return 'https://www.cardmarket.com/en/Pokemon/Products/Singles?searchString=' + query;
 }
 
 /**

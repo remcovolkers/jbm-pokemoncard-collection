@@ -556,7 +556,7 @@ describe('apps-script/Code.gs Backend API & Formule-integriteit', () => {
     assert.equal(delRes.data.feedback.length, 0);
   });
 
-  it('handleSheetEdit ondersteunt two-way werken in Google Sheets (auto-fill, Set Voortgang, Cardmarket link, Pokédex I->D vinkje & holo-prijs)', () => {
+  it('handleSheetEdit ondersteunt two-way werken in Google Sheets (auto-fill, Set Voortgang, Cardmarket idProduct + fallback, Pokédex I->D & holo-prijs)', () => {
     const { sandbox, sheets, lockState } = createGasEnvironment({
       tcgdexMock: () => ({
         getResponseCode: () => 200,
@@ -573,7 +573,7 @@ describe('apps-script/Code.gs Backend API & Formule-integriteit', () => {
               serie: { name: 'Scarlet & Violet' },
               cardCount: { official: 165, total: 207 },
             },
-            pricing: { cardmarket: { trend: 11.4, 'trend-holo': 24.75 } },
+            pricing: { cardmarket: { idProduct: 733794, trend: 11.4, 'trend-holo': 24.75 } },
           }),
       }),
     });
@@ -594,7 +594,11 @@ describe('apps-script/Code.gs Backend API & Formule-integriteit', () => {
     assert.equal(row[11], 1);
     assert.equal(row[16], 24.75); // Holo-prijs gekozen i.p.v. normale prijs!
     assert.equal(row[17], '=FORMULA_TOTAL_VAL'); // R:T formules onaangeroerd
-    assert.match(row[21], /^https:\/\/www\.cardmarket\.com\/en\/Pokemon\/Products\/Singles\?searchString=/);
+    assert.equal(row[21], 'https://www.cardmarket.com/en/Pokemon/Products?idProduct=733794');
+    assert.equal(
+      sandbox.buildCardmarketUrl_({ name: 'Dark Charizard', localId: '004' }),
+      'https://www.cardmarket.com/en/Pokemon/Products/Singles?searchString=Dark%20Charizard%204'
+    );
     assert.equal(sheets['Set Voortgang']._grid[1][0], '151');
     assert.equal(sheets['Pokédex Binder']._grid[10][3], true); // Mew (#151) aangevinkt
 

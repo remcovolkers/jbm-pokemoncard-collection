@@ -22,6 +22,9 @@ export interface CardCatalogPort {
   /** Retourneert gecachte of afgeleide high-res artwork URL voor een kaart-ID. */
   getCachedArtworkUrl(cardId: string): string;
 
+  /** Retourneert het gecachte Cardmarket product-ID (idProduct) voor een kaart-ID, indien bekend. */
+  getCachedCardmarketProductId?(cardId: string): number | undefined;
+
   /** Haalt het overzicht van alle officiële TCG-sets op (1 lichte request, 24u gecacht). */
   listAllSets?(): Promise<CatalogSetSummary[]>;
 

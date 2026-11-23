@@ -1,7 +1,12 @@
 import { Component, HostListener, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { buildCardmarketSearchUrl, getDisplaySetCode, parseCardIdInput } from '../../core/domain/card-id.utils';
+import {
+  extractCardmarketUrlFromNotes,
+  getDisplaySetCode,
+  parseCardIdInput,
+  resolveCardmarketUrl,
+} from '../../core/domain/card-id.utils';
 import {
   calculateCardMetrics,
   compareCardNumbers,
@@ -9,6 +14,7 @@ import {
   formatPercent,
 } from '../../core/domain/card-math.utils';
 import { CollectionCard } from '../../core/domain/models';
+import { CARD_CATALOG_PORT } from '../../core/ports/card-catalog.port';
 import { CollectionStore } from '../../core/state/collection.store';
 import { CardArtworkComponent } from '../../shared/card-artwork/card-artwork.component';
 
@@ -23,11 +29,11 @@ type SortOption = 'value_desc' | 'value_asc' | 'number_asc' | 'name_asc' | 'qty_
 })
 export class CollectionComponent implements OnInit {
   readonly store = inject(CollectionStore);
+  private readonly catalog = inject(CARD_CATALOG_PORT);
 
   readonly formatEur = formatEur;
   readonly formatPercent = formatPercent;
   readonly getDisplaySetCode = getDisplaySetCode;
-  readonly buildCardmarketSearchUrl = buildCardmarketSearchUrl;
 
   readonly searchQuery = signal('');
   readonly viewMode = signal<'grid' | 'list'>('grid');
@@ -40,7 +46,20 @@ export class CollectionComponent implements OnInit {
   // Detail Bottom Sheet state
   readonly activeCard = signal<CollectionCard | null>(null);
   readonly editDraft = signal<CollectionCard | null>(null);
+  readonly activeCardmarketProductId = signal<number | undefined>(undefined);
   readonly confirmDelete = signal(false);
+
+  readonly activeCardmarketUrl = computed(() => {
+    const d = this.editDraft();
+    if (!d) return '';
+    return resolveCardmarketUrl({
+      name: d.name,
+      setName: d.setName,
+      cardNumber: d.cardNumber,
+      cardmarketProductId: this.activeCardmarketProductId(),
+      notes: d.notes,
+    });
+  });
 
   readonly availableSets = computed(() => {
     const sets = new Set(this.store.collection().map((c) => c.setName).filter(Boolean));
@@ -138,11 +157,31 @@ export class CollectionComponent implements OnInit {
     this.activeCard.set(card);
     this.editDraft.set({ ...card });
     this.confirmDelete.set(false);
+    const cachedId = this.catalog.getCachedCardmarketProductId?.(card.cardId);
+    this.activeCardmarketProductId.set(cachedId);
+
+    if (!cachedId && card.cardId && !extractCardmarketUrlFromNotes(card.notes)) {
+      void this.resolveProductIdForDetail(card.cardId);
+    }
+  }
+
+  private async resolveProductIdForDetail(cardId: string): Promise<void> {
+    try {
+      const found =
+        (await this.catalog.getCardByExactId(cardId)) ??
+        (await this.catalog.lookupByCardId(cardId));
+      if (found?.cardmarketProductId && this.activeCard()?.cardId === cardId) {
+        this.activeCardmarketProductId.set(found.cardmarketProductId);
+      }
+    } catch {
+      // Offline of onbekend ID: Singles-zoeklink blijft als fallback actief
+    }
   }
 
   closeDetail(): void {
     this.activeCard.set(null);
     this.editDraft.set(null);
+    this.activeCardmarketProductId.set(undefined);
     this.confirmDelete.set(false);
   }
 

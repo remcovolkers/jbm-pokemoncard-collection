@@ -165,6 +165,7 @@ export interface CatalogCard {
   imageUrl: string;
   lowImageUrl: string;
   marketPriceEur: number;
+  cardmarketProductId?: number;
   lowPriceEur?: number;
   highPriceEur?: number;
   trendPercent?: number;

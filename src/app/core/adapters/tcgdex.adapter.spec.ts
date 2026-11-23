@@ -47,7 +47,7 @@ describe('TcgdexAdapter', () => {
             cardCount: { official: 165, total: 207 },
           },
           pricing: {
-            cardmarket: { trend: 4.5, avg30: 4.0, low: 2.5, avg: 5.0 },
+            cardmarket: { idProduct: 733794, trend: 4.5, avg30: 4.0, low: 2.5, avg: 5.0 },
           },
         })
       );
@@ -59,12 +59,15 @@ describe('TcgdexAdapter', () => {
     expect(card?.cardNumber).toBe('3/165');
     expect(card?.imageUrl).toBe('https://assets.tcgdex.net/en/sv/sv03.5/003/high.webp');
     expect(card?.marketPriceEur).toBe(4.5);
+    expect(card?.cardmarketProductId).toBe(733794);
     expect(card?.trendPercent).toBe(12.5);
+    expect(adapter.getCachedCardmarketProductId('sv03.5-3')).toBe(733794);
     expect(fetchSpy).toHaveBeenCalledTimes(2);
 
-    // Tweede aanroep gebruikt in-memory cache (geen extra fetch!)
+    // Tweede aanroep gebruikt in-memory cache (geen extra fetch!) en idProduct blijft bewaard in localStorage
     const cached = await adapter.getCardByExactId('sv03.5-3');
     expect(cached?.id).toBe('sv03.5-3');
+    expect(cached?.cardmarketProductId).toBe(733794);
     expect(fetchSpy).toHaveBeenCalledTimes(2);
     expect(adapter.getCachedArtworkUrl('sv03.5-3')).toBe(
       'https://assets.tcgdex.net/en/sv/sv03.5/003/high.webp'
