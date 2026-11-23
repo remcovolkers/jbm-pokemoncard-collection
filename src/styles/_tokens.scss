@@ -1,0 +1,156 @@
+// ============================================================================
+// Obsidian Vault TCG — Gecentraliseerde Design Tokens (Uit Google Stitch)
+// ============================================================================
+
+// Kleurpalet (Stitch Named Colors + Obsidian Vault Semantic Tokens)
+$color-surface: #0b1326;
+$color-surface-dim: #0b1326;
+$color-surface-lowest: #060e20;
+$color-surface-low: #131b2e;
+$color-surface-container: #171f33;
+$color-surface-high: #222a3d;
+$color-surface-highest: #2d3449;
+$color-surface-bright: #31394d;
+
+$color-on-surface: #dae2fd;
+$color-on-surface-variant: #c6b6c2; // Warme Obsidian-rose secundaire tint (verhoogd contrast op #171f33)
+$color-on-surface-muted: #93a0be;
+$color-outline: #8e7b86;
+$color-outline-variant: #334155;
+$color-outline-strong: #475569;
+
+$color-primary: #ffb2b7;
+$color-primary-container: #ff516a;
+$color-primary-hover: #f43f5e;
+$color-on-primary: #ffffff;
+$color-on-primary-dark: #5b0017;
+$color-primary-fixed: #ffdadb;
+
+$color-secondary: #4edea3;
+$color-secondary-container: #00a572;
+$color-on-secondary: #00311f;
+$color-secondary-fixed: #6ffbbe;
+
+$color-tertiary: #ffb95f;
+$color-tertiary-container: #ca8100;
+$color-on-tertiary: #3e2400;
+$color-tertiary-fixed: #ffddb8;
+
+$color-error: #ffb4ab;
+$color-error-container: #93000a;
+$color-on-error-container: #ffdad6;
+
+// Typografie
+$font-headline: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+$font-body: 'Geist', system-ui, -apple-system, sans-serif;
+$font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+
+// Spacing (4px / 8px ritme)
+$space-xs: 0.25rem; // 4px
+$space-sm: 0.5rem; // 8px
+$space-md: 1rem; // 16px
+$space-lg: 1.5rem; // 24px
+$space-xl: 2rem; // 32px
+$gutter-mobile: 0.75rem; // 12px
+$gutter-desktop: 1rem; // 16px
+$margin-mobile: 1rem; // 16px
+$margin-desktop: 1.5rem; // 24px
+
+// Radii
+$radius-xs: 0.25rem; // 4px
+$radius-sm: 0.5rem; // 8px
+$radius-md: 0.75rem; // 12px
+$radius-lg: 1rem; // 16px
+$radius-xl: 1.5rem; // 24px
+$radius-full: 9999px;
+
+// Breakpoints
+$bp-sm: 640px;
+$bp-md: 768px;
+$bp-lg: 1024px;
+$bp-xl: 1280px;
+
+// Layout maten
+$header-height: 4rem; // 64px
+$bottom-nav-height: 4.25rem; // 68px
+$sidebar-width: 16.5rem; // 264px
+$content-max-width: 1280px;
+
+// Z-index lagen
+$z-sticky: 25;
+$z-header: 40;
+$z-nav: 45;
+$z-sheet: 60;
+$z-modal: 70;
+$z-toast: 90;
+
+// Elevatie & Holografische effecten
+$shadow-slab: 0 4px 14px -2px rgba(0, 0, 0, 0.45);
+$shadow-elevated: 0 12px 32px -4px rgba(0, 0, 0, 0.65);
+$shadow-primary-glow: 0 4px 18px rgba(255, 81, 106, 0.4);
+$shadow-secondary-glow: 0 0 14px rgba(78, 222, 163, 0.2);
+$shadow-tertiary-glow: 0 0 16px rgba(255, 185, 95, 0.25);
+$shadow-holo:
+  0 0 22px -4px rgba(255, 81, 106, 0.25),
+  0 8px 18px -2px rgba(0, 0, 0, 0.55);
+
+$gradient-holo-border: linear-gradient(
+  135deg,
+  rgba(255, 81, 106, 0.45) 0%,
+  rgba(168, 85, 247, 0.4) 50%,
+  rgba(78, 222, 163, 0.45) 100%
+);
+
+:root {
+  --pb-surface: #{$color-surface};
+  --pb-surface-lowest: #{$color-surface-lowest};
+  --pb-surface-low: #{$color-surface-low};
+  --pb-surface-container: #{$color-surface-container};
+  --pb-surface-high: #{$color-surface-high};
+  --pb-surface-highest: #{$color-surface-highest};
+  --pb-surface-bright: #{$color-surface-bright};
+
+  --pb-on-surface: #{$color-on-surface};
+  --pb-on-surface-variant: #{$color-on-surface-variant};
+  --pb-on-surface-muted: #{$color-on-surface-muted};
+  --pb-outline: #{$color-outline};
+  --pb-outline-variant: #{$color-outline-variant};
+  --pb-outline-strong: #{$color-outline-strong};
+
+  --pb-primary: #{$color-primary};
+  --pb-primary-container: #{$color-primary-container};
+  --pb-primary-hover: #{$color-primary-hover};
+  --pb-on-primary: #{$color-on-primary};
+  --pb-primary-fixed: #{$color-primary-fixed};
+
+  --pb-secondary: #{$color-secondary};
+  --pb-secondary-container: #{$color-secondary-container};
+  --pb-on-secondary: #{$color-on-secondary};
+  --pb-secondary-fixed: #{$color-secondary-fixed};
+
+  --pb-tertiary: #{$color-tertiary};
+  --pb-tertiary-container: #{$color-tertiary-container};
+  --pb-on-tertiary: #{$color-on-tertiary};
+  --pb-tertiary-fixed: #{$color-tertiary-fixed};
+
+  --pb-error: #{$color-error};
+  --pb-error-container: #{$color-error-container};
+  --pb-on-error-container: #{$color-on-error-container};
+
+  --pb-font-headline: #{$font-headline};
+  --pb-font-body: #{$font-body};
+  --pb-font-mono: #{$font-mono};
+
+  --pb-space-xs: #{$space-xs};
+  --pb-space-sm: #{$space-sm};
+  --pb-space-md: #{$space-md};
+  --pb-space-lg: #{$space-lg};
+  --pb-space-xl: #{$space-xl};
+
+  --pb-radius-xs: #{$radius-xs};
+  --pb-radius-sm: #{$radius-sm};
+  --pb-radius-md: #{$radius-md};
+  --pb-radius-lg: #{$radius-lg};
+  --pb-radius-xl: #{$radius-xl};
+  --pb-radius-full: #{$radius-full};
+}

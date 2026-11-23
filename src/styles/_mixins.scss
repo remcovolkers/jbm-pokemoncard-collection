@@ -1,0 +1,177 @@
+@use 'tokens' as *;
+
+// Responsive Media Queries (Mobile-First)
+@mixin mq-sm {
+  @media (min-width: #{$bp-sm}) {
+    @content;
+  }
+}
+
+@mixin mq-md {
+  @media (min-width: #{$bp-md}) {
+    @content;
+  }
+}
+
+@mixin mq-lg {
+  @media (min-width: #{$bp-lg}) {
+    @content;
+  }
+}
+
+@mixin mq-xl {
+  @media (min-width: #{$bp-xl}) {
+    @content;
+  }
+}
+
+// Typografie Mixins (Exacte Stitch schaal)
+@mixin type-headline-xl {
+  font-family: $font-headline;
+  font-size: 1.875rem; // 30px mobiel
+  font-weight: 700;
+  line-height: 2.25rem;
+  letter-spacing: -0.02em;
+
+  @include mq-md {
+    font-size: 2.5rem; // 40px desktop
+    line-height: 3rem;
+    letter-spacing: -0.03em;
+  }
+}
+
+@mixin type-headline-lg {
+  font-family: $font-headline;
+  font-size: 1.375rem; // 22px mobiel
+  font-weight: 600;
+  line-height: 1.75rem;
+  letter-spacing: -0.01em;
+
+  @include mq-md {
+    font-size: 1.75rem; // 28px desktop
+    line-height: 2.125rem;
+    letter-spacing: -0.02em;
+  }
+}
+
+@mixin type-headline-md {
+  font-family: $font-headline;
+  font-size: 1.125rem; // 18px-20px
+  font-weight: 600;
+  line-height: 1.5rem;
+  letter-spacing: -0.01em;
+
+  @include mq-md {
+    font-size: 1.25rem;
+    line-height: 1.625rem;
+  }
+}
+
+@mixin type-body-lg {
+  font-family: $font-body;
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.5rem;
+}
+
+@mixin type-body-md {
+  font-family: $font-body;
+  font-size: 0.875rem;
+  font-weight: 400;
+  line-height: 1.25rem;
+}
+
+@mixin type-body-sm {
+  font-family: $font-body;
+  font-size: 0.75rem;
+  font-weight: 400;
+  line-height: 1rem;
+}
+
+@mixin type-label-ui {
+  font-family: $font-body;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1rem;
+  letter-spacing: 0.01em;
+}
+
+@mixin type-data-lg {
+  font-family: $font-mono;
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.5rem;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+@mixin type-data-md {
+  font-family: $font-mono;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.125rem;
+  font-variant-numeric: tabular-nums;
+}
+
+@mixin type-data-sm {
+  font-family: $font-mono;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  line-height: 0.875rem;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+}
+
+// Oppervlak & Depth Mixins
+@mixin surface-slab {
+  background-color: $color-surface-container;
+  border: 1px solid rgba($color-outline-variant, 0.65);
+  border-radius: $radius-lg;
+  box-shadow: $shadow-slab;
+}
+
+@mixin surface-glass {
+  background-color: rgba($color-surface-low, 0.88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+@mixin touch-target($min: 44px) {
+  min-width: $min;
+  min-height: $min;
+}
+
+@mixin truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@mixin hide-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@mixin focus-ring {
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba($color-primary-container, 0.35);
+    border-color: $color-primary-container;
+  }
+}
+
+@mixin pressable {
+  transition:
+    transform 120ms ease,
+    background-color 150ms ease,
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+
+  &:active {
+    transform: scale(0.98);
+  }
+}

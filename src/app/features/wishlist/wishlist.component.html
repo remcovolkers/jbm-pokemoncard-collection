@@ -1,0 +1,381 @@
+<div class="wl-page">
+  <!-- Fintech Maandbudget Header Banner (Trouw aan Stitch) -->
+  <section class="pb-card budget-card">
+    <div class="budget-card__glow" aria-hidden="true"></div>
+    <div class="budget-card__inner">
+      <div class="budget-card__top">
+        <div class="budget-card__label-wrap">
+          <span class="material-symbols-outlined">account_balance_wallet</span>
+          <span>Maandbudget Kaarten</span>
+        </div>
+        <span class="pb-pill pb-pill--neutral mono">{{ budgetStats().monthLabel }}</span>
+      </div>
+
+      <div class="budget-card__nums">
+        <div>
+          <strong class="budget-card__limit mono">{{ formatEur(budgetStats().limit) }}</strong>
+          <span class="budget-card__sub mono">Totaal allocatieplafond</span>
+        </div>
+        <div class="budget-card__avail-wrap">
+          <strong class="budget-card__avail mono">{{ formatEur(budgetStats().remaining) }}</strong>
+          <span class="budget-card__avail-sub">Beschikbaar saldo</span>
+        </div>
+      </div>
+
+      <div class="budget-card__bar">
+        <div class="pb-progress">
+          <div
+            class="pb-progress__bar"
+            [class.pb-progress__bar--coral]="budgetStats().pct >= 90"
+            [style.width.%]="budgetStats().pct"
+          ></div>
+        </div>
+        <div class="budget-card__bar-meta mono">
+          <span>Reeds besteed: <strong>{{ formatEur(budgetStats().spentThisMonth) }}</strong></span>
+          <span>{{ budgetStats().pct }}% verbruikt</span>
+        </div>
+      </div>
+
+      <div class="budget-mini-grid">
+        <div class="budget-mini">
+          <div>
+            <span>Totale Lijstwaarde</span>
+            <strong class="mono">{{ formatEur(budgetStats().listMarketValue) }}</strong>
+          </div>
+          <span class="material-symbols-outlined icon-coral">insights</span>
+        </div>
+        <div class="budget-mini">
+          <div>
+            <span>Actieve Targets</span>
+            <strong class="mono text-amber">{{ budgetStats().activeCount }} Kaarten</strong>
+          </div>
+          <span class="material-symbols-outlined icon-amber">bookmark_heart</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Filter Pills -->
+  <div class="wl-filters">
+    <button
+      type="button"
+      class="pb-pill pb-pill--interactive"
+      [class.is-active]="filter() === 'open'"
+      (click)="filter.set('open')"
+    >
+      Alle open ({{ openItems().length }})
+    </button>
+    <button
+      type="button"
+      class="pb-pill pb-pill--interactive"
+      [class.is-active]="filter() === 'high'"
+      (click)="filter.set('high')"
+    >
+      <span class="pb-dot pb-dot--primary"></span>
+      Hoge Prioriteit ({{ highPriorityCount() }})
+    </button>
+    <button
+      type="button"
+      class="pb-pill pb-pill--interactive"
+      [class.is-active-emerald]="filter() === 'in_budget'"
+      (click)="filter.set('in_budget')"
+    >
+      <span class="pb-dot pb-dot--secondary"></span>
+      Binnen Budget ({{ inBudgetCount() }})
+    </button>
+    <button
+      type="button"
+      class="pb-pill pb-pill--interactive"
+      [class.is-active]="filter() === 'found'"
+      (click)="filter.set('found')"
+    >
+      Gevonden ({{ foundItems().length }})
+    </button>
+  </div>
+
+  <!-- Verlanglijst Kaarten -->
+  @if (filteredItems().length === 0) {
+    <div class="pb-empty">
+      <div class="pb-empty__icon">
+        <span class="material-symbols-outlined">star</span>
+      </div>
+      <h2 class="pb-empty__title">Geen verlanglijst-kaarten in dit filter</h2>
+      <p class="pb-empty__text">Voeg nieuwe droomkaarten toe met live Cardmarket budgetbewaking.</p>
+    </div>
+  } @else {
+    <div class="wl-grid">
+      @for (item of filteredItems(); track item.rowIndex + '-' + item.cardName) {
+        <article class="pb-card wl-card">
+          <div class="wl-card__top">
+            <div class="wl-card__art">
+              <pb-card-artwork [cardId]="item.cardId || ''" [src]="item.imageUrl" [alt]="item.cardName" [compact]="true">
+                @if (item.cardNumber) {
+                  <span class="wl-card__num mono">#{{ item.cardNumber.split('/')[0] }}</span>
+                }
+              </pb-card-artwork>
+            </div>
+
+            <div class="wl-card__info">
+              <div class="wl-card__badges">
+                <span
+                  class="pb-pill"
+                  [class.pb-pill--primary]="item.priority === 'Hoog'"
+                  [class.pb-pill--tertiary]="item.priority === 'Grail'"
+                  [class.pb-pill--neutral]="item.priority !== 'Hoog' && item.priority !== 'Grail'"
+                >
+                  {{ item.priority }}
+                </span>
+                <span class="mono wl-card__cond">{{ item.desiredVariant }} · min. {{ item.minCondition }}</span>
+              </div>
+
+              <h3 class="wl-card__name">{{ item.cardName }}</h3>
+              <p class="wl-card__set">{{ item.setName }} {{ item.cardNumber ? '· ' + item.cardNumber : '' }}</p>
+              @if (item.notes) {
+                <p class="wl-card__notes">{{ item.notes }}</p>
+              }
+
+              <div class="wl-card__prices">
+                <div>
+                  <span class="wl-price-label mono">Markttrend</span>
+                  <strong
+                    class="mono wl-price-val"
+                    [class.is-over]="!isWithinBudget(item)"
+                  >
+                    {{ formatEur(item.marketPrice) }}
+                  </strong>
+                </div>
+                <div>
+                  <span class="wl-price-label mono">Max Target</span>
+                  <strong class="mono wl-price-target">{{ formatEur(item.maxBudget) }}</strong>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="wl-card__status-row">
+            @if (item.found) {
+              <span class="pb-pill pb-pill--secondary">
+                <span class="material-symbols-outlined">verified</span>
+                Gevonden
+              </span>
+            } @else if (isWithinBudget(item)) {
+              <span class="pb-pill pb-pill--secondary">
+                <span class="material-symbols-outlined">check_circle</span>
+                Binnen budget ({{ formatEur(budgetDiff(item)) }} ruimte)
+              </span>
+            } @else {
+              <span class="pb-pill pb-pill--error">
+                <span class="material-symbols-outlined">warning</span>
+                Boven budget (+{{ formatEur(Math.abs(budgetDiff(item))) }})
+              </span>
+            }
+          </div>
+
+          @if (!item.found) {
+            <div class="wl-card__actions">
+              <button
+                type="button"
+                class="pb-btn pb-btn--primary wl-card__primary-cta"
+                (click)="markFoundAndAdd(item)"
+              >
+                <span class="material-symbols-outlined">add_circle</span>
+                <span>Gevonden → Toevoegen</span>
+              </button>
+              <button
+                type="button"
+                class="pb-btn pb-btn--surface wl-card__check-only"
+                title="Alleen afvinken op verlanglijst"
+                aria-label="Alleen afvinken op verlanglijst"
+                (click)="markFoundOnly(item)"
+              >
+                <span class="material-symbols-outlined">done</span>
+              </button>
+            </div>
+          }
+        </article>
+      }
+    </div>
+  }
+
+  <!-- Nieuwe Wens Toevoegen CTA -->
+  <div class="wl-add-cta">
+    <button type="button" class="pb-btn pb-btn--secondary pb-btn--full" (click)="openAddModal()">
+      <span class="material-symbols-outlined">playlist_add</span>
+      <span>+ Nieuwe Kaart aan Verlanglijst Toevoegen</span>
+    </button>
+  </div>
+
+  <!-- Bottom Sheet: Nieuwe Wens Toevoegen met TCGdex Lookup -->
+  @if (showAddSheet()) {
+    <div class="pb-sheet-backdrop" role="dialog" aria-modal="true" (click)="showAddSheet.set(false)">
+      <div class="pb-sheet" (click)="$event.stopPropagation()">
+        <div class="pb-sheet__handle"></div>
+        <div class="pb-sheet__header">
+          <div>
+            <h2>Nieuwe kaart op verlanglijst</h2>
+            <p class="sheet-sub">Zoek via TCGdex of vul direct je doelprijs in</p>
+          </div>
+          <button
+            type="button"
+            class="pb-btn pb-btn--icon"
+            aria-label="Sluiten"
+            (click)="showAddSheet.set(false)"
+          >
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+
+        <div class="wl-form">
+          <!-- Snelle TCGdex Lookup -->
+          <div class="pb-field">
+            <label class="pb-label" for="wl-lookup">TCGdex Lookup (Code of Naam)</label>
+            <div class="lookup-row">
+              <input
+                id="wl-lookup"
+                type="text"
+                class="pb-input"
+                placeholder="bijv. MEW 202 of Umbreon"
+                [ngModel]="lookupQuery()"
+                (ngModelChange)="lookupQuery.set($event)"
+                (keydown.enter)="lookupCardForWishlist()"
+              />
+              <button
+                type="button"
+                class="pb-btn pb-btn--secondary"
+                [disabled]="isLookingUp()"
+                (click)="lookupCardForWishlist()"
+              >
+                <span class="material-symbols-outlined" [class.pb-spin]="isLookingUp()">
+                  {{ isLookingUp() ? 'progress_activity' : 'search' }}
+                </span>
+                <span>Zoek</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="two-col">
+            <div class="pb-field">
+              <label class="pb-label" for="wl-name">Kaartnaam *</label>
+              <input
+                id="wl-name"
+                type="text"
+                class="pb-input"
+                [ngModel]="newCardName()"
+                (ngModelChange)="newCardName.set($event)"
+              />
+            </div>
+            <div class="pb-field">
+              <label class="pb-label" for="wl-set">Set</label>
+              <input
+                id="wl-set"
+                type="text"
+                class="pb-input"
+                [ngModel]="newSetName()"
+                (ngModelChange)="newSetName.set($event)"
+              />
+            </div>
+          </div>
+
+          <div class="two-col">
+            <div class="pb-field">
+              <label class="pb-label" for="wl-num">Kaartnr.</label>
+              <input
+                id="wl-num"
+                type="text"
+                class="pb-input mono"
+                [ngModel]="newCardNumber()"
+                (ngModelChange)="newCardNumber.set($event)"
+              />
+            </div>
+            <div class="pb-field">
+              <label class="pb-label" for="wl-prio">Prioriteit</label>
+              <select
+                id="wl-prio"
+                class="pb-select"
+                [ngModel]="newPriority()"
+                (ngModelChange)="newPriority.set($event)"
+              >
+                @for (p of store.settings().priorities; track p) {
+                  <option [value]="p">{{ p }}</option>
+                }
+              </select>
+            </div>
+          </div>
+
+          <div class="two-col">
+            <div class="pb-field">
+              <label class="pb-label" for="wl-var">Gewenste Variant</label>
+              <select
+                id="wl-var"
+                class="pb-select"
+                [ngModel]="newDesiredVariant()"
+                (ngModelChange)="newDesiredVariant.set($event)"
+              >
+                @for (v of store.settings().variants; track v) {
+                  <option [value]="v">{{ v }}</option>
+                }
+              </select>
+            </div>
+            <div class="pb-field">
+              <label class="pb-label" for="wl-cond">Min. Conditie</label>
+              <select
+                id="wl-cond"
+                class="pb-select"
+                [ngModel]="newMinCondition()"
+                (ngModelChange)="newMinCondition.set($event)"
+              >
+                @for (c of store.settings().conditions; track c) {
+                  <option [value]="c">{{ c }}</option>
+                }
+              </select>
+            </div>
+          </div>
+
+          <div class="two-col">
+            <div class="pb-field">
+              <label class="pb-label" for="wl-budget">Max. Budget (€)</label>
+              <input
+                id="wl-budget"
+                type="number"
+                step="0.5"
+                min="0"
+                class="pb-input mono"
+                [ngModel]="newMaxBudget()"
+                (ngModelChange)="newMaxBudget.set(+$event)"
+              />
+            </div>
+            <div class="pb-field">
+              <label class="pb-label" for="wl-market">Marktprijs (€)</label>
+              <input
+                id="wl-market"
+                type="number"
+                step="0.5"
+                min="0"
+                class="pb-input mono"
+                [ngModel]="newMarketPrice()"
+                (ngModelChange)="newMarketPrice.set(+$event)"
+              />
+            </div>
+          </div>
+
+          <div class="pb-field">
+            <label class="pb-label" for="wl-notes">Notities / Cardmarket link</label>
+            <input
+              id="wl-notes"
+              type="text"
+              class="pb-input"
+              placeholder="Opmerkingen over centering of prijsalert…"
+              [ngModel]="newNotes()"
+              (ngModelChange)="newNotes.set($event)"
+            />
+          </div>
+
+          <button type="button" class="pb-btn pb-btn--primary pb-btn--full" (click)="saveNewWish()">
+            <span class="material-symbols-outlined">bookmark_add</span>
+            <span>Opslaan op Verlanglijst</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+</div>

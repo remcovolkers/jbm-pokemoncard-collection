@@ -1,0 +1,460 @@
+<div class="qa-page">
+  <!-- Subheader -->
+  <div class="qa-header">
+    <div class="qa-header__left">
+      <span class="pb-dot pb-dot--primary pb-dot--pulse"></span>
+      <h1>Kaart Toevoegen</h1>
+    </div>
+    <button type="button" class="pb-btn pb-btn--icon" aria-label="Sluiten" (click)="closePage()">
+      <span class="material-symbols-outlined">close</span>
+    </button>
+  </div>
+
+  <!-- Segmented Mode Bar + Pack Opening Mode -->
+  <div class="qa-stack">
+    <div class="mode-tabs" role="tablist">
+      <button
+        type="button"
+        role="tab"
+        class="mode-tabs__btn"
+        [class.is-active]="inputMode() === 'code'"
+        [attr.aria-selected]="inputMode() === 'code'"
+        (click)="inputMode.set('code')"
+      >
+        <span class="material-symbols-outlined">tag</span>
+        <span>Code / ID Invoer</span>
+      </button>
+      <button
+        type="button"
+        role="tab"
+        class="mode-tabs__btn"
+        [class.is-active]="inputMode() === 'name'"
+        [attr.aria-selected]="inputMode() === 'name'"
+        (click)="inputMode.set('name')"
+      >
+        <span class="material-symbols-outlined">search</span>
+        <span>Zoek op Naam</span>
+      </button>
+    </div>
+
+    <!-- Pack Opening Mode Switch -->
+    <div class="pack-card" [class.is-active]="packMode()">
+      <div class="pack-card__left">
+        <div class="pack-card__icon">
+          <span class="material-symbols-outlined is-filled">bolt</span>
+        </div>
+        <div class="pack-card__copy">
+          <div class="pack-card__title-row">
+            <strong>Pack Opening Mode</strong>
+            @if (packMode()) {
+              <span class="pb-pill pb-pill--secondary">ACTIEF</span>
+            }
+          </div>
+          <p>
+            Houdt dit scherm open na opslaan en onthoudt set ({{ store.packDefaults().setCode }}), conditie en map.
+          </p>
+        </div>
+      </div>
+
+      <button
+        type="button"
+        role="switch"
+        class="pb-switch"
+        [class.is-checked]="packMode()"
+        [attr.aria-checked]="packMode()"
+        aria-label="Pack Opening Mode schakelen"
+        (click)="togglePackMode()"
+      >
+        <span class="pb-switch__thumb"></span>
+      </button>
+    </div>
+
+    <!-- Invoermodus 1: Code / ID -->
+    @if (inputMode() === 'code') {
+      <div class="pb-field">
+        <div class="input-label-row">
+          <label class="pb-label" for="qa-code-input">Setcode &amp; Kaartnummer</label>
+          @if (isSearching()) {
+            <span class="lookup-status lookup-status--loading mono">TCGdex zoeken…</span>
+          } @else if (previewCard()) {
+            <span class="lookup-status lookup-status--ok mono">
+              <span class="material-symbols-outlined is-filled">check_circle</span>
+              Herkend in TCGdex DB
+            </span>
+          }
+        </div>
+
+        <div class="code-input-wrap">
+          <span class="code-input-wrap__hash mono">#</span>
+          <input
+            id="qa-code-input"
+            type="text"
+            class="pb-input code-input-wrap__field mono"
+            placeholder="Typ bijv. MEW 181, OBF 199/197, BS 44"
+            [ngModel]="codeQuery()"
+            (ngModelChange)="onCodeInputChange($event)"
+            (keydown.enter)="lookupByCode(codeQuery())"
+          />
+          <button
+            type="button"
+            class="code-input-wrap__go"
+            aria-label="Kaart opzoeken"
+            (click)="lookupByCode(codeQuery())"
+          >
+            <span class="material-symbols-outlined" [class.pb-spin]="isSearching()">
+              {{ isSearching() ? 'progress_activity' : 'search' }}
+            </span>
+          </button>
+        </div>
+
+        <div class="example-chips">
+          <span class="example-chips__label">Snel testen:</span>
+          @for (ex of quickExamples; track ex) {
+            <button type="button" class="example-chip mono" (click)="applyExample(ex)">
+              {{ ex }}
+            </button>
+          }
+        </div>
+      </div>
+    } @else {
+      <!-- Invoermodus 2: Zoeken op Pokémon-naam -->
+      <div class="pb-field">
+        <div class="input-label-row">
+          <label class="pb-label" for="qa-name-input">Zoek op Pokémon- of kaartnaam</label>
+          @if (isSearching()) {
+            <span class="lookup-status lookup-status--loading mono">TCGdex doorzoeken…</span>
+          }
+        </div>
+
+        <div class="code-input-wrap">
+          <span class="material-symbols-outlined code-input-wrap__search-icon">search</span>
+          <input
+            id="qa-name-input"
+            type="text"
+            class="pb-input code-input-wrap__field"
+            placeholder="bijv. Charizard, Dragonair, Umbreon, Mew…"
+            [ngModel]="nameQuery()"
+            (ngModelChange)="onNameInputChange($event)"
+            (keydown.enter)="searchByName(nameQuery())"
+          />
+        </div>
+
+        @if (nameResults().length > 0) {
+          <div class="search-results">
+            @for (item of nameResults(); track item.id) {
+              <button
+                type="button"
+                class="result-tile"
+                [class.is-selected]="previewCard()?.id === item.id"
+                (click)="selectNameResult(item)"
+              >
+                <pb-card-artwork [cardId]="item.id" [src]="item.imageUrl" [alt]="item.name" [compact]="true" />
+                <span class="result-tile__name">{{ item.name }}</span>
+                <span class="mono result-tile__id">{{ item.id }}</span>
+              </button>
+            }
+          </div>
+        }
+      </div>
+    }
+
+    @if (lookupError()) {
+      <div class="lookup-error">
+        <span class="material-symbols-outlined">info</span>
+        <span>{{ lookupError() }}</span>
+      </div>
+    }
+
+    <!-- Live Dynamic Card Preview Slab -->
+    @if (previewCard(); as card) {
+      <section class="pb-card pb-card--holo preview-slab">
+        <div class="preview-slab__glow" aria-hidden="true"></div>
+        <div class="preview-slab__inner">
+          <div class="preview-slab__art">
+            <pb-card-artwork [cardId]="card.id" [src]="card.imageUrl" [alt]="card.name">
+              <span class="preview-slab__tag mono">{{ card.localId }}</span>
+            </pb-card-artwork>
+          </div>
+
+          <div class="preview-slab__meta">
+            <div class="preview-slab__pills">
+              <span class="pb-pill pb-pill--primary">★ {{ card.rarity }}</span>
+              <span class="pb-pill pb-pill--neutral">{{ card.type }}</span>
+            </div>
+
+            <h2 class="preview-slab__name">{{ card.name }}</h2>
+            <p class="mono preview-slab__set">
+              {{ card.setName }} ({{ card.setId }}) · #{{ card.cardNumber }}
+            </p>
+
+            <div class="price-box">
+              <div class="price-box__top">
+                <span class="price-box__label">Cardmarket Trend</span>
+                @if (card.trendPercent !== undefined) {
+                  <span class="mono price-box__trend" [class.is-negative]="card.trendPercent < 0">
+                    {{ formatPercent(card.trendPercent) }}
+                  </span>
+                }
+              </div>
+              <div class="price-box__bottom">
+                <span class="mono price-box__eur">
+                  {{ card.marketPriceEur > 0 ? formatEur(card.marketPriceEur) : 'Geen prijsdata' }}
+                </span>
+                @if (card.lowPriceEur && card.highPriceEur) {
+                  <span class="mono price-box__range">
+                    L: {{ formatEur(card.lowPriceEur) }} · H: {{ formatEur(card.highPriceEur) }}
+                  </span>
+                }
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    } @else {
+      <!-- Handmatige fallback invoer (ook bruikbaar als je offline bent) -->
+      <details class="manual-box">
+        <summary>Handmatig invoeren (bijv. offline of speciale promo)</summary>
+        <div class="manual-box__grid">
+          <div class="pb-field">
+            <label class="pb-label" for="m-name">Kaartnaam</label>
+            <input
+              id="m-name"
+              type="text"
+              class="pb-input"
+              placeholder="bijv. Dragonair"
+              [ngModel]="manualName()"
+              (ngModelChange)="manualName.set($event)"
+            />
+          </div>
+          <div class="pb-field">
+            <label class="pb-label" for="m-set">Setnaam</label>
+            <input
+              id="m-set"
+              type="text"
+              class="pb-input"
+              placeholder="bijv. 151"
+              [ngModel]="manualSet()"
+              (ngModelChange)="manualSet.set($event)"
+            />
+          </div>
+          <div class="pb-field">
+            <label class="pb-label" for="m-num">Kaartnummer</label>
+            <input
+              id="m-num"
+              type="text"
+              class="pb-input mono"
+              placeholder="bijv. 181/165"
+              [ngModel]="manualNumber()"
+              (ngModelChange)="manualNumber.set($event)"
+            />
+          </div>
+        </div>
+      </details>
+    }
+
+    <!-- Duplicaat Detectie Banner -->
+    @if (existingMatch(); as dup) {
+      <div class="dup-banner">
+        <div class="dup-banner__head">
+          <span class="material-symbols-outlined">inventory_2</span>
+          <div>
+            <strong>Deze kaart zit al in je collectie!</strong>
+            <p class="mono">
+              {{ dup.name }} ({{ dup.cardId }}) · {{ dup.quantity }}× · {{ dup.variant }} · {{ dup.storageLocation }}
+            </p>
+          </div>
+        </div>
+        <div class="dup-banner__actions">
+          <button type="button" class="pb-btn pb-btn--emerald" (click)="incrementDuplicate()">
+            <span class="material-symbols-outlined">exposure_plus_1</span>
+            <span>+{{ quantity() }} bij bestaande kaart</span>
+          </button>
+          <span class="dup-banner__or">Of kies hieronder een andere variant en sla apart op</span>
+        </div>
+      </div>
+    }
+
+    <!-- Touch-Friendly Attributen Stack -->
+    <div class="attrs-stack">
+      <!-- 1. Kaartvariant -->
+      <div class="pb-field">
+        <span class="pb-label">1. Kaartvariant</span>
+        <div class="pills-wrap">
+          @for (v of store.settings().variants; track v) {
+            <button
+              type="button"
+              class="pb-pill pb-pill--interactive"
+              [class.is-active]="variant() === v"
+              (click)="variant.set(v)"
+            >
+              {{ v }}
+            </button>
+          }
+        </div>
+      </div>
+
+      <!-- 2. Conditie -->
+      <div class="pb-field">
+        <div class="input-label-row">
+          <span class="pb-label">2. Conditie (Cardmarket schaal)</span>
+          <span class="mono cond-selected">{{ condition() }}</span>
+        </div>
+        <div class="cond-grid">
+          @for (c of store.settings().conditions; track c) {
+            <button
+              type="button"
+              class="cond-tile"
+              [class.is-active]="condition() === c"
+              (click)="condition.set(c)"
+            >
+              <span class="mono cond-tile__code">{{ shortCondCode(c) }}</span>
+              <span class="cond-tile__name">{{ shortCondName(c) }}</span>
+            </button>
+          }
+        </div>
+      </div>
+
+      <!-- 3. Grading Slab Status -->
+      <div class="pb-field">
+        <span class="pb-label">3. Grading Slab Status</span>
+        <div class="pills-wrap">
+          @for (g of store.settings().gradings; track g) {
+            <button
+              type="button"
+              class="pb-pill pb-pill--interactive"
+              [class.is-active]="grading() === g"
+              (click)="grading.set(g)"
+            >
+              {{ g === 'Raw' ? 'Raw (Ongradeerd)' : g }}
+            </button>
+          }
+        </div>
+        @if (grading() !== 'Raw') {
+          <input
+            type="text"
+            class="pb-input mono grade-input"
+            placeholder="Grade cijfer (bijv. 10, 9.5, 9)"
+            [ngModel]="grade()"
+            (ngModelChange)="grade.set($event)"
+          />
+        }
+      </div>
+
+      <!-- 4. Opslaglocatie & Map Detail -->
+      <div class="pb-field">
+        <span class="pb-label">4. Opslaglocatie &amp; Binder</span>
+        <div class="pills-wrap">
+          @for (loc of store.settings().storageLocations; track loc) {
+            <button
+              type="button"
+              class="pb-pill pb-pill--interactive"
+              [class.is-active]="storageLocation() === loc"
+              (click)="storageLocation.set(loc)"
+            >
+              {{ loc }}
+            </button>
+          }
+        </div>
+        <input
+          type="text"
+          class="pb-input"
+          placeholder="Map / Deck detail (bijv. VaultX Pagina 4)"
+          [ngModel]="binderDetail()"
+          (ngModelChange)="binderDetail.set($event)"
+        />
+      </div>
+
+      <!-- 5. Aantal, Aankoopprijs & Taal -->
+      <div class="triple-grid">
+        <div class="pb-field">
+          <span class="pb-label">Aantal</span>
+          <div class="stepper-box">
+            <button type="button" class="stepper-box__btn" (click)="adjustQty(-1)">−</button>
+            <span class="mono stepper-box__val">{{ quantity() }}</span>
+            <button type="button" class="stepper-box__btn" (click)="adjustQty(1)">+</button>
+          </div>
+        </div>
+
+        <div class="pb-field">
+          <label class="pb-label" for="qa-price">Aankoopprijs (€)</label>
+          <input
+            id="qa-price"
+            type="number"
+            step="0.01"
+            min="0"
+            class="pb-input mono"
+            [ngModel]="purchasePrice()"
+            (ngModelChange)="purchasePrice.set(+$event)"
+          />
+        </div>
+
+        <div class="pb-field">
+          <label class="pb-label" for="qa-lang">Taal</label>
+          <select
+            id="qa-lang"
+            class="pb-select"
+            [ngModel]="language()"
+            (ngModelChange)="language.set($event)"
+          >
+            @for (lang of store.settings().languages; track lang) {
+              <option [value]="lang">{{ lang }}</option>
+            }
+          </select>
+        </div>
+      </div>
+
+      <!-- Te ruil schakelaar -->
+      <div class="trade-row">
+        <span>Direct markeren als <strong>Te ruil / verkoop</strong></span>
+        <button
+          type="button"
+          role="switch"
+          class="pb-switch"
+          [class.is-checked]="forTrade()"
+          [attr.aria-checked]="forTrade()"
+          (click)="forTrade.set(!forTrade())"
+        >
+          <span class="pb-switch__thumb"></span>
+        </button>
+      </div>
+
+      <!-- 6. National Pokédex Automated Linking Banner -->
+      @if (matchedPokedexEntry(); as dex) {
+        <div class="dex-link-banner">
+          <div class="dex-link-banner__icon">
+            <span class="material-symbols-outlined is-filled">menu_book</span>
+          </div>
+          <p>
+            Koppelt <strong>{{ dex.name }}</strong> automatisch aan slot
+            <strong class="mono">{{ formatDexNumber(dex.dexNumber) }}</strong> in je National Pokédex Binder!
+          </p>
+        </div>
+      }
+    </div>
+  </div>
+
+  <!-- Zwevende Actiebalk Onderaan -->
+  <div class="qa-dock">
+    <div class="qa-dock__inner">
+      <button
+        type="button"
+        class="pb-btn pb-btn--primary pb-btn--full"
+        [disabled]="isSaving() || (!previewCard() && !manualName().trim())"
+        (click)="saveCard(false)"
+      >
+        <span class="material-symbols-outlined is-filled">bookmark_add</span>
+        <span>Opslaan in Collectie &amp; Sync Pokédex</span>
+      </button>
+
+      <button
+        type="button"
+        class="pb-btn pb-btn--secondary pb-btn--full"
+        [disabled]="isSaving() || (!previewCard() && !manualName().trim())"
+        (click)="saveCard(true)"
+      >
+        <span class="material-symbols-outlined pack-bolt">bolt</span>
+        <span>Opslaan &amp; Volgende Kaart (Pack Mode)</span>
+      </button>
+    </div>
+  </div>
+</div>

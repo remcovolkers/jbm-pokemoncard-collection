@@ -1,0 +1,56 @@
+import { Component, computed, inject, signal } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
+import { formatEur, formatPercent } from '../../core/domain/card-math.utils';
+import { SetProgress } from '../../core/domain/models';
+import { CollectionStore } from '../../core/state/collection.store';
+
+@Component({
+  selector: 'app-set-progress',
+  standalone: true,
+  imports: [FormsModule],
+  templateUrl: './set-progress.component.html',
+  styleUrl: './set-progress.component.scss',
+})
+export class SetProgressComponent {
+  readonly store = inject(CollectionStore);
+  private readonly router = inject(Router);
+
+  readonly formatEur = formatEur;
+  readonly formatPercent = formatPercent;
+
+  readonly query = signal('');
+  readonly sortBy = signal<'progress' | 'value' | 'name'>('progress');
+
+  readonly filteredSets = computed(() => {
+    const q = this.query().trim().toLowerCase();
+    const sort = this.sortBy();
+
+    const list = this.store.setProgress().filter((s) => {
+      if (!q) return true;
+      return `${s.setName} ${s.series} ${s.setCode ?? ''}`.toLowerCase().includes(q);
+    });
+
+    return [...list].sort((a, b) => {
+      if (sort === 'value') return b.totalSetValue - a.totalSetValue;
+      if (sort === 'name') return a.setName.localeCompare(b.setName, 'nl');
+      return b.progressPercent - a.progressPercent || b.totalSetValue - a.totalSetValue;
+    });
+  });
+
+  readonly stats = computed(() => {
+    const sets = this.store.setProgress();
+    const totalValue = sets.reduce((acc, s) => acc + s.totalSetValue, 0);
+    const totalOwned = sets.reduce((acc, s) => acc + s.ownedUnique, 0);
+    const avgPct =
+      sets.length > 0
+        ? Math.round((sets.reduce((acc, s) => acc + s.progressPercent, 0) / sets.length) * 10) / 10
+        : 0;
+    return { count: sets.length, totalValue, totalOwned, avgPct };
+  });
+
+  openSetInCollection(set: SetProgress): void {
+    this.store.requestedSetFilter.set(set.setName);
+    void this.router.navigateByUrl('/collectie');
+  }
+}

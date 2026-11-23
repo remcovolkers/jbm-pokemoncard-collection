@@ -1,0 +1,503 @@
+@use 'tokens' as *;
+@use 'mixins' as *;
+
+.shell {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background-color: $color-surface;
+  color: $color-on-surface;
+
+  @include mq-md {
+    flex-direction: row;
+  }
+}
+
+// ============================================================================
+// Desktop Zijbalk (>= 768px)
+// ============================================================================
+.sidebar {
+  display: none;
+
+  @include mq-md {
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: $sidebar-width;
+    background-color: $color-surface-low;
+    border-right: 1px solid rgba($color-outline-variant, 0.7);
+    padding: $space-lg $space-md;
+    gap: $space-md;
+    z-index: $z-header;
+    overflow-y: auto;
+  }
+
+  &__brand {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.25rem 0.25rem $space-sm;
+  }
+
+  &__logo {
+    width: 38px;
+    height: 38px;
+    flex-shrink: 0;
+  }
+
+  &__brand-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  &__title {
+    @include type-headline-md;
+    font-weight: 700;
+    color: $color-on-surface;
+    line-height: 1.1;
+  }
+
+  &__tagline {
+    @include type-data-sm;
+    color: $color-on-surface-muted;
+    margin-top: 2px;
+  }
+
+  &__cta {
+    margin-bottom: $space-xs;
+  }
+
+  &__nav {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    flex: 1;
+  }
+
+  &__section-label {
+    @include type-data-sm;
+    color: $color-on-surface-muted;
+    text-transform: uppercase;
+    padding: $space-sm 0.75rem 0.25rem;
+  }
+
+  &__link {
+    @include touch-target(44px);
+    @include pressable;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.6rem 0.75rem;
+    border-radius: $radius-md;
+    color: $color-on-surface-variant;
+    font-weight: 500;
+    font-size: 0.9rem;
+
+    .material-symbols-outlined {
+      font-size: 21px;
+    }
+
+    &:hover {
+      background-color: $color-surface-container;
+      color: $color-on-surface;
+    }
+
+    &.is-active {
+      background-color: rgba($color-primary-container, 0.16);
+      color: $color-primary-fixed;
+      font-weight: 600;
+      box-shadow: inset 3px 0 0 $color-primary-container;
+
+      .material-symbols-outlined {
+        color: $color-primary-container;
+        font-variation-settings: 'FILL' 1, 'wght' 500, 'GRAD' 0, 'opsz' 24;
+      }
+    }
+  }
+
+  &__badge {
+    @include type-data-sm;
+    margin-left: auto;
+    padding: 0.15rem 0.5rem;
+    border-radius: $radius-full;
+    background-color: $color-surface-high;
+    color: $color-on-surface-muted;
+
+    &--emerald {
+      background-color: rgba($color-secondary, 0.15);
+      color: $color-secondary;
+    }
+
+    &--coral {
+      background-color: rgba($color-primary-container, 0.2);
+      color: $color-primary;
+    }
+  }
+
+  &__footer {
+    padding-top: $space-sm;
+    border-top: 1px solid rgba($color-outline-variant, 0.5);
+  }
+}
+
+// ============================================================================
+// Mobiele Top Header (< 768px)
+// ============================================================================
+.topbar {
+  @include surface-glass;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: $z-header;
+  padding-top: env(safe-area-inset-top, 0px);
+  border-bottom: 1px solid rgba($color-outline-variant, 0.45);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.45);
+
+  @include mq-md {
+    display: none;
+  }
+
+  &__inner {
+    height: $header-height;
+    padding: 0 $margin-mobile;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: $space-sm;
+  }
+
+  &__left,
+  &__right {
+    display: flex;
+    align-items: center;
+    gap: $space-sm;
+    min-width: 0;
+  }
+
+  &__brand {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    min-width: 0;
+  }
+
+  &__logo {
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+  }
+
+  &__titles {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  &__title {
+    @include type-headline-md;
+    font-weight: 700;
+    line-height: 1.1;
+    color: $color-on-surface;
+  }
+
+  &__subtitle {
+    @include type-body-sm;
+    color: $color-on-surface-muted;
+    line-height: 1.15;
+    @include truncate;
+  }
+
+  &__icon-btn,
+  &__profile-btn {
+    @include touch-target(42px);
+    @include pressable;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: $radius-full;
+    color: $color-on-surface-variant;
+    background-color: $color-surface-container;
+    border: 1px solid rgba($color-outline-variant, 0.6);
+
+    &:hover {
+      color: $color-on-surface;
+      background-color: $color-surface-high;
+    }
+  }
+}
+
+// ============================================================================
+// Sync Pill (Header & Sidebar)
+// ============================================================================
+.sync-pill {
+  @include type-data-sm;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.7rem;
+  border-radius: $radius-full;
+  background-color: rgba($color-secondary, 0.12);
+  border: 1px solid rgba($color-secondary, 0.28);
+  color: $color-secondary;
+  white-space: nowrap;
+  box-shadow: $shadow-secondary-glow;
+
+  &__dot {
+    width: 7px;
+    height: 7px;
+    border-radius: $radius-full;
+    background-color: currentColor;
+    animation: pb-pulse 2s ease-in-out infinite;
+    flex-shrink: 0;
+  }
+
+  &__queue {
+    margin-left: auto;
+    font-size: 0.625rem;
+    opacity: 0.85;
+  }
+
+  &__btn {
+    margin-left: auto;
+    width: 28px;
+    height: 28px;
+    border-radius: $radius-full;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: inherit;
+
+    &:hover {
+      background-color: rgba(255, 255, 255, 0.08);
+    }
+
+    .material-symbols-outlined {
+      font-size: 16px;
+    }
+  }
+
+  &--full {
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border-radius: $radius-md;
+  }
+
+  &.is-demo {
+    background-color: rgba($color-tertiary, 0.14);
+    border-color: rgba($color-tertiary, 0.35);
+    color: $color-tertiary;
+    box-shadow: none;
+  }
+
+  &.is-offline {
+    background-color: rgba($color-outline, 0.16);
+    border-color: rgba($color-outline, 0.4);
+    color: $color-on-surface-variant;
+    box-shadow: none;
+  }
+
+  &.is-error {
+    background-color: rgba($color-error-container, 0.45);
+    border-color: rgba($color-error, 0.4);
+    color: $color-error;
+    box-shadow: none;
+  }
+}
+
+// ============================================================================
+// Hoofdinhoud
+// ============================================================================
+.shell__main {
+  flex: 1;
+  width: 100%;
+  padding-top: calc(#{$header-height} + env(safe-area-inset-top, 0px));
+  padding-bottom: calc(#{$bottom-nav-height} + 1.5rem + env(safe-area-inset-bottom, 0px));
+
+  &.is-quick-add {
+    padding-bottom: calc(9.5rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  @include mq-md {
+    margin-left: $sidebar-width;
+    width: calc(100% - #{$sidebar-width});
+    padding-top: 0;
+    padding-bottom: $space-xl;
+
+    &.is-quick-add {
+      padding-bottom: 8rem;
+    }
+  }
+}
+
+.shell__content {
+  width: 100%;
+  max-width: $content-max-width;
+  margin: 0 auto;
+}
+
+// ============================================================================
+// Mobiele Bottom Navigation (< 768px, Stitch 5-tab met verhoogde FAB)
+// ============================================================================
+.bottom-nav {
+  @include surface-glass;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: $z-nav;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  border-top: 1px solid rgba($color-outline-variant, 0.5);
+  box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.55);
+
+  @include mq-md {
+    display: none;
+  }
+
+  &__inner {
+    height: $bottom-nav-height;
+    padding: 0 $space-xs;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    align-items: center;
+  }
+
+  &__item {
+    @include touch-target(44px);
+    @include pressable;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.2rem;
+    color: $color-on-surface-muted;
+
+    &.is-active {
+      color: $color-primary-container;
+
+      .bottom-nav__icon {
+        transform: scale(1.08);
+        font-variation-settings: 'FILL' 1, 'wght' 550, 'GRAD' 0, 'opsz' 24;
+      }
+    }
+  }
+
+  &__icon {
+    font-size: 23px;
+    transition: transform 150ms ease;
+  }
+
+  &__label {
+    font-size: 0.6875rem;
+    font-weight: 500;
+    line-height: 1.1;
+  }
+
+  &__fab-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    top: -12px;
+  }
+
+  &__fab {
+    @include pressable;
+    width: 52px;
+    height: 52px;
+    border-radius: $radius-full;
+    background: linear-gradient(145deg, $color-primary-container 0%, $color-primary-hover 100%);
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 6px 20px rgba($color-primary-container, 0.5);
+    border: 2px solid rgba(255, 255, 255, 0.14);
+
+    .material-symbols-outlined {
+      font-size: 28px;
+      font-weight: 700;
+    }
+  }
+
+  &__fab-label {
+    font-size: 0.625rem;
+    font-weight: 600;
+    color: $color-on-surface-variant;
+    margin-top: 2px;
+  }
+}
+
+// ============================================================================
+// Globale Toast Stack
+// ============================================================================
+.toast-stack {
+  position: fixed;
+  top: calc(#{$header-height} + 0.75rem + env(safe-area-inset-top, 0px));
+  left: $margin-mobile;
+  right: $margin-mobile;
+  z-index: $z-toast;
+  display: flex;
+  flex-direction: column;
+  gap: $space-sm;
+  pointer-events: none;
+
+  @include mq-md {
+    top: $space-lg;
+    left: auto;
+    right: $space-lg;
+    width: 360px;
+  }
+}
+
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  text-align: left;
+  padding: 0.75rem 1rem;
+  border-radius: $radius-md;
+  background-color: $color-surface-high;
+  border: 1px solid $color-outline-strong;
+  color: $color-on-surface;
+  box-shadow: $shadow-elevated;
+  animation: pb-slide-up 180ms ease;
+
+  &__icon {
+    font-size: 20px;
+    flex-shrink: 0;
+  }
+
+  &__text {
+    @include type-body-sm;
+    font-weight: 500;
+  }
+
+  &--success {
+    border-color: rgba($color-secondary, 0.5);
+    .toast__icon {
+      color: $color-secondary;
+    }
+  }
+
+  &--warning {
+    border-color: rgba($color-tertiary, 0.5);
+    .toast__icon {
+      color: $color-tertiary;
+    }
+  }
+
+  &--error {
+    border-color: rgba($color-primary-container, 0.6);
+    .toast__icon {
+      color: $color-primary-container;
+    }
+  }
+}

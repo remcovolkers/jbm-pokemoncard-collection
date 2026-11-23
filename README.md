@@ -1,0 +1,118 @@
+# PokéBinder — Pokémon TCG Manager PWA
+
+**PokéBinder** is een offline-first Progressive Web App (PWA) gebouwd met **Angular 21** (standalone components, Angular Signals, gecentraliseerde SCSS design tokens volgens het **Obsidian Vault TCG** design system), gehost op **GitHub Pages**, met een bestaande **Google Sheets** *Pokémon Kaartencollectie Tracker* als backend via Google Apps Script én live kaartdata, artwork en Cardmarket EUR-prijzen via de gratis [TCGdex API](https://tcgdex.dev/).
+
+---
+
+## Functionaliteiten
+
+- **Dashboard:** Live KPI-berekeningen (Unieke kaarten, Totaal exemplaren, Aankoopwaarde, Marktwaarde, Ongerealiseerde winst & ROI %, Gerealiseerde verkoopwinst, Openstaand verlanglijst-budget), National Pokédex voortgangskaart met generatie-overzicht, Top 5 waardevolste kaarten en Actieve Master Sets.
+- **Collectie:** Visuele 2–6 koloms kaartengallery met TCGdex artwork én lijstweergave, multi-filters (Set, Opslaglocatie, Zeldzaamheid, Te ruil/verkoop, live zoekbalk), natuurlijke numerieke kaartnummer-sortering (`44/102` vóór `166/165`) en een interactieve Detail Bottom Sheet met `- / +` stepper en directe bewerking.
+- **Snel Toevoegen (`+`):** Zoeken via Kaart-ID met setcode-aliassen (`MEW 181`, `OBF 199/197`, `BS 44`, `sv03.5-181`) óf op Pokémon-naam via TCGdex, live kaart-preview met Cardmarket EUR-prijs, duplicaatdetectie (**"+1 bij bestaande kaart"** of **"Als aparte variant toevoegen"**) en **Pack Opening Mode** die set, conditie en opslaglocatie onthoudt voor razendsnel invoeren.
+- **Pokédex Binder (`#0001–#1025`):** Visuele binder-weergave in `4` (2×2), `9` (3×3), `12` (4×3) of `16` (4×4) vakjes per pagina + compacte checklist, generatiefilter (`Gen 1` t/m `Gen 9` met live teller), statusfilter (`Alle`, `Ontbrekend`, `Al in Collectie`, `In Binder`, `Upgrade gewenst`), variant-kiezer met echt kaartartwork en directe `Upgrade gewenst`-schakelaar.
+- **Meer (Tools):**
+  - **Set Voortgang:** Overzichtskaarten per set met voortgangsbalk en 1-klik filter naar `Collectie`.
+  - **Verlanglijst:** Maandbudget-overzicht, filters op prioriteit en budgetstatus, nieuwe wens toevoegen met TCGdex-lookup en 1-klik `"Gevonden → Toevoegen aan Collectie"`.
+  - **Ruil & Verkoop:** Live Trade Binder (kaarten met `Te ruil/verkoop = true` of `Aantal > 1`), totale ruilwaarde en transactielogboek voor verkopen/ruilen/inruilen.
+  - **Instellingen:** Google Apps Script Web App URL & persoonlijk API-token beheren, verbinding testen, handmatig volledig synchroniseren, Cardmarket-prijzen verversen, Demo-modus aan/uit en offline-cache legen.
+- **Offline-first PWA:** Service Worker caching voor de app én TCGdex artwork/API, lokale snapshot-cache en een offline wijzigingswachtrij die automatisch synchroniseert zodra je weer online bent.
+
+---
+
+## Lokaal ontwikkelen & testen
+
+```bash
+# 1. Afhankelijkheden installeren
+npm install
+
+# 2. Ontwikkelserver starten (op http://localhost:4200)
+npm start
+
+# 3. Alle tests draaien (Angular Vitest + Apps Script backend tests)
+npm run test:all
+
+# Of afzonderlijk:
+npm test -- --watch=false
+npm run test:apps-script
+
+# 4. Productie-build maken
+npm run build
+```
+
+---
+
+## Installatiehandleiding (Productie)
+
+### Stap A — `apps-script/Code.gs` deployen als Web App + `API_TOKEN` instellen
+
+De backend-code staat kant-en-klaar in [`apps-script/Code.gs`](apps-script/Code.gs). Het script schrijft nooit over bestaande Google Sheets-formules heen (zoals `R:T` in `Collectie`, `D:H` in `Set Voortgang`, `E:H` in `Pokédex Binder`, `I:J` in `Verlanglijst` en `H` in `Ruil & Verkoop`) en gebruikt `LockService` tegen schrijfbotsingen.
+
+1. Open je bestaande Google Spreadsheet (**Pokémon Kaartencollectie Tracker**).
+2. Klik in het bovenste menu op **Extensies → Apps Script**.
+3. Vervang de inhoud van `Code.gs` door de volledige inhoud van [`apps-script/Code.gs`](apps-script/Code.gs) en sla op (`Ctrl+S`).
+4. **Persoonlijk `API_TOKEN` instellen** (geen secrets in GitHub!):
+   - Klik links in de Apps Script-editor op het tandwiel (**Projectinstellingen**).
+   - Scroll helemaal naar beneden naar **Scripteigenschappen → Scripteigenschap toevoegen**.
+   - **Eigenschap:** `API_TOKEN`
+   - **Waarde:** een zelfgekozen sterke sleutel (bijv. 32+ willekeurige tekens).
+   - Klik op **Scripteigenschappen opslaan**. *(Tip: na herladen van je Sheet kun je dit ook via het nieuwe menu **PokéBinder → API-token instellen** doen.)*
+5. **Deployen als Web App:**
+   - Klik rechtsboven op **Implementeren → Nieuwe implementatie**.
+   - Klik op het tandwiel bij *Type selecteren* en kies **Web-app**.
+   - **Beschrijving:** `PokéBinder API v1`
+   - **Uitvoeren als:** `Ik` *(jouw eigen Google-account)*
+   - **Wie heeft toegang:** `Iedereen` *(vereist zodat de PWA zonder Google OAuth-popup mag aanroepen; je persoonlijke `API_TOKEN` schermt alle requests af)*.
+   - Klik op **Implementeren**, doorloop de eenmalige Google-toestemming en kopieer de **Web-app-URL** (eindigend op `/exec`).
+6. *(Optioneel maar aanbevolen voor direct bewerken in Sheets)* Voeg bij **Triggers** (klok-icoon links) een trigger toe voor functie `handleSheetEdit` → *Uit spreadsheet* → *Bij bewerken*.
+7. Open de PokéBinder PWA → ga naar **Meer → Instellingen**, schakel **Demo-modus** uit, vul de **Web-app-URL** en je **API-token** in, klik op **Verbinding testen** en daarna op **Opslaan & Synchroniseren**.
+
+> **Let op bij aanpassingen in `Code.gs`:** Maak na codewijzigingen altijd een nieuwe versie via **Implementeren → Implementaties beheren → Bewerken → Nieuwe versie** zodat de bestaande `/exec`-URL de nieuwe code serveert.
+
+---
+
+### Stap B — GitHub Pages aanzetten
+
+Deze repository bevat al een kant-en-klare GitHub Actions workflow in [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) die automatisch unit tests draait, de Angular PWA bouwt met de juiste `--base-href "/<repo-naam>/"`, een `404.html` SPA-fallback toevoegt en publiceert naar GitHub Pages.
+
+1. Push deze repository naar GitHub op de branch `main` (`https://github.com/remcovolkers/jbm-pokemoncard-collection`).
+2. Ga op GitHub naar **Settings → Pages**.
+3. Kies onder **Build and deployment → Source** de optie **GitHub Actions**.
+4. Ga naar het tabblad **Actions** en bekijk de workflow **Deploy PokéBinder PWA to GitHub Pages** (of start deze handmatig via *Run workflow*).
+5. Zodra de job groen is, staat jouw PWA live op:
+   **`https://remcovolkers.github.io/jbm-pokemoncard-collection/`**
+
+---
+
+### Stap C — PokéBinder installeren als PWA op je telefoon
+
+- **Android (Chrome / Edge):**
+  1. Open je GitHub Pages URL in Chrome.
+  2. Tik op het menu (`⋮`) rechtsboven → **App installeren** (of **Toevoegen aan startscherm**).
+  3. Bevestig met **Installeren**. PokéBinder verschijnt met eigen icoon op je startscherm en opent fullscreen zonder adresbalk.
+- **iOS (Safari):**
+  1. Open je GitHub Pages URL in Safari.
+  2. Tik onderaan op het deel-icoon (**Deel** `↑`).
+  3. Scroll naar beneden en tik op **Zet op beginscherm** → **Voeg toe**.
+- **Offline gebruik op ruilavonden:** Open de app één keer met internet om je collectie, Pokédex Binder en kaart-artwork te cachen. Zonder bereik blijft alles direct bladerbaar en worden wijzigingen opgeslagen in de sync-wachtrij.
+
+---
+
+## Architectuur (Hexagonaal)
+
+```text
+src/
+├── styles/                     # Gecentraliseerde Obsidian Vault TCG SCSS (geen Tailwind)
+│   ├── _tokens.scss            # Kleuren, typografie, spacing, radii & CSS custom properties
+│   ├── _mixins.scss            # Breakpoints, typography & slab mixins
+│   ├── _base.scss              # Dark canvas reset & animaties
+│   └── _components.scss        # Buttons, pills, switches, inputs & bottom sheets
+└── app/
+    ├── core/
+    │   ├── domain/             # Pure TypeScript modellen, ROI, binder-posities, Pokédex regex
+    │   ├── ports/              # Abstracte interfaces (CollectionRepository, CardCatalogPort)
+    │   ├── adapters/           # TcgdexAdapter, AppsScriptSheetsAdapter, LocalCacheAdapter
+    │   └── state/              # CollectionStore (Angular Signals)
+    ├── shared/                 # Herbruikbare UI-componenten (o.a. CardArtwork)
+    └── features/               # Standalone feature modules (dashboard, collection, quick-add,
+                                # pokedex-binder, set-progress, wishlist, trades, settings)
+```

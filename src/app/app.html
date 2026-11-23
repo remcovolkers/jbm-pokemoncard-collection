@@ -1,0 +1,214 @@
+<div class="shell">
+  <!-- Desktop Zijbalk (>= 768px) -->
+  <aside class="sidebar" aria-label="Hoofdnavigatie">
+    <a class="sidebar__brand" routerLink="/dashboard">
+      <img src="icons/pokebinder-logo.svg" alt="PokéBinder Logo" class="sidebar__logo" />
+      <div class="sidebar__brand-text">
+        <span class="sidebar__title">PokéBinder</span>
+        <span class="sidebar__tagline">Obsidian Vault TCG</span>
+      </div>
+    </a>
+
+    <a class="pb-btn pb-btn--primary pb-btn--full sidebar__cta" routerLink="/toevoegen">
+      <span class="material-symbols-outlined">add_circle</span>
+      <span>Kaart Toevoegen</span>
+    </a>
+
+    <nav class="sidebar__nav">
+      <span class="sidebar__section-label">Overzicht</span>
+      <a class="sidebar__link" routerLink="/dashboard" routerLinkActive="is-active">
+        <span class="material-symbols-outlined">dashboard</span>
+        <span>Dashboard</span>
+      </a>
+      <a class="sidebar__link" routerLink="/collectie" routerLinkActive="is-active">
+        <span class="material-symbols-outlined">style</span>
+        <span>Collectie</span>
+        <span class="sidebar__badge">{{ store.portfolio().uniqueCards }}</span>
+      </a>
+      <a class="sidebar__link" routerLink="/pokedex" routerLinkActive="is-active">
+        <span class="material-symbols-outlined">menu_book</span>
+        <span>Pokédex Binder</span>
+        <span class="sidebar__badge sidebar__badge--emerald">{{ store.pokedexStats().inBinder }}</span>
+      </a>
+
+      <span class="sidebar__section-label">Tools & Beheer</span>
+      <a class="sidebar__link" routerLink="/meer/sets" routerLinkActive="is-active">
+        <span class="material-symbols-outlined">fact_check</span>
+        <span>Set Voortgang</span>
+        <span class="sidebar__badge">{{ store.setProgress().length }}</span>
+      </a>
+      <a class="sidebar__link" routerLink="/meer/verlanglijst" routerLinkActive="is-active">
+        <span class="material-symbols-outlined">star</span>
+        <span>Verlanglijst</span>
+        <span class="sidebar__badge sidebar__badge--coral">{{ store.portfolio().openWishlistCount }}</span>
+      </a>
+      <a class="sidebar__link" routerLink="/meer/ruil-verkoop" routerLinkActive="is-active">
+        <span class="material-symbols-outlined">swap_horiz</span>
+        <span>Ruil &amp; Verkoop</span>
+        <span class="sidebar__badge">{{ store.tradeBinderCards().length }}</span>
+      </a>
+      <a class="sidebar__link" routerLink="/meer/instellingen" routerLinkActive="is-active">
+        <span class="material-symbols-outlined">tune</span>
+        <span>Instellingen</span>
+      </a>
+    </nav>
+
+    <div class="sidebar__footer">
+      <div
+        class="sync-pill sync-pill--full"
+        [class.is-demo]="store.syncStatus() === 'demo'"
+        [class.is-offline]="store.syncStatus() === 'offline'"
+        [class.is-error]="store.syncStatus() === 'error'"
+      >
+        <span class="sync-pill__dot"></span>
+        <span class="sync-pill__text">{{ syncLabel() }}</span>
+        @if (store.pendingQueue().length > 0) {
+          <span class="sync-pill__queue">{{ store.pendingQueue().length }} in wachtrij</span>
+        }
+        <button
+          type="button"
+          class="sync-pill__btn"
+          aria-label="Nu synchroniseren"
+          (click)="store.syncFromRemote()"
+        >
+          <span class="material-symbols-outlined" [class.pb-spin]="store.isSyncing()">sync</span>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Mobiele Top Header (< 768px) -->
+  <header class="topbar">
+    <div class="topbar__inner">
+      <div class="topbar__left">
+        @if (isQuickAddRoute()) {
+          <button
+            type="button"
+            class="topbar__icon-btn"
+            aria-label="Terug"
+            (click)="goBack()"
+          >
+            <span class="material-symbols-outlined">arrow_back</span>
+          </button>
+        }
+        <a routerLink="/dashboard" class="topbar__brand">
+          <img src="icons/pokebinder-logo.svg" alt="PokéBinder Logo" class="topbar__logo" />
+          <div class="topbar__titles">
+            <span class="topbar__title">PokéBinder</span>
+            <span class="topbar__subtitle">{{ pageSubtitle() }}</span>
+          </div>
+        </a>
+      </div>
+
+      <div class="topbar__right">
+        <button
+          type="button"
+          class="sync-pill"
+          [class.is-demo]="store.syncStatus() === 'demo'"
+          [class.is-offline]="store.syncStatus() === 'offline'"
+          [class.is-error]="store.syncStatus() === 'error'"
+          (click)="store.syncFromRemote()"
+          aria-label="Synchronisatiestatus"
+        >
+          <span class="sync-pill__dot"></span>
+          <span class="sync-pill__text">{{ syncLabel() }}</span>
+        </button>
+
+        <a
+          routerLink="/meer/instellingen"
+          class="topbar__profile-btn"
+          aria-label="Instellingen"
+        >
+          <span class="material-symbols-outlined">tune</span>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Hoofdinhoud -->
+  <main class="shell__main" [class.is-quick-add]="isQuickAddRoute()">
+    <div class="shell__content">
+      <router-outlet />
+    </div>
+  </main>
+
+  <!-- Mobiele Bottom Navigation (< 768px, verborgen op Quick Add stack-pagina) -->
+  @if (!isQuickAddRoute()) {
+    <nav class="bottom-nav" aria-label="Mobiele navigatie">
+      <div class="bottom-nav__inner">
+        <a
+          class="bottom-nav__item"
+          routerLink="/dashboard"
+          routerLinkActive="is-active"
+        >
+          <span class="material-symbols-outlined bottom-nav__icon">dashboard</span>
+          <span class="bottom-nav__label">Dashboard</span>
+        </a>
+
+        <a
+          class="bottom-nav__item"
+          routerLink="/collectie"
+          routerLinkActive="is-active"
+        >
+          <span class="material-symbols-outlined bottom-nav__icon">style</span>
+          <span class="bottom-nav__label">Collectie</span>
+        </a>
+
+        <div class="bottom-nav__fab-wrap">
+          <a
+            class="bottom-nav__fab"
+            routerLink="/toevoegen"
+            aria-label="Kaart toevoegen"
+          >
+            <span class="material-symbols-outlined">add</span>
+          </a>
+          <span class="bottom-nav__fab-label">Toevoegen</span>
+        </div>
+
+        <a
+          class="bottom-nav__item"
+          routerLink="/pokedex"
+          routerLinkActive="is-active"
+        >
+          <span class="material-symbols-outlined bottom-nav__icon">menu_book</span>
+          <span class="bottom-nav__label">Pokédex</span>
+        </a>
+
+        <a
+          class="bottom-nav__item"
+          routerLink="/meer"
+          routerLinkActive="is-active"
+        >
+          <span class="material-symbols-outlined bottom-nav__icon">more_horiz</span>
+          <span class="bottom-nav__label">Meer</span>
+        </a>
+      </div>
+    </nav>
+  }
+
+  <!-- Globale Toast Meldingen -->
+  @if (store.toasts().length > 0) {
+    <div class="toast-stack" role="status" aria-live="polite">
+      @for (toast of store.toasts(); track toast.id) {
+        <button
+          type="button"
+          class="toast"
+          [class.toast--success]="toast.tone === 'success'"
+          [class.toast--warning]="toast.tone === 'warning'"
+          [class.toast--error]="toast.tone === 'error'"
+          (click)="store.dismissToast(toast.id)"
+        >
+          <span class="material-symbols-outlined toast__icon">
+            @switch (toast.tone) {
+              @case ('success') { check_circle }
+              @case ('warning') { warning }
+              @case ('error') { error }
+              @default { info }
+            }
+          </span>
+          <span class="toast__text">{{ toast.text }}</span>
+        </button>
+      }
+    </div>
+  }
+</div>

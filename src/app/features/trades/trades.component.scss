@@ -1,0 +1,261 @@
+@use 'tokens' as *;
+@use 'mixins' as *;
+
+.tr-page {
+  display: flex;
+  flex-direction: column;
+  gap: $space-lg;
+  padding: $space-md $margin-mobile $space-xl;
+
+  @include mq-md {
+    padding: $space-lg $margin-desktop $space-xl;
+  }
+}
+
+.tr-summary {
+  display: flex;
+  flex-direction: column;
+  gap: $space-md;
+
+  &__grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: $space-md;
+
+    @include mq-sm {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+}
+
+.tr-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.75rem;
+  border-radius: $radius-md;
+  background-color: $color-surface-high;
+
+  &__label {
+    @include type-body-sm;
+    color: $color-on-surface-variant;
+  }
+
+  &__val {
+    @include type-headline-lg;
+  }
+
+  &__sub {
+    @include type-data-sm;
+    color: $color-on-surface-muted;
+  }
+}
+
+.text-emerald {
+  color: $color-secondary !important;
+}
+
+.text-coral {
+  color: $color-primary-container !important;
+}
+
+.tr-section {
+  display: flex;
+  flex-direction: column;
+  gap: $space-sm;
+
+  &__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: $space-sm;
+
+    h2 {
+      @include type-headline-md;
+    }
+  }
+
+  &__hint {
+    @include type-data-sm;
+    color: $color-on-surface-muted;
+  }
+}
+
+.trade-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: $gutter-mobile;
+
+  @include mq-md {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.trade-card {
+  display: flex;
+  gap: 0.85rem;
+  padding: 0.75rem;
+
+  &__art {
+    width: 66px;
+    flex-shrink: 0;
+  }
+
+  &__qty {
+    position: absolute;
+    bottom: 4px;
+    left: 4px;
+    padding: 0.1rem 0.35rem;
+    border-radius: $radius-full;
+    background-color: rgba($color-secondary-container, 0.92);
+    color: $color-on-secondary;
+    font-size: 0.58rem;
+    font-weight: 700;
+  }
+
+  &__info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 0.3rem;
+  }
+
+  &__top {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.5rem;
+
+    h3 {
+      @include type-body-md;
+      font-weight: 700;
+      @include truncate;
+    }
+  }
+
+  &__price {
+    @include type-data-md;
+    color: $color-secondary;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  &__sub {
+    @include type-data-sm;
+    color: $color-on-surface-muted;
+    @include truncate;
+  }
+
+  &__foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding-top: 0.25rem;
+  }
+
+  &__log-btn {
+    min-height: 34px;
+    padding: 0.3rem 0.75rem;
+    font-size: 0.78rem;
+  }
+}
+
+.log-list {
+  display: flex;
+  flex-direction: column;
+  gap: $space-sm;
+}
+
+.log-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: $space-md;
+  padding: 0.85rem $space-md;
+
+  &__left {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    min-width: 0;
+
+    h3 {
+      @include type-body-md;
+      font-weight: 700;
+    }
+  }
+
+  &__top {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  &__date {
+    @include type-data-sm;
+    color: $color-on-surface-muted;
+  }
+
+  &__sub {
+    @include type-body-sm;
+    color: $color-on-surface-variant;
+  }
+
+  &__right {
+    text-align: right;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+
+  &__net {
+    @include type-data-lg;
+  }
+
+  &__breakdown {
+    @include type-data-sm;
+    color: $color-on-surface-muted;
+  }
+}
+
+.sheet-sub {
+  @include type-body-sm;
+  color: $color-on-surface-muted;
+  margin-top: 2px;
+}
+
+.tr-form {
+  display: flex;
+  flex-direction: column;
+  gap: $space-sm;
+}
+
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: $space-sm;
+}
+
+.three-col {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: $space-sm;
+}
+
+.net-preview {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.7rem 0.9rem;
+  border-radius: $radius-md;
+  background-color: $color-surface-high;
+  @include type-body-sm;
+
+  strong {
+    @include type-data-lg;
+  }
+}

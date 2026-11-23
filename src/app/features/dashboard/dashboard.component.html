@@ -1,0 +1,280 @@
+<div class="dash">
+  <!-- Live Synchronisatie Strip -->
+  <div class="sync-strip">
+    <div class="sync-strip__left">
+      <span
+        class="pb-dot pb-dot--pulse"
+        [class.pb-dot--secondary]="store.syncStatus() === 'synced'"
+        [class.pb-dot--tertiary]="store.syncStatus() === 'demo' || store.syncStatus() === 'offline'"
+        [class.pb-dot--primary]="store.syncStatus() === 'error'"
+      ></span>
+      <p class="sync-strip__text">
+        @if (store.config().demoMode) {
+          Demo-modus actief · <strong>Voorbeeldcollectie</strong> (koppel je Sheet bij Instellingen)
+        } @else if (!store.isOnline()) {
+          Offline snapshot · <strong>{{ syncedTimeAgo() }}</strong>
+          @if (store.pendingQueue().length > 0) {
+            · {{ store.pendingQueue().length }} in wachtrij
+          }
+        } @else {
+          Google Sheets Live Sync: <strong>{{ syncedTimeAgo() }}</strong> · 100% up-to-date
+        }
+      </p>
+    </div>
+    <button
+      type="button"
+      class="sync-strip__refresh"
+      aria-label="Nu verversen"
+      (click)="store.syncFromRemote()"
+    >
+      <span class="material-symbols-outlined" [class.pb-spin]="store.isSyncing()">sync</span>
+    </button>
+  </div>
+
+  <!-- Bovenste Bento-rij op desktop: Hero Portfolio + Pokédex Binder -->
+  <div class="dash__hero-grid">
+    <!-- Hero Portfolio Kaart (Fintech Metaphor) -->
+    <section class="pb-card hero-card">
+      <div class="hero-card__glow" aria-hidden="true"></div>
+      <div class="hero-card__body">
+        <div class="hero-card__top">
+          <span class="hero-card__eyebrow">Totale Portfoliowaarde</span>
+          <span class="pb-pill pb-pill--neutral">
+            <span class="material-symbols-outlined hero-card__pill-icon">query_stats</span>
+            Cardmarket API
+          </span>
+        </div>
+
+        <div class="hero-card__value mono">{{ formatEur(store.portfolio().marketValue) }}</div>
+
+        <div
+          class="hero-card__profit"
+          [class.is-negative]="store.portfolio().unrealizedProfit < 0"
+        >
+          <span class="material-symbols-outlined">
+            {{ store.portfolio().unrealizedProfit >= 0 ? 'trending_up' : 'trending_down' }}
+          </span>
+          <span class="mono hero-card__profit-nums">
+            {{ formatEur(store.portfolio().unrealizedProfit, true) }} ·
+            {{ formatPercent(store.portfolio().roiPercent) }}
+          </span>
+          <span class="hero-card__profit-sub">(Ongerealiseerd)</span>
+        </div>
+
+        <!-- 2x2 / 3x2 Sub-metrics Grid -->
+        <div class="kpi-grid">
+          <div class="kpi-tile">
+            <span class="kpi-tile__label">Unieke kaarten</span>
+            <div class="kpi-tile__val-row">
+              <span class="kpi-tile__val mono">{{ formatInteger(store.portfolio().uniqueCards) }}</span>
+              <span class="kpi-tile__unit kpi-tile__unit--emerald">uniek</span>
+            </div>
+          </div>
+
+          <div class="kpi-tile">
+            <span class="kpi-tile__label">Totaal exemplaren</span>
+            <div class="kpi-tile__val-row">
+              <span class="kpi-tile__val mono">{{ formatInteger(store.portfolio().totalCopies) }}</span>
+              <span class="kpi-tile__unit">stuks</span>
+            </div>
+          </div>
+
+          <div class="kpi-tile">
+            <span class="kpi-tile__label">Aankoopwaarde</span>
+            <div class="kpi-tile__val-row">
+              <span class="kpi-tile__val mono">{{ formatEur(store.portfolio().purchaseValue) }}</span>
+            </div>
+          </div>
+
+          <div class="kpi-tile">
+            <span class="kpi-tile__label">Gerealiseerde winst</span>
+            <div class="kpi-tile__val-row">
+              <span
+                class="kpi-tile__val mono"
+                [class.text-emerald]="store.portfolio().realizedProfit >= 0"
+                [class.text-coral]="store.portfolio().realizedProfit < 0"
+              >
+                {{ formatEur(store.portfolio().realizedProfit, true) }}
+              </span>
+            </div>
+          </div>
+
+          <div class="kpi-tile kpi-tile--wide">
+            <span class="kpi-tile__label">Openstaand verlanglijst-budget</span>
+            <div class="kpi-tile__val-row">
+              <span class="kpi-tile__val mono">{{ formatEur(store.portfolio().openWishlistBudget) }}</span>
+              <span class="kpi-tile__unit kpi-tile__unit--amber">
+                {{ store.portfolio().openWishlistCount }} open wensen
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- National Pokédex Voortgangskaart -->
+    <section class="pb-card dex-card">
+      <div class="dex-card__header">
+        <div class="dex-card__title-wrap">
+          <div class="dex-card__icon">
+            <span class="material-symbols-outlined">menu_book</span>
+          </div>
+          <h2>National Pokédex Binder</h2>
+        </div>
+        <span class="mono dex-card__range">Gen 1–9</span>
+      </div>
+
+      <div class="dex-card__progress-wrap">
+        <div class="dex-card__meta">
+          <span>
+            <strong>{{ formatInteger(store.pokedexStats().inBinder) }}</strong> /
+            {{ formatInteger(store.pokedexStats().total) }} gedocumenteerd
+          </span>
+          <span class="mono dex-card__pct">{{ formatPercent(store.pokedexStats().percent, false) }}</span>
+        </div>
+        <div class="pb-progress pb-progress--lg">
+          <div
+            class="pb-progress__bar pb-progress__bar--gradient"
+            [style.width.%]="store.pokedexStats().percent"
+          ></div>
+        </div>
+      </div>
+
+      @if (store.pokedexStats().readyForBinder > 0) {
+        <button type="button" class="dex-alert" (click)="openReadyForBinder()">
+          <div class="dex-alert__left">
+            <span class="material-symbols-outlined dex-alert__spark">auto_awesome</span>
+            <span class="dex-alert__text">
+              {{ store.pokedexStats().readyForBinder }}
+              {{ store.pokedexStats().readyForBinder === 1 ? 'kaart' : 'kaarten' }} in collectie klaar voor binder
+            </span>
+          </div>
+          <span class="dex-alert__cta">
+            Direct plaatsen
+            <span class="material-symbols-outlined">chevron_right</span>
+          </span>
+        </button>
+      }
+
+      <!-- Generatie-overzicht (Gen 1 t/m Gen 9) -->
+      <div class="gen-grid">
+        @for (gen of generationSummaries(); track gen.id) {
+          <a routerLink="/pokedex" class="gen-chip" [title]="gen.region">
+            <div class="gen-chip__top">
+              <span class="gen-chip__name">{{ gen.shortLabel }}</span>
+              <span class="mono gen-chip__count">{{ gen.owned }}/{{ gen.total }}</span>
+            </div>
+            <div class="pb-progress gen-chip__bar">
+              <div class="pb-progress__bar" [style.width.%]="gen.pct"></div>
+            </div>
+          </a>
+        }
+      </div>
+    </section>
+  </div>
+
+  <!-- Top 5 Waardevolste Kaarten -->
+  <section class="section">
+    <div class="section__header">
+      <div class="section__title-wrap">
+        <span class="material-symbols-outlined section__icon section__icon--emerald">diamond</span>
+        <h2>Top Waardevolste Kaarten</h2>
+      </div>
+      <span class="mono section__meta">Top 5 Portfolio</span>
+    </div>
+
+    <div class="top-rail">
+      @for (card of store.topValuableCards(); track card.rowIndex + '-' + card.cardId) {
+        <article class="pb-card top-card" (click)="openCardInCollection(card)">
+          <div class="top-card__art">
+            <pb-card-artwork [cardId]="card.cardId" [src]="card.imageUrl" [alt]="card.name">
+              <span
+                class="top-card__badge"
+                [class.is-graded]="card.grading && card.grading !== 'Raw'"
+              >
+                {{ badgeLabel(card) }}
+              </span>
+            </pb-card-artwork>
+          </div>
+
+          <div class="top-card__meta">
+            <h3 class="top-card__name">{{ card.name }}</h3>
+            <p class="mono top-card__sub">
+              {{ card.setName }} {{ getDisplaySetCode(card.cardId, card.setName) }} · #{{ card.cardNumber }}
+            </p>
+            <div class="top-card__price-row">
+              <span class="mono top-card__price">{{ formatEur(card.marketPrice) }}</span>
+              <span
+                class="mono top-card__trend"
+                [class.is-negative]="cardRoi(card) < 0"
+              >
+                {{ formatPercent(cardRoi(card)) }}
+              </span>
+            </div>
+            <span class="top-card__loc mono">
+              {{ card.grading !== 'Raw' ? 'Slab' : shortCondition(card.condition) }} · {{ card.storageLocation }}
+            </span>
+          </div>
+        </article>
+      }
+    </div>
+  </section>
+
+  <!-- Actieve Master Sets -->
+  <section class="section">
+    <div class="section__header">
+      <div class="section__title-wrap">
+        <span class="material-symbols-outlined section__icon section__icon--coral">layers</span>
+        <h2>Actieve Master Sets</h2>
+      </div>
+      <a routerLink="/meer/sets" class="section__link">Alles bekijken</a>
+    </div>
+
+    <div class="sets-grid">
+      @for (set of topMasterSets(); track set.setName) {
+        <article class="pb-card set-card" (click)="openSetInCollection(set)">
+          <div class="set-card__top">
+            <div class="set-card__left">
+              <div class="set-card__code mono">
+                {{ set.setCode || set.setName.slice(0, 3).toUpperCase() }}
+              </div>
+              <div class="set-card__titles">
+                <h3 class="set-card__name">{{ set.setName }}</h3>
+                <p class="mono set-card__series">{{ set.series }}</p>
+              </div>
+            </div>
+            <div class="set-card__right">
+              <span class="mono set-card__pct">{{ formatPercent(set.progressPercent, false) }}</span>
+              <p class="mono set-card__rem">Nog {{ set.remaining }} kaarten</p>
+            </div>
+          </div>
+
+          <div class="pb-progress">
+            <div
+              class="pb-progress__bar"
+              [class.pb-progress__bar--amber]="set.progressPercent < 50"
+              [style.width.%]="set.progressPercent"
+            ></div>
+          </div>
+
+          <div class="set-card__foot mono">
+            <span>{{ set.ownedUnique }} / {{ set.totalCards }} kaarten</span>
+            <span>Waarde: {{ formatEur(set.totalSetValue) }}</span>
+          </div>
+        </article>
+      }
+    </div>
+  </section>
+
+  <!-- Snelle Actieknoppen Onderaan -->
+  <div class="quick-actions">
+    <a routerLink="/collectie" class="pb-btn pb-btn--primary pb-btn--full">
+      <span class="material-symbols-outlined">history</span>
+      <span>Collectie &amp; recente toevoegingen bekijken</span>
+    </a>
+    <a routerLink="/meer/instellingen" class="pb-btn pb-btn--secondary pb-btn--full">
+      <span class="material-symbols-outlined text-emerald">table_chart</span>
+      <span>Google Sheets synchronisatie &amp; instellingen</span>
+    </a>
+  </div>
+</div>

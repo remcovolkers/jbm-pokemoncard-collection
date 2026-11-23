@@ -1,0 +1,236 @@
+<div class="set-page">
+  <!-- Demo-modus Kaart -->
+  <section class="pb-card mode-card">
+    <div class="mode-card__copy">
+      <div class="mode-card__title-row">
+        <h2>Demo-modus</h2>
+        <span
+          class="pb-pill"
+          [class.pb-pill--tertiary]="store.config().demoMode"
+          [class.pb-pill--secondary]="!store.config().demoMode"
+        >
+          {{ store.config().demoMode ? 'Actief' : 'Live Google Sheets' }}
+        </span>
+      </div>
+      <p>
+        Test alle functies direct met realistische voorbeeldkaarten en TCGdex-artwork zonder gekoppelde
+        spreadsheet. Schakel uit om met je eigen Google Sheet te synchroniseren.
+      </p>
+    </div>
+
+    <button
+      type="button"
+      role="switch"
+      class="pb-switch is-amber"
+      [class.is-checked]="store.config().demoMode"
+      [attr.aria-checked]="store.config().demoMode"
+      aria-label="Demo-modus schakelen"
+      (click)="toggleDemoMode()"
+    >
+      <span class="pb-switch__thumb"></span>
+    </button>
+  </section>
+
+  <!-- Google Apps Script Koppeling -->
+  <section class="pb-card config-card">
+    <div class="card-head">
+      <span class="material-symbols-outlined card-head__icon">table_chart</span>
+      <div>
+        <h2>Google Sheets Apps Script API</h2>
+        <p>Opgeslagen in lokale browser-opslag (geen secrets in GitHub)</p>
+      </div>
+    </div>
+
+    <form class="config-form" (ngSubmit)="saveConnectionOnly()">
+      <div class="pb-field">
+        <label class="pb-label" for="cfg-url">Web App URL (eindigend op /exec)</label>
+        <input
+          id="cfg-url"
+          name="webAppUrl"
+          type="url"
+          class="pb-input mono"
+          placeholder="https://script.google.com/macros/s/…/exec"
+          [ngModel]="webAppUrl()"
+          (ngModelChange)="webAppUrl.set($event)"
+        />
+      </div>
+
+      <div class="pb-field">
+        <label class="pb-label" for="cfg-token">Persoonlijk API-token (Script Property API_TOKEN)</label>
+        <div class="token-row">
+          <input
+            id="cfg-token"
+            name="apiToken"
+            [type]="showToken() ? 'text' : 'password'"
+            autocomplete="off"
+            class="pb-input mono"
+            placeholder="Voer je persoonlijke API_TOKEN in"
+            [ngModel]="apiToken()"
+            (ngModelChange)="apiToken.set($event)"
+          />
+          <button
+            type="button"
+            class="pb-btn pb-btn--secondary token-toggle"
+            (click)="showToken.set(!showToken())"
+            [attr.aria-label]="showToken() ? 'Token verbergen' : 'Token tonen'"
+          >
+            <span class="material-symbols-outlined">
+              {{ showToken() ? 'visibility_off' : 'visibility' }}
+            </span>
+          </button>
+        </div>
+      </div>
+
+      <div class="pb-field">
+        <label class="pb-label" for="cfg-budget">Maandbudget Verlanglijst (€)</label>
+        <input
+          id="cfg-budget"
+          name="monthlyBudget"
+          type="number"
+          min="0"
+          step="5"
+          class="pb-input mono budget-input"
+          [ngModel]="monthlyBudget()"
+          (ngModelChange)="monthlyBudget.set(+$event)"
+        />
+      </div>
+
+      @if (testResult(); as res) {
+        <div class="test-banner" [class.is-ok]="res.ok" [class.is-err]="!res.ok">
+          <span class="material-symbols-outlined">
+            {{ res.ok ? 'check_circle' : 'error' }}
+          </span>
+          <div>
+            @if (res.ok) {
+              <strong>Verbinding geslaagd!</strong>
+              <p>Gekoppeld met spreadsheet: {{ res.spreadsheetName || 'Pokémon Kaartencollectie Tracker' }}</p>
+            } @else {
+              <strong>Verbinding mislukt</strong>
+              <p>{{ res.error }}</p>
+            }
+          </div>
+        </div>
+      }
+
+      <div class="config-actions">
+        <button
+          type="button"
+          class="pb-btn pb-btn--secondary"
+          [disabled]="isTesting() || !webAppUrl().trim() || !apiToken().trim()"
+          (click)="testConnection()"
+        >
+          <span class="material-symbols-outlined" [class.pb-spin]="isTesting()">
+            {{ isTesting() ? 'progress_activity' : 'wifi_tethering' }}
+          </span>
+          <span>Verbinding testen</span>
+        </button>
+
+        <button type="submit" class="pb-btn pb-btn--surface">
+          <span class="material-symbols-outlined">save</span>
+          <span>Opslaan</span>
+        </button>
+
+        <button
+          type="button"
+          class="pb-btn pb-btn--primary"
+          [disabled]="store.isSyncing() || !webAppUrl().trim() || !apiToken().trim()"
+          (click)="saveAndSync()"
+        >
+          <span class="material-symbols-outlined" [class.pb-spin]="store.isSyncing()">sync</span>
+          <span>Opslaan &amp; Live Sync</span>
+        </button>
+      </div>
+    </form>
+  </section>
+
+  <!-- Synchronisatie, Prijzen & Offline Cache -->
+  <section class="pb-card tools-card">
+    <div class="card-head">
+      <span class="material-symbols-outlined card-head__icon card-head__icon--emerald">cloud_sync</span>
+      <div>
+        <h2>Synchronisatie &amp; Offline-cache</h2>
+        <p class="mono">Laatste sync: {{ syncedLabel() }} · Lokale snapshot: {{ cacheSizeKb() }} KB</p>
+      </div>
+    </div>
+
+    <div class="tools-grid">
+      <button
+        type="button"
+        class="pb-btn pb-btn--secondary pb-btn--full"
+        [disabled]="store.isSyncing()"
+        (click)="store.syncFromRemote()"
+      >
+        <span class="material-symbols-outlined" [class.pb-spin]="store.isSyncing()">sync</span>
+        <span>Handmatig volledig synchroniseren</span>
+      </button>
+
+      <button
+        type="button"
+        class="pb-btn pb-btn--secondary pb-btn--full"
+        [disabled]="store.isSyncing()"
+        (click)="refreshPrices()"
+      >
+        <span class="material-symbols-outlined">euro</span>
+        <span>Cardmarket EUR-prijzen verversen</span>
+      </button>
+
+      <button
+        type="button"
+        class="pb-btn pb-btn--danger pb-btn--full"
+        (click)="clearCache()"
+      >
+        <span class="material-symbols-outlined">delete_sweep</span>
+        <span>Offline-cache legen</span>
+      </button>
+    </div>
+
+    @if (store.pendingQueue().length > 0) {
+      <div class="queue-box">
+        <div class="queue-box__head">
+          <strong>Offline wachtrij ({{ store.pendingQueue().length }})</strong>
+          <button type="button" class="pb-btn pb-btn--emerald queue-box__btn" (click)="flushQueue()">
+            Nu verzenden
+          </button>
+        </div>
+        <ul>
+          @for (item of store.pendingQueue(); track item.id) {
+            <li class="mono">{{ item.description }}</li>
+          }
+        </ul>
+      </div>
+    }
+  </section>
+
+  <!-- Gesynchroniseerde Dropdown-opties uit tabblad Instellingen -->
+  <section class="pb-card lists-card">
+    <h2>Actieve keuzelijsten (tabblad Instellingen)</h2>
+    <div class="lists-grid">
+      <div class="list-group">
+        <span class="pb-label">Opslaglocaties</span>
+        <div class="chip-row">
+          @for (loc of store.settings().storageLocations; track loc) {
+            <span class="pb-pill pb-pill--neutral">{{ loc }}</span>
+          }
+        </div>
+      </div>
+
+      <div class="list-group">
+        <span class="pb-label">Varianten</span>
+        <div class="chip-row">
+          @for (v of store.settings().variants; track v) {
+            <span class="pb-pill pb-pill--neutral">{{ v }}</span>
+          }
+        </div>
+      </div>
+
+      <div class="list-group">
+        <span class="pb-label">Condities</span>
+        <div class="chip-row">
+          @for (c of store.settings().conditions; track c) {
+            <span class="pb-pill pb-pill--neutral">{{ c }}</span>
+          }
+        </div>
+      </div>
+    </div>
+  </section>
+</div>

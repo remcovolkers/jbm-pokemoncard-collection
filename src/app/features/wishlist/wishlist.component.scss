@@ -1,0 +1,312 @@
+@use 'tokens' as *;
+@use 'mixins' as *;
+
+.wl-page {
+  display: flex;
+  flex-direction: column;
+  gap: $space-md;
+  padding: $space-md $margin-mobile $space-xl;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: clip;
+
+  @include mq-md {
+    padding: $space-lg $margin-desktop $space-xl;
+  }
+}
+
+.budget-card {
+  overflow: hidden;
+
+  &__glow {
+    position: absolute;
+    right: -3rem;
+    top: -3rem;
+    width: 11rem;
+    height: 11rem;
+    border-radius: $radius-full;
+    background: radial-gradient(circle, rgba($color-secondary, 0.16), transparent 70%);
+    filter: blur(26px);
+    pointer-events: none;
+  }
+
+  &__inner {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    gap: $space-sm;
+  }
+
+  &__top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: $space-sm;
+  }
+
+  &__label-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    color: $color-on-surface-variant;
+    font-size: 0.82rem;
+    font-weight: 600;
+
+    .material-symbols-outlined {
+      color: $color-tertiary;
+      font-size: 19px;
+    }
+  }
+
+  &__nums {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: $space-md;
+    flex-wrap: wrap;
+  }
+
+  &__limit {
+    @include type-headline-xl;
+    display: block;
+  }
+
+  &__sub {
+    @include type-data-sm;
+    color: $color-on-surface-muted;
+  }
+
+  &__avail-wrap {
+    text-align: right;
+  }
+
+  &__avail {
+    @include type-data-lg;
+    display: block;
+    color: $color-secondary;
+  }
+
+  &__avail-sub {
+    @include type-body-sm;
+    color: rgba($color-secondary, 0.85);
+  }
+
+  &__bar {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  &__bar-meta {
+    display: flex;
+    justify-content: space-between;
+    @include type-data-sm;
+    color: $color-on-surface-muted;
+
+    strong {
+      color: $color-on-surface;
+    }
+  }
+}
+
+.budget-mini-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: $space-sm;
+  padding-top: $space-xs;
+}
+
+.budget-mini {
+  padding: 0.65rem 0.8rem;
+  border-radius: $radius-md;
+  background-color: $color-surface-low;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $space-xs;
+
+  span {
+    display: block;
+    font-size: 0.7rem;
+    color: $color-on-surface-muted;
+  }
+
+  strong {
+    @include type-data-md;
+    font-weight: 700;
+  }
+
+  .icon-coral {
+    color: $color-primary;
+  }
+
+  .icon-amber,
+  .text-amber {
+    color: $color-tertiary;
+  }
+}
+
+.wl-filters {
+  @include hide-scrollbar;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  overflow-x: auto;
+  padding: 2px 0;
+}
+
+.wl-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: $gutter-mobile;
+  min-width: 0;
+
+  @include mq-lg {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: $gutter-desktop;
+  }
+}
+
+.wl-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+
+  &__top {
+    display: flex;
+    gap: $space-md;
+  }
+
+  &__art {
+    width: 82px;
+    flex-shrink: 0;
+  }
+
+  &__num {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    padding: 0.1rem 0.3rem;
+    border-radius: 4px;
+    background-color: rgba($color-surface-lowest, 0.86);
+    color: $color-on-surface;
+    font-size: 0.6rem;
+    font-weight: 700;
+  }
+
+  &__info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  &__badges {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    flex-wrap: wrap;
+  }
+
+  &__cond {
+    font-size: 0.66rem;
+    color: $color-on-surface-muted;
+  }
+
+  &__name {
+    @include type-headline-md;
+    font-size: 1.05rem;
+    @include truncate;
+  }
+
+  &__set {
+    @include type-body-sm;
+    color: $color-on-surface-variant;
+  }
+
+  &__notes {
+    @include type-body-sm;
+    color: $color-on-surface-muted;
+  }
+
+  &__prices {
+    display: flex;
+    align-items: baseline;
+    gap: $space-md;
+    padding-top: 0.2rem;
+  }
+
+  &__actions {
+    display: flex;
+    gap: 0.5rem;
+    min-width: 0;
+  }
+
+  &__primary-cta {
+    flex: 1;
+    min-width: 0;
+    min-height: 48px;
+    padding: 0.65rem 0.75rem;
+    white-space: normal;
+    text-align: center;
+  }
+
+  &__check-only {
+    width: 48px;
+    min-height: 48px;
+    padding: 0;
+    flex-shrink: 0;
+  }
+}
+
+.wl-price-label {
+  display: block;
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  color: $color-on-surface-muted;
+}
+
+.wl-price-val {
+  @include type-data-lg;
+
+  &.is-over {
+    color: $color-error;
+  }
+}
+
+.wl-price-target {
+  @include type-data-md;
+  color: $color-on-surface-variant;
+}
+
+.wl-add-cta {
+  padding-top: $space-xs;
+}
+
+.sheet-sub {
+  @include type-body-sm;
+  color: $color-on-surface-muted;
+  margin-top: 2px;
+}
+
+.wl-form {
+  display: flex;
+  flex-direction: column;
+  gap: $space-sm;
+}
+
+.lookup-row {
+  display: flex;
+  gap: $space-sm;
+}
+
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: $space-sm;
+}

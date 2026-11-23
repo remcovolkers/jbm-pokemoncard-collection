@@ -1,0 +1,90 @@
+<div class="sets-page">
+  <!-- Samenvatting Banner -->
+  <section class="pb-card sets-banner">
+    <div class="sets-banner__grid">
+      <div class="sets-stat">
+        <span class="sets-stat__label">Actieve Sets</span>
+        <strong class="mono sets-stat__val">{{ stats().count }}</strong>
+      </div>
+      <div class="sets-stat">
+        <span class="sets-stat__label">Gem. Voortgang</span>
+        <strong class="mono sets-stat__val text-emerald">{{ formatPercent(stats().avgPct, false) }}</strong>
+      </div>
+      <div class="sets-stat">
+        <span class="sets-stat__label">Totale Setwaarde</span>
+        <strong class="mono sets-stat__val">{{ formatEur(stats().totalValue) }}</strong>
+      </div>
+    </div>
+  </section>
+
+  <!-- Zoek & Sorteer -->
+  <div class="sets-toolbar">
+    <input
+      type="text"
+      class="pb-input"
+      placeholder="Zoek set of serie (bijv. 151, Evolving Skies)…"
+      [ngModel]="query()"
+      (ngModelChange)="query.set($event)"
+      aria-label="Zoek in Set Voortgang"
+    />
+    <select
+      class="pb-select sets-toolbar__sort"
+      [ngModel]="sortBy()"
+      (ngModelChange)="sortBy.set($event)"
+      aria-label="Sorteer sets"
+    >
+      <option value="progress">Voortgang ↓</option>
+      <option value="value">Setwaarde ↓</option>
+      <option value="name">Naam A–Z</option>
+    </select>
+  </div>
+
+  <!-- Set Overzichtskaarten -->
+  @if (filteredSets().length === 0) {
+    <div class="pb-empty">
+      <div class="pb-empty__icon">
+        <span class="material-symbols-outlined">fact_check</span>
+      </div>
+      <h2 class="pb-empty__title">Geen sets gevonden</h2>
+      <p class="pb-empty__text">Voeg kaarten toe om automatisch voortgang per Master Set bij te houden.</p>
+    </div>
+  } @else {
+    <div class="sets-list">
+      @for (set of filteredSets(); track set.setName) {
+        <button type="button" class="pb-card set-item" (click)="openSetInCollection(set)">
+          <div class="set-item__top">
+            <div class="set-item__left">
+              <div class="set-item__code mono">
+                {{ set.setCode || set.setName.slice(0, 3).toUpperCase() }}
+              </div>
+              <div class="set-item__titles">
+                <h3>{{ set.setName }}</h3>
+                <span class="mono">{{ set.series || 'Pokémon TCG' }}</span>
+              </div>
+            </div>
+            <div class="set-item__right">
+              <strong class="mono set-item__pct">{{ formatPercent(set.progressPercent, false) }}</strong>
+              <span class="mono set-item__rem">Nog {{ set.remaining }} nodig</span>
+            </div>
+          </div>
+
+          <div class="pb-progress pb-progress--lg">
+            <div
+              class="pb-progress__bar"
+              [class.pb-progress__bar--amber]="set.progressPercent < 50"
+              [style.width.%]="set.progressPercent"
+            ></div>
+          </div>
+
+          <div class="set-item__foot mono">
+            <span>{{ set.ownedUnique }} / {{ set.totalCards }} unieke kaarten</span>
+            <span class="set-item__cta">
+              {{ formatEur(set.totalSetValue) }} · Bekijk in Collectie
+              <span class="material-symbols-outlined">chevron_right</span>
+            </span>
+          </div>
+        </button>
+      }
+    </div>
+  }
+</div>

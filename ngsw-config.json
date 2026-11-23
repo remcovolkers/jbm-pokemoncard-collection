@@ -1,0 +1,59 @@
+{
+  "$schema": "./node_modules/@angular/service-worker/config/schema.json",
+  "index": "/index.html",
+  "assetGroups": [
+    {
+      "name": "app",
+      "installMode": "prefetch",
+      "resources": {
+        "files": [
+          "/favicon.ico",
+          "/index.csr.html",
+          "/index.html",
+          "/manifest.webmanifest",
+          "/*.css",
+          "/*.js"
+        ]
+      }
+    },
+    {
+      "name": "assets",
+      "installMode": "lazy",
+      "updateMode": "prefetch",
+      "resources": {
+        "files": ["/**/*.(svg|cur|jpg|jpeg|png|apng|webp|avif|gif|otf|ttf|woff|woff2)"]
+      }
+    }
+  ],
+  "dataGroups": [
+    {
+      "name": "tcgdex-api",
+      "urls": ["https://api.tcgdex.net/v2/**"],
+      "cacheConfig": {
+        "maxSize": 500,
+        "maxAge": "7d",
+        "timeout": "8s",
+        "strategy": "performance"
+      }
+    },
+    {
+      "name": "tcgdex-artwork",
+      "urls": ["https://assets.tcgdex.net/**"],
+      "cacheConfig": {
+        "maxSize": 800,
+        "maxAge": "30d",
+        "timeout": "10s",
+        "strategy": "performance"
+      }
+    },
+    {
+      "name": "google-fonts",
+      "urls": ["https://fonts.googleapis.com/**", "https://fonts.gstatic.com/**"],
+      "cacheConfig": {
+        "maxSize": 40,
+        "maxAge": "30d",
+        "strategy": "performance"
+      }
+    }
+  ]
+}

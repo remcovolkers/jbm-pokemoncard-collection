@@ -1,0 +1,463 @@
+<div class="dex-page">
+  <!-- Sticky Controls Header -->
+  <section class="dex-controls">
+    <!-- Top Row: Generatie Pills + Pocket Format + View Toggle -->
+    <div class="dex-controls__top">
+      <div class="gen-pills" role="tablist" aria-label="Generatiefilter">
+        <button
+          type="button"
+          class="pb-pill pb-pill--interactive"
+          [class.is-active]="selectedGen() === 0"
+          (click)="selectGeneration(0)"
+        >
+          Alle ({{ store.pokedexStats().inBinder }}/{{ store.pokedexStats().total }})
+        </button>
+
+        @for (gen of generations; track gen.id) {
+          <button
+            type="button"
+            class="pb-pill pb-pill--interactive"
+            [class.is-active]="selectedGen() === gen.id"
+            (click)="selectGeneration(gen.id)"
+          >
+            {{ gen.shortLabel }}
+            <span class="gen-pills__cnt mono">
+              {{ generationCounts().get(gen.id)?.owned ?? 0 }}/{{ generationCounts().get(gen.id)?.total ?? 0 }}
+            </span>
+          </button>
+        }
+      </div>
+
+      <div class="dex-controls__right">
+        <select
+          class="format-select mono"
+          aria-label="Vakjes per binderpagina"
+          [ngModel]="slotsPerPage()"
+          (ngModelChange)="changeSlotsPerPage($event)"
+        >
+          <option [value]="4">2×2 (4)</option>
+          <option [value]="9">3×3 (9)</option>
+          <option [value]="12">4×3 (12)</option>
+          <option [value]="16">4×4 (16)</option>
+        </select>
+
+        <div class="view-switch" role="group" aria-label="Weergave">
+          <button
+            type="button"
+            class="view-switch__btn"
+            [class.is-active]="viewMode() === 'binder'"
+            aria-label="Visuele Binder"
+            (click)="viewMode.set('binder')"
+          >
+            <span class="material-symbols-outlined">grid_on</span>
+          </button>
+          <button
+            type="button"
+            class="view-switch__btn"
+            [class.is-active]="viewMode() === 'checklist'"
+            aria-label="Compacte Checklist"
+            (click)="viewMode.set('checklist')"
+          >
+            <span class="material-symbols-outlined">checklist</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Statusfilter + Snel Zoeken -->
+    <div class="dex-controls__sub">
+      <div class="status-pills">
+        <button
+          type="button"
+          class="pb-pill pb-pill--interactive"
+          [class.is-active]="statusFilter() === 'all'"
+          (click)="selectStatus('all')"
+        >
+          Alle ({{ statusCounts().all }})
+        </button>
+        <button
+          type="button"
+          class="pb-pill pb-pill--interactive"
+          [class.is-active]="statusFilter() === 'missing'"
+          (click)="selectStatus('missing')"
+        >
+          Ontbrekend ({{ statusCounts().missing }})
+        </button>
+        <button
+          type="button"
+          class="pb-pill pb-pill--interactive"
+          [class.is-active-amber]="statusFilter() === 'in_collection'"
+          (click)="selectStatus('in_collection')"
+        >
+          Al in Collectie ({{ statusCounts().inCollection }})
+        </button>
+        <button
+          type="button"
+          class="pb-pill pb-pill--interactive"
+          [class.is-active-emerald]="statusFilter() === 'in_binder'"
+          (click)="selectStatus('in_binder')"
+        >
+          <span class="pb-dot pb-dot--secondary"></span>
+          In Binder ({{ statusCounts().inBinder }})
+        </button>
+        <button
+          type="button"
+          class="pb-pill pb-pill--interactive"
+          [class.is-active-amber]="statusFilter() === 'upgrade'"
+          (click)="selectStatus('upgrade')"
+        >
+          ★ Upgrade? ({{ statusCounts().upgrade }})
+        </button>
+      </div>
+
+      <div class="dex-search">
+        <span class="material-symbols-outlined">search</span>
+        <input
+          type="text"
+          placeholder="Spring naar Pokémon of #nr…"
+          [ngModel]="searchQuery()"
+          (ngModelChange)="onSearchChange($event)"
+          aria-label="Zoek Pokémon in Pokédex Binder"
+        />
+        @if (searchQuery()) {
+          <button type="button" aria-label="Wissen" (click)="onSearchChange('')">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        }
+      </div>
+    </div>
+  </section>
+
+  <!-- Hoofdweergave -->
+  <div class="dex-body">
+    @if (filteredSlots().length === 0) {
+      <div class="pb-empty">
+        <div class="pb-empty__icon">
+          <span class="material-symbols-outlined">menu_book</span>
+        </div>
+        <h2 class="pb-empty__title">Geen Pokémon in deze selectie</h2>
+        <p class="pb-empty__text">Kies een andere generatie of wis het statusfilter.</p>
+        <button
+          type="button"
+          class="pb-btn pb-btn--secondary"
+          (click)="selectStatus('all'); onSearchChange('')"
+        >
+          Alle Pokémon tonen
+        </button>
+      </div>
+    } @else if (viewMode() === 'binder') {
+      <!-- Visuele Binder Pagina (Obsidian Leather Sleeve Metaphor) -->
+      <section class="binder-sheet">
+        <!-- Binder Ring / Spine Dots links -->
+        <div class="binder-sheet__spine" aria-hidden="true">
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
+
+        <div
+          class="binder-grid"
+          [class.cols-2]="gridCols() === 2"
+          [class.cols-3]="gridCols() === 3"
+          [class.cols-4]="gridCols() === 4"
+        >
+          @for (slot of pageSlots(); track slot.dexNumber) {
+            <button
+              type="button"
+              class="pocket"
+              [class.pocket--filled]="slot.inBinder"
+              [class.pocket--ready]="!slot.inBinder && slot.inCollectionCount > 0"
+              [class.pocket--upgrade]="slot.upgradeWanted"
+              (click)="openSlotSheet(slot)"
+            >
+              <div class="pocket__art">
+                @if (getSlotCard(slot); as card) {
+                  <pb-card-artwork [cardId]="card.cardId" [src]="card.imageUrl" [alt]="slot.pokemonName" [compact]="true">
+                    <span
+                      class="pocket__num mono"
+                      [class.is-filled]="slot.inBinder"
+                      [class.is-ready]="!slot.inBinder && slot.inCollectionCount > 0"
+                    >
+                      {{ formatDexNumber(slot.dexNumber) }}
+                    </span>
+                    @if (slot.upgradeWanted) {
+                      <span class="pocket__star" title="Upgrade gewenst">
+                        <span class="material-symbols-outlined is-filled">star</span>
+                      </span>
+                    }
+                    @if (!slot.inBinder && slot.inCollectionCount > 0) {
+                      <span class="pocket__ready-tag mono">Klaar</span>
+                    }
+                  </pb-card-artwork>
+                } @else {
+                  <div class="pocket__empty-sleeve" [class.is-checked]="slot.inBinder">
+                    <span class="pocket__num mono" [class.is-filled]="slot.inBinder">
+                      {{ formatDexNumber(slot.dexNumber) }}
+                    </span>
+                    <span class="material-symbols-outlined pocket__empty-icon">
+                      {{ slot.inBinder ? 'verified' : 'add_card' }}
+                    </span>
+                    <span class="pocket__empty-hint mono">
+                      {{ slot.inBinder ? 'In binder' : 'Leeg vakje' }}
+                    </span>
+                  </div>
+                }
+              </div>
+
+              <div class="pocket__meta">
+                <div class="pocket__name-row">
+                  <span class="pocket__name" [class.is-amber]="slot.upgradeWanted">{{ slot.pokemonName }}</span>
+                  @if (slot.upgradeWanted) {
+                    <span class="pocket__star-inline">★</span>
+                  }
+                </div>
+                <span class="mono pocket__sub">{{ shortChoiceLabel(slot) }}</span>
+              </div>
+            </button>
+          }
+        </div>
+      </section>
+
+      <!-- Pagina-samenvatting & Navigatie -->
+      <div class="binder-footer">
+        <div class="page-summary">
+          <div class="page-summary__left">
+            <span class="material-symbols-outlined is-filled page-summary__icon">check_circle</span>
+            <span>{{ pageStats().filled }} / {{ pageStats().total }} vakjes gevuld op deze pagina</span>
+          </div>
+          <span class="pb-pill pb-pill--secondary mono">{{ pageStats().pct }}% Compleet</span>
+        </div>
+
+        <div class="pager">
+          <button
+            type="button"
+            class="pager__btn"
+            [disabled]="clampedPage() <= 1"
+            (click)="prevPage()"
+          >
+            <span class="material-symbols-outlined">chevron_left</span>
+            <span>Vorige</span>
+          </button>
+
+          <div class="pager__center">
+            <span class="mono">Pagina</span>
+            <input
+              type="number"
+              class="pager__input mono"
+              min="1"
+              [max]="totalPages()"
+              [ngModel]="clampedPage()"
+              (ngModelChange)="jumpToPage($event)"
+              aria-label="Ga naar binderpagina"
+            />
+            <span class="mono">van {{ totalPages() }}</span>
+          </div>
+
+          <button
+            type="button"
+            class="pager__btn"
+            [disabled]="clampedPage() >= totalPages()"
+            (click)="nextPage()"
+          >
+            <span>Volgende</span>
+            <span class="material-symbols-outlined">chevron_right</span>
+          </button>
+        </div>
+
+        <!-- Helper Discovery Banner (zoals Stitch Dragonair #0148) -->
+        @if (nextReadyToPlace(); as ready) {
+          <div class="discovery-card">
+            <div class="discovery-card__num mono">{{ formatDexNumber(ready.dexNumber) }}</div>
+            <div class="discovery-card__copy">
+              <div class="discovery-card__title-row">
+                <strong>{{ ready.pokemonName }}</strong>
+                <span class="pb-pill pb-pill--tertiary">{{ ready.inCollectionCount }}× Beschikbaar</span>
+              </div>
+              <p>
+                Staat al in je Collectie. Tik om direct op pagina {{ ready.page }} ({{ ready.position }}) te plaatsen.
+              </p>
+            </div>
+            <button
+              type="button"
+              class="discovery-card__add"
+              aria-label="Direct plaatsen in binder"
+              (click)="quickPlaceReadySlot(ready)"
+            >
+              <span class="material-symbols-outlined">add</span>
+            </button>
+          </div>
+        }
+      </div>
+    } @else {
+      <!-- Compacte Checklist Weergave -->
+      <section class="checklist">
+        @for (slot of visibleChecklist(); track slot.dexNumber) {
+          <button type="button" class="check-row" (click)="openSlotSheet(slot)">
+            <span class="mono check-row__num">{{ formatDexNumber(slot.dexNumber) }}</span>
+            <div class="check-row__main">
+              <div class="check-row__top">
+                <strong>{{ slot.pokemonName }}</strong>
+                <span class="mono check-row__pos">{{ slot.generation }} · {{ slot.position }}</span>
+              </div>
+              <span class="mono check-row__choice">
+                {{ slot.selectedCard || (slot.inBinder ? 'Handmatig afgevinkt' : 'Nog niet in binder') }}
+              </span>
+            </div>
+
+            <div class="check-row__badges">
+              @if (slot.upgradeWanted) {
+                <span class="pb-pill pb-pill--tertiary">★ Upgrade</span>
+              } @else if (slot.inBinder) {
+                <span class="pb-pill pb-pill--secondary">In Binder</span>
+              } @else if (slot.inCollectionCount > 0) {
+                <span class="pb-pill pb-pill--tertiary">In Collectie</span>
+              } @else {
+                <span class="pb-pill pb-pill--neutral">Ontbreekt</span>
+              }
+            </div>
+          </button>
+        }
+
+        @if (visibleChecklist().length < filteredSlots().length) {
+          <button type="button" class="pb-btn pb-btn--secondary pb-btn--full" (click)="loadMoreChecklist()">
+            Meer laden ({{ filteredSlots().length - visibleChecklist().length }} over)
+          </button>
+        }
+      </section>
+    }
+  </div>
+
+  <!-- Variant Picker & Slot Bottom Sheet -->
+  @if (activeSlot(); as slot) {
+    <div
+      class="pb-sheet-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="dex-sheet-title"
+      (click)="closeSlotSheet()"
+    >
+      <div class="pb-sheet" (click)="$event.stopPropagation()">
+        <div class="pb-sheet__handle"></div>
+
+        <div class="pb-sheet__header">
+          <div class="dex-sheet-head">
+            <div class="dex-sheet-head__row">
+              <span class="pb-pill pb-pill--secondary mono">{{ formatDexNumber(slot.dexNumber) }}</span>
+              <h2 id="dex-sheet-title">{{ slot.pokemonName }}</h2>
+            </div>
+            @if (activeSlotPosition(); as pos) {
+              <p class="dex-sheet-head__sub">
+                {{ slot.generation }} · Pagina {{ pos.page }}, Vakje {{ pos.slotInPage }} ({{ pos.label }})
+                @if (activeSlotMatchingCards().length > 0) {
+                  · Je bezit {{ activeSlotMatchingCards().length }}
+                  {{ activeSlotMatchingCards().length === 1 ? 'versie' : 'verschillende versies' }}
+                }
+              </p>
+            }
+          </div>
+
+          <button
+            type="button"
+            class="pb-btn pb-btn--icon"
+            aria-label="Sluiten"
+            (click)="closeSlotSheet()"
+          >
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+
+        <!-- Beschikbare Kaart-varianten in Collectie -->
+        @if (activeSlotMatchingCards().length > 0) {
+          <div class="variants-list">
+            @for (card of activeSlotMatchingCards(); track card.rowIndex + '-' + card.cardId) {
+              <button
+                type="button"
+                class="variant-option"
+                [class.is-selected]="isChoiceSelected(card)"
+                (click)="chooseVariant(card)"
+              >
+                <div class="variant-option__thumb">
+                  <pb-card-artwork [cardId]="card.cardId" [src]="card.imageUrl" [alt]="card.name" [compact]="true" />
+                </div>
+
+                <div class="variant-option__info">
+                  <div class="variant-option__title-row">
+                    <strong>{{ card.name }}</strong>
+                    <span class="pb-pill pb-pill--primary">{{ rarityShort(card) }}</span>
+                  </div>
+                  <span class="mono variant-option__set">
+                    {{ card.setName }} ({{ card.cardNumber }}) · {{ card.variant }}
+                  </span>
+                  <span class="mono variant-option__price">{{ formatEur(card.marketPrice) }}</span>
+                </div>
+
+                <div class="variant-option__radio">
+                  <span class="radio-dot" [class.is-checked]="isChoiceSelected(card)"></span>
+                  <span class="mono">{{ isChoiceSelected(card) ? 'Actief' : 'Kies deze' }}</span>
+                </div>
+              </button>
+            }
+          </div>
+        } @else {
+          <div class="no-variants-note">
+            <span class="material-symbols-outlined">info</span>
+            <p>
+              Nog geen kaart van <strong>{{ slot.pokemonName }}</strong> gevonden in je Collectie. Je kunt dit
+              vakje wel handmatig afvinken voor een losse bulk-kaart.
+            </p>
+          </div>
+        }
+
+        <!-- Handmatig In Binder toggle -->
+        <div class="slot-toggle">
+          <div>
+            <strong>In Binder geplaatst</strong>
+            <span>Vink aan als deze Pokémon fysiek in je National Pokédex map zit</span>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            class="pb-switch"
+            [class.is-checked]="draftInBinder()"
+            [attr.aria-checked]="draftInBinder()"
+            (click)="draftInBinder.set(!draftInBinder())"
+          >
+            <span class="pb-switch__thumb"></span>
+          </button>
+        </div>
+
+        <!-- Upgrade gewenst toggle -->
+        <div class="slot-toggle slot-toggle--amber">
+          <div>
+            <div class="slot-toggle__amber-head">
+              <span class="material-symbols-outlined">bookmark_add</span>
+              <strong>Markeer als “Upgrade gewenst”</strong>
+            </div>
+            <span>Zoekt specifiek naar een mooiere Full Art, SIR of betere conditie</span>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            class="pb-switch is-amber"
+            [class.is-checked]="draftUpgradeWanted()"
+            [attr.aria-checked]="draftUpgradeWanted()"
+            (click)="draftUpgradeWanted.set(!draftUpgradeWanted())"
+          >
+            <span class="pb-switch__thumb"></span>
+          </button>
+        </div>
+
+        <!-- Actieknoppen -->
+        <div class="dex-sheet-actions">
+          <button type="button" class="pb-btn pb-btn--primary" (click)="confirmSlotSelection()">
+            <span class="material-symbols-outlined">check</span>
+            <span>Bevestig selectie</span>
+          </button>
+          <button type="button" class="pb-btn pb-btn--secondary" (click)="closeSlotSheet()">
+            Sluiten
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+</div>
