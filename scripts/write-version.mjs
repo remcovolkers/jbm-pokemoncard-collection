@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -29,13 +30,25 @@ const releaseNotes = argValue(
   process.env.RELEASE_NOTES || 'Nieuwe verbeteringen en updates voor PokéBinder.'
 );
 const outManifestPath = argValue('--out-manifest', '');
+const bundleFilePath = argValue('--bundle-file', '');
 const stampTs = !process.argv.includes('--manifest-only');
 
 const pagesBaseUrl = `https://${owner}.github.io/${repo}`;
 const manifestUrl = `${pagesBaseUrl}/version.json`;
-const bundleUrl = `${pagesBaseUrl}/ota/web-bundle.zip`;
+const bundleUrl = `${pagesBaseUrl}/ota/web-bundle.zip?v=${encodeURIComponent(webVersion)}`;
 const apkDownloadUrl = `https://github.com/${owner}/${repo}/releases/latest/download/pokebinder-release.apk`;
 const releasePageUrl = `https://github.com/${owner}/${repo}/releases/latest`;
+
+let bundleChecksum = '';
+if (bundleFilePath) {
+  const resolvedBundle = path.resolve(root, bundleFilePath);
+  if (!fs.existsSync(resolvedBundle)) {
+    throw new Error(`OTA bundle niet gevonden voor SHA-256 checksum: ${resolvedBundle}`);
+  }
+  const zipBytes = fs.readFileSync(resolvedBundle);
+  bundleChecksum = crypto.createHash('sha256').update(zipBytes).digest('hex');
+  console.log(`Computed OTA bundle SHA-256 (${zipBytes.length} bytes): ${bundleChecksum}`);
+}
 
 if (stampTs) {
   const versionTsPath = path.join(root, 'src', 'app', 'core', 'platform', 'app-version.ts');
@@ -70,6 +83,7 @@ if (outManifestPath) {
     minNativeVersion,
     latestNativeVersion: nativeVersion,
     bundleUrl,
+    bundleChecksum,
     apkDownloadUrl,
     releasePageUrl,
     releaseNotes,

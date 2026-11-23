@@ -9,6 +9,20 @@ import { COLLECTION_REPOSITORY } from '../ports/collection-repository.port';
 import { AppUpdateService } from './app-update.service';
 import { PlatformService } from './platform.service';
 
+const { mockUpdaterDownload, mockUpdaterSet } = vi.hoisted(() => ({
+  mockUpdaterDownload: vi.fn(),
+  mockUpdaterSet: vi.fn(),
+}));
+
+vi.mock('@capgo/capacitor-updater', () => ({
+  CapacitorUpdater: {
+    notifyAppReady: vi.fn(async () => ({})),
+    current: vi.fn(async () => ({ bundle: { version: 'builtin' } })),
+    download: mockUpdaterDownload,
+    set: mockUpdaterSet,
+  },
+}));
+
 describe('AppUpdateService (PWA SwUpdate + Native OTA & Direct APK Download)', () => {
   let service: AppUpdateService;
   let platform: PlatformService;
@@ -19,6 +33,8 @@ describe('AppUpdateService (PWA SwUpdate + Native OTA & Direct APK Download)', (
     window.localStorage.clear();
     versionUpdates$ = new Subject<VersionEvent>();
     fetchSpy.mockReset();
+    mockUpdaterDownload.mockReset();
+    mockUpdaterSet.mockReset();
     vi.stubGlobal('fetch', fetchSpy);
 
     const mockSwUpdate = {
@@ -63,6 +79,8 @@ describe('AppUpdateService (PWA SwUpdate + Native OTA & Direct APK Download)', (
   });
 
   it('detecteert nieuwe web-versie uit version.json en opent directe APK-link via PlatformService', async () => {
+    service.currentWebVersion.set('1.0.0');
+    service.currentNativeVersion.set('1.0.0');
     fetchSpy.mockResolvedValueOnce(
       new Response(
         JSON.stringify({
@@ -70,6 +88,7 @@ describe('AppUpdateService (PWA SwUpdate + Native OTA & Direct APK Download)', (
           minNativeVersion: '1.0.0',
           latestNativeVersion: '1.0.0',
           bundleUrl: 'https://remcovolkers.github.io/jbm-pokemoncard-collection/ota/web-bundle.zip',
+          bundleChecksum: 'c'.repeat(64),
           apkDownloadUrl:
             'https://github.com/remcovolkers/jbm-pokemoncard-collection/releases/latest/download/pokebinder-release.apk',
           releaseNotes: 'Nieuwe filters',
@@ -122,5 +141,49 @@ describe('AppUpdateService (PWA SwUpdate + Native OTA & Direct APK Download)', (
     // Verplichte APK-banner blijft zichtbaar na dismissBanner()
     service.dismissBanner();
     expect(service.showUpdateBanner()).toBe(true);
+  });
+
+  it('geeft de verplichte SHA-256 bundleChecksum mee aan CapacitorUpdater.download() op Android', async () => {
+    platform.isNative.set(true);
+    platform.platform.set('android');
+    service.currentNativeVersion.set('1.0.1');
+    service.currentWebVersion.set('1.0.1+1');
+
+    const fakeChecksum = 'a'.repeat(64);
+    mockUpdaterDownload.mockResolvedValue({
+      id: 'bundle-123',
+      version: '1.0.1+2',
+      downloaded: '2026-11-23T12:00:00Z',
+      checksum: fakeChecksum,
+      status: 'pending',
+    });
+    mockUpdaterSet.mockResolvedValue(undefined);
+
+    fetchSpy.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          webVersion: '1.0.1+2',
+          minNativeVersion: '1.0.1',
+          latestNativeVersion: '1.0.1',
+          bundleUrl: 'https://remcovolkers.github.io/jbm-pokemoncard-collection/ota/web-bundle.zip?v=1.0.1%2B2',
+          bundleChecksum: fakeChecksum,
+          apkDownloadUrl:
+            'https://github.com/remcovolkers/jbm-pokemoncard-collection/releases/latest/download/pokebinder-release.apk',
+          releaseNotes: 'Snelle OTA fix',
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      )
+    );
+
+    await service.checkForUpdates(true);
+    expect(service.otaBundleChecksum()).toBe(fakeChecksum);
+    expect(mockUpdaterDownload).toHaveBeenCalledWith({
+      url: 'https://remcovolkers.github.io/jbm-pokemoncard-collection/ota/web-bundle.zip?v=1.0.1%2B2',
+      version: '1.0.1+2',
+      checksum: fakeChecksum,
+    });
+
+    await service.applyWebUpdate();
+    expect(mockUpdaterSet).toHaveBeenCalledWith({ id: 'bundle-123' });
   });
 });

@@ -7,6 +7,8 @@ export interface RemoteVersionManifest {
   latestNativeVersion: string;
   /** Directe downloadlink voor de Capacitor OTA web-bundle zip */
   bundleUrl: string;
+  /** Verplichte SHA-256 hex checksum van web-bundle.zip (vereist door @capgo/capacitor-updater v8.54+) */
+  bundleChecksum?: string;
   /** Directe downloadlink naar de nieuwste Android APK */
   apkDownloadUrl: string;
   /** Optionele link naar GitHub Releases overzicht */
@@ -33,6 +35,7 @@ export interface UpdateEvaluation {
   latestWebVersion: string;
   latestNativeVersion: string;
   bundleUrl: string;
+  bundleChecksum: string;
   apkDownloadUrl: string;
   releasePageUrl: string;
   releaseNotes: string;
@@ -119,6 +122,7 @@ export function evaluateUpdateManifest(
     latestWebVersion: remote.webVersion || local.webVersion,
     latestNativeVersion: remote.latestNativeVersion || local.nativeVersion,
     bundleUrl: remote.bundleUrl || '',
+    bundleChecksum: (remote.bundleChecksum || '').trim().toLowerCase(),
     apkDownloadUrl,
     releasePageUrl,
     releaseNotes: remote.releaseNotes || '',

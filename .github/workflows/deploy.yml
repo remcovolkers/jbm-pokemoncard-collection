@@ -61,6 +61,7 @@ jobs:
           node scripts/write-version.mjs \
             --manifest-only \
             --repo "${GITHUB_REPOSITORY}" \
+            --bundle-file dist/pokebinder/browser/ota/web-bundle.zip \
             --out-manifest dist/pokebinder/browser/version.json
 
       - name: Setup Pages

@@ -38,6 +38,7 @@ export class AppUpdateService {
   readonly latestWebVersion = signal<string>(APP_VERSION.webVersion);
   readonly otaState = signal<OtaDownloadState>('idle');
   readonly otaBundleUrl = signal<string>('');
+  readonly otaBundleChecksum = signal<string>('');
   private readyBundleId: string | null = null;
 
   // APK (Native) update state
@@ -187,6 +188,7 @@ export class AppUpdateService {
       this.latestWebVersion.set(decision.latestWebVersion);
       this.latestNativeVersion.set(decision.latestNativeVersion);
       this.otaBundleUrl.set(decision.bundleUrl);
+      this.otaBundleChecksum.set(decision.bundleChecksum);
       this.apkDownloadUrl.set(decision.apkDownloadUrl);
       this.releasePageUrl.set(decision.releasePageUrl);
       this.releaseNotes.set(decision.releaseNotes);
@@ -197,9 +199,18 @@ export class AppUpdateService {
         this.webUpdateAvailable.set(true);
         this.bannerDismissed.set(false);
 
-        // Op native Android downloaden we de non-APK web-bundle direct op de achtergrond
-        if (this.platform.isNative() && decision.bundleUrl && this.otaState() === 'idle') {
-          void this.preloadNativeOtaBundle(decision.bundleUrl, decision.latestWebVersion);
+        // Op native Android downloaden we de non-APK web-bundle direct op de achtergrond (met verplichte SHA-256 checksum)
+        if (
+          this.platform.isNative() &&
+          decision.bundleUrl &&
+          decision.bundleChecksum &&
+          this.otaState() === 'idle'
+        ) {
+          void this.preloadNativeOtaBundle(
+            decision.bundleUrl,
+            decision.latestWebVersion,
+            decision.bundleChecksum
+          );
         }
       }
 
@@ -270,10 +281,10 @@ export class AppUpdateService {
     }
   }
 
-  private async preloadNativeOtaBundle(url: string, version: string): Promise<void> {
+  private async preloadNativeOtaBundle(url: string, version: string, checksum: string): Promise<void> {
     this.otaState.set('downloading');
     try {
-      const bundle = await CapacitorUpdater.download({ url, version });
+      const bundle = await CapacitorUpdater.download({ url, version, checksum });
       this.readyBundleId = bundle.id;
       this.otaState.set('ready');
     } catch {
@@ -284,10 +295,20 @@ export class AppUpdateService {
   private async applyNativeOtaUpdate(): Promise<void> {
     try {
       if (!this.readyBundleId && this.otaBundleUrl()) {
+        const checksum = this.otaBundleChecksum();
+        if (!checksum) {
+          this.otaState.set('error');
+          this.store.showToast(
+            'Update-manifest mist een SHA-256 checksum. Probeer over een minuut opnieuw of download de nieuwste APK.',
+            'error'
+          );
+          return;
+        }
         this.otaState.set('downloading');
         const bundle = await CapacitorUpdater.download({
           url: this.otaBundleUrl(),
           version: this.latestWebVersion(),
+          checksum,
         });
         this.readyBundleId = bundle.id;
       }

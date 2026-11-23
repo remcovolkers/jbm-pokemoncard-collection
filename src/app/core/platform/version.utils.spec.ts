@@ -11,6 +11,7 @@ const BASE_REMOTE: RemoteVersionManifest = {
   minNativeVersion: '1.0.0',
   latestNativeVersion: '1.0.0',
   bundleUrl: 'https://remcovolkers.github.io/jbm-pokemoncard-collection/ota/web-bundle.zip',
+  bundleChecksum: 'b'.repeat(64),
   apkDownloadUrl:
     'https://github.com/remcovolkers/jbm-pokemoncard-collection/releases/latest/download/pokebinder-release.apk',
   releasePageUrl: 'https://github.com/remcovolkers/jbm-pokemoncard-collection/releases/latest',

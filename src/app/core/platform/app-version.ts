@@ -15,8 +15,8 @@ export interface AppVersionInfo {
  * Standaard versieconfiguratie (wordt tijdens CI-builds automatisch bijgewerkt door scripts/write-version.mjs).
  */
 export const APP_VERSION: AppVersionInfo = {
-  webVersion: '1.0.0',
-  nativeVersion: '1.0.0',
+  webVersion: '1.0.1',
+  nativeVersion: '1.0.1',
   manifestUrl: 'https://remcovolkers.github.io/jbm-pokemoncard-collection/version.json',
   defaultApkDownloadUrl:
     'https://github.com/remcovolkers/jbm-pokemoncard-collection/releases/latest/download/pokebinder-release.apk',
