@@ -282,35 +282,38 @@
       aria-labelledby="detail-sheet-title"
       (click)="closeDetail()"
     >
-      <div class="pb-sheet" (pbSheetDismiss)="closeDetail()" (click)="$event.stopPropagation()">
-        <div class="pb-sheet__handle"></div>
+      <div class="pb-sheet pb-sheet--structured" (pbSheetDismiss)="closeDetail()" (click)="$event.stopPropagation()">
+        <div class="pb-sheet__top">
+          <div class="pb-sheet__handle"></div>
 
-        <div class="pb-sheet__header">
-          <div class="sheet-title-wrap">
-            <div class="sheet-badges">
-              <span class="pb-pill pb-pill--primary mono">
-                {{ getDisplaySetCode(draft.cardId, draft.setName) }} #{{ draft.cardNumber }}
-              </span>
-              <span class="mono sheet-rarity">• {{ draft.rarity }}</span>
-              @if (draft.acquisitionMethod) {
-                <span class="pb-pill pb-pill--neutral">{{ draft.acquisitionMethod }}</span>
-              }
+          <div class="pb-sheet__header">
+            <div class="sheet-title-wrap">
+              <div class="sheet-badges">
+                <span class="pb-pill pb-pill--primary mono">
+                  {{ getDisplaySetCode(draft.cardId, draft.setName) }} #{{ draft.cardNumber }}
+                </span>
+                <span class="mono sheet-rarity">• {{ draft.rarity }}</span>
+                @if (draft.acquisitionMethod) {
+                  <span class="pb-pill pb-pill--neutral">{{ draft.acquisitionMethod }}</span>
+                }
+              </div>
+              <h2 id="detail-sheet-title" class="sheet-title">{{ draft.name }}</h2>
+              <span class="sheet-set">{{ draft.setName }} · ID: {{ draft.cardId }}</span>
             </div>
-            <h2 id="detail-sheet-title" class="sheet-title">{{ draft.name }}</h2>
-            <span class="sheet-set">{{ draft.setName }} · ID: {{ draft.cardId }}</span>
-          </div>
 
-          <button
-            type="button"
-            class="pb-btn pb-btn--icon"
-            aria-label="Detailpaneel sluiten"
-            (click)="closeDetail()"
-          >
-            <span class="material-symbols-outlined">close</span>
-          </button>
+            <button
+              type="button"
+              class="pb-btn pb-btn--icon"
+              aria-label="Detailpaneel sluiten"
+              (click)="closeDetail()"
+            >
+              <span class="material-symbols-outlined">close</span>
+            </button>
+          </div>
         </div>
 
-        <!-- Hero Slab Overview -->
+        <div class="pb-sheet__body">
+          <!-- Hero Slab Overview -->
         <div class="sheet-hero">
           <div class="sheet-hero__art">
             <pb-card-artwork [cardId]="draft.cardId" [src]="draft.imageUrl" [alt]="draft.name" />
@@ -559,11 +562,6 @@
 
           <!-- Actieknoppen -->
           <div class="sheet-actions">
-            <button type="button" class="pb-btn pb-btn--primary pb-btn--full" (click)="saveDraft()">
-              <span class="material-symbols-outlined">save</span>
-              <span>Wijzigingen opslaan</span>
-            </button>
-
             <a
               class="pb-btn pb-btn--surface pb-btn--full"
               [href]="activeCardmarketUrl()"
@@ -597,6 +595,14 @@
               </div>
             }
           </div>
+        </div>
+        </div>
+
+        <div class="pb-sheet__footer">
+          <button type="button" class="pb-btn pb-btn--primary pb-btn--full" (click)="saveDraft()">
+            <span class="material-symbols-outlined">save</span>
+            <span>Wijzigingen opslaan</span>
+          </button>
         </div>
       </div>
     </div>

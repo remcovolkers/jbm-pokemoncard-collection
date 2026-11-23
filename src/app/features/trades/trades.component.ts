@@ -3,6 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { getDisplaySetCode } from '../../core/domain/card-id.utils';
 import { formatEur, roundCurrency } from '../../core/domain/card-math.utils';
 import { CollectionCard } from '../../core/domain/models';
+import { HapticsService } from '../../core/platform/haptics.service';
 import { ModalScrollLockService } from '../../core/platform/modal-scroll-lock.service';
 import { CollectionStore } from '../../core/state/collection.store';
 import { CardArtworkComponent } from '../../shared/card-artwork/card-artwork.component';
@@ -19,6 +20,7 @@ import { PbSheetDismissDirective } from '../../shared/directives/sheet-dismiss.d
 export class TradesComponent {
   readonly store = inject(CollectionStore);
   private readonly scrollLock = inject(ModalScrollLockService);
+  private readonly haptics = inject(HapticsService);
 
   readonly formatEur = formatEur;
   readonly getDisplaySetCode = getDisplaySetCode;
@@ -95,6 +97,7 @@ export class TradesComponent {
       counterparty: this.counterparty().trim() || 'Ruilavond / Cardmarket',
       notes: this.notes().trim(),
     });
+    void this.haptics.success();
     this.showLogSheet.set(false);
   }
 

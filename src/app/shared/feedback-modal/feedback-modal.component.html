@@ -6,26 +6,29 @@
     aria-labelledby="fb-modal-title"
     (click)="close()"
   >
-    <div class="pb-sheet fb-sheet" (pbSheetDismiss)="close()" (click)="$event.stopPropagation()">
-      <div class="pb-sheet__handle"></div>
+    <div class="pb-sheet pb-sheet--structured fb-sheet" (pbSheetDismiss)="close()" (click)="$event.stopPropagation()">
+      <div class="pb-sheet__top">
+        <div class="pb-sheet__handle"></div>
 
-      <div class="pb-sheet__header">
-        <div>
-          <h2 id="fb-modal-title">{{ isEditMode() ? 'Feedback bewerken' : 'Feedback geven' }}</h2>
-          <p class="fb-sheet__sub">
-            {{
-              isEditMode()
-                ? 'Pas de titel, pagina, categorie of toelichting aan in de Feedback Hub.'
-                : 'Meld een bug, deel een idee of stel een verbetering voor op de Feedback Hub to-do lijst.'
-            }}
-          </p>
+        <div class="pb-sheet__header">
+          <div>
+            <h2 id="fb-modal-title">{{ isEditMode() ? 'Feedback bewerken' : 'Feedback geven' }}</h2>
+            <p class="fb-sheet__sub">
+              {{
+                isEditMode()
+                  ? 'Pas de titel, pagina, categorie of toelichting aan in de Feedback Hub.'
+                  : 'Meld een bug, deel een idee of stel een verbetering voor op de Feedback Hub to-do lijst.'
+              }}
+            </p>
+          </div>
+          <button type="button" class="pb-btn pb-btn--icon" aria-label="Sluiten" (click)="close()">
+            <span class="material-symbols-outlined">close</span>
+          </button>
         </div>
-        <button type="button" class="pb-btn pb-btn--icon" aria-label="Sluiten" (click)="close()">
-          <span class="material-symbols-outlined">close</span>
-        </button>
       </div>
 
-      <form class="fb-form" (ngSubmit)="submit(false)">
+      <form id="fb-composer-form" class="fb-form" (ngSubmit)="submit(false)">
+        <div class="pb-sheet__body fb-form">
         <!-- Pagina-dropdown (op desktop vooringevuld, op mobiel vrij te kiezen) -->
         <div class="pb-field">
           <label class="pb-label" for="fb-page">Over welke pagina gaat je feedback?</label>
@@ -165,39 +168,43 @@
           }
         </div>
 
-        <div class="fb-actions">
-          <button
-            type="submit"
-            class="pb-btn pb-btn--primary pb-btn--full"
-            [disabled]="!title().trim() || isSubmitting() || isCompressingImage()"
-          >
-            <span class="material-symbols-outlined">{{ isEditMode() ? 'save' : 'send' }}</span>
-            <span>{{ isEditMode() ? 'Wijzigingen opslaan' : 'Opslaan in Feedback Hub' }}</span>
-          </button>
+        </div>
 
-          @if (isEditMode()) {
-            <button type="button" class="pb-btn pb-btn--secondary pb-btn--full" (click)="close()">
-              <span>Annuleren</span>
-            </button>
-          } @else {
+        <div class="pb-sheet__footer">
+          <div class="fb-actions">
             <button
-              type="button"
-              class="pb-btn pb-btn--secondary pb-btn--full"
-              [disabled]="!title().trim() || isSubmitting()"
-              (click)="submit(true)"
+              type="submit"
+              class="pb-btn pb-btn--primary pb-btn--full"
+              [disabled]="!title().trim() || isSubmitting() || isCompressingImage()"
             >
-              <span class="material-symbols-outlined">public</span>
-              <span>Opslaan &amp; deel publiek (GitHub Issue)</span>
+              <span class="material-symbols-outlined">{{ isEditMode() ? 'save' : 'send' }}</span>
+              <span>{{ isEditMode() ? 'Wijzigingen opslaan' : 'Opslaan in Feedback Hub' }}</span>
+            </button>
+
+            @if (isEditMode()) {
+              <button type="button" class="pb-btn pb-btn--secondary pb-btn--full" (click)="close()">
+                <span>Annuleren</span>
+              </button>
+            } @else {
+              <button
+                type="button"
+                class="pb-btn pb-btn--secondary pb-btn--full"
+                [disabled]="!title().trim() || isSubmitting()"
+                (click)="submit(true)"
+              >
+                <span class="material-symbols-outlined">public</span>
+                <span>Opslaan &amp; deel publiek (GitHub Issue)</span>
+              </button>
+            }
+          </div>
+
+          @if (!isEditMode()) {
+            <button type="button" class="fb-hub-link" (click)="openHub()">
+              <span>Bekijk alle open punten in de Feedback Hub</span>
+              <span class="material-symbols-outlined">arrow_forward</span>
             </button>
           }
         </div>
-
-        @if (!isEditMode()) {
-          <button type="button" class="fb-hub-link" (click)="openHub()">
-            <span>Bekijk alle open punten in de Feedback Hub</span>
-            <span class="material-symbols-outlined">arrow_forward</span>
-          </button>
-        }
       </form>
     </div>
   </div>

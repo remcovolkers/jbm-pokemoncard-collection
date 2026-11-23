@@ -208,24 +208,27 @@
   <!-- Bottom Sheet: Nieuwe Wens Toevoegen met TCGdex Lookup -->
   @if (showAddSheet()) {
     <div class="pb-sheet-backdrop" role="dialog" aria-modal="true" (click)="closeAddModal()">
-      <div class="pb-sheet" (pbSheetDismiss)="closeAddModal()" (click)="$event.stopPropagation()">
-        <div class="pb-sheet__handle"></div>
-        <div class="pb-sheet__header">
-          <div>
-            <h2>Nieuwe kaart op verlanglijst</h2>
-            <p class="sheet-sub">Zoek via TCGdex of vul direct je doelprijs in</p>
+      <div class="pb-sheet pb-sheet--structured" (pbSheetDismiss)="closeAddModal()" (click)="$event.stopPropagation()">
+        <div class="pb-sheet__top">
+          <div class="pb-sheet__handle"></div>
+          <div class="pb-sheet__header">
+            <div>
+              <h2>Nieuwe kaart op verlanglijst</h2>
+              <p class="sheet-sub">Zoek via TCGdex of vul direct je doelprijs in</p>
+            </div>
+            <button
+              type="button"
+              class="pb-btn pb-btn--icon"
+              aria-label="Sluiten"
+              (click)="closeAddModal()"
+            >
+              <span class="material-symbols-outlined">close</span>
+            </button>
           </div>
-          <button
-            type="button"
-            class="pb-btn pb-btn--icon"
-            aria-label="Sluiten"
-            (click)="closeAddModal()"
-          >
-            <span class="material-symbols-outlined">close</span>
-          </button>
         </div>
 
-        <div class="wl-form">
+        <div class="pb-sheet__body">
+          <div class="wl-form">
           <!-- Snelle TCGdex Lookup -->
           <div class="pb-field">
             <label class="pb-label" for="wl-lookup">TCGdex Lookup (Code of Naam)</label>
@@ -389,7 +392,10 @@
               (ngModelChange)="newNotes.set($event)"
             />
           </div>
+        </div>
+        </div>
 
+        <div class="pb-sheet__footer">
           <button type="button" class="pb-btn pb-btn--primary pb-btn--full" (click)="saveNewWish()">
             <span class="material-symbols-outlined">bookmark_add</span>
             <span>Opslaan op Verlanglijst</span>

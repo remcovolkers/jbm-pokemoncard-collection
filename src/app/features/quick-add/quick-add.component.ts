@@ -13,6 +13,7 @@ import {
 import { NATIONAL_DEX_NAMES } from '../../core/domain/national-dex.data';
 import { doesCardMatchPokemon } from '../../core/domain/pokedex-matching.utils';
 import { CARD_CATALOG_PORT } from '../../core/ports/card-catalog.port';
+import { HapticsService } from '../../core/platform/haptics.service';
 import { MobileViewportService } from '../../core/platform/mobile-viewport.service';
 import { ModalScrollLockService } from '../../core/platform/modal-scroll-lock.service';
 import { PlatformService } from '../../core/platform/platform.service';
@@ -63,6 +64,7 @@ export class QuickAddComponent implements OnDestroy {
   private readonly scrollLock = inject(ModalScrollLockService);
   private readonly mobileViewport = inject(MobileViewportService);
   private readonly platform = inject(PlatformService);
+  private readonly haptics = inject(HapticsService);
 
   constructor() {
     this.scrollLock.registerDismissHandler(() => this.isSetDropdownOpen(), () => this.closeSetDropdown());
@@ -294,6 +296,7 @@ export class QuickAddComponent implements OnDestroy {
   }
 
   togglePackMode(): void {
+    void this.haptics.light();
     const next = !this.packMode();
     const parsed = parseCardIdInput(this.codeQuery());
     const nextMethod = next ? (this.acquisitionMethod() || 'Pack Pull') : this.acquisitionMethod();
@@ -585,12 +588,14 @@ export class QuickAddComponent implements OnDestroy {
   }
 
   adjustQty(delta: number): void {
+    void this.haptics.light();
     this.quantity.update((q) => Math.max(1, q + delta));
   }
 
   async incrementDuplicate(): Promise<void> {
     const existing = this.existingMatch();
     if (!existing) return;
+    void this.haptics.success();
     await this.store.incrementExistingCard(existing, this.quantity());
     this.prepareNextCard(this.packMode());
   }
@@ -646,6 +651,7 @@ export class QuickAddComponent implements OnDestroy {
         seriesName: card?.seriesName,
         setTotalCards: card?.officialCardCount || card?.totalCardCount,
       });
+      void this.haptics.success();
 
       if (stayOnPage) {
         this.prepareNextCard(nextPackMode);

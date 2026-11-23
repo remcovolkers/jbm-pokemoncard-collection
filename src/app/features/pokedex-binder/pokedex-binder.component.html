@@ -147,7 +147,13 @@
       </div>
     } @else if (viewMode() === 'binder') {
       <!-- Visuele Binder Pagina (Obsidian Leather Sleeve Metaphor) -->
-      <section class="binder-sheet" [class.is-wide]="gridCols() === 5">
+      <section
+        class="binder-sheet"
+        [class.is-wide]="gridCols() === 5"
+        pbBinderSwipe
+        (swipeNext)="nextPage()"
+        (swipePrev)="prevPage()"
+      >
         <!-- Binder Ring / Spine Dots links -->
         <div class="binder-sheet__spine" aria-hidden="true">
           <span></span>
@@ -265,6 +271,10 @@
           </button>
         </div>
 
+        @if (totalPages() > 1) {
+          <p class="binder-swipe-hint mono">Veeg links/rechts over de binder om te bladeren</p>
+        }
+
         <!-- Helper Discovery Banner (zoals Stitch Dragonair #0148) -->
         @if (nextReadyToPlace(); as ready) {
           <div class="discovery-card">
@@ -337,37 +347,40 @@
       aria-labelledby="dex-sheet-title"
       (click)="closeSlotSheet()"
     >
-      <div class="pb-sheet" (pbSheetDismiss)="closeSlotSheet()" (click)="$event.stopPropagation()">
-        <div class="pb-sheet__handle"></div>
+      <div class="pb-sheet pb-sheet--structured" (pbSheetDismiss)="closeSlotSheet()" (click)="$event.stopPropagation()">
+        <div class="pb-sheet__top">
+          <div class="pb-sheet__handle"></div>
 
-        <div class="pb-sheet__header">
-          <div class="dex-sheet-head">
-            <div class="dex-sheet-head__row">
-              <span class="pb-pill pb-pill--secondary mono">{{ formatDexNumber(slot.dexNumber) }}</span>
-              <h2 id="dex-sheet-title">{{ slot.pokemonName }}</h2>
+          <div class="pb-sheet__header">
+            <div class="dex-sheet-head">
+              <div class="dex-sheet-head__row">
+                <span class="pb-pill pb-pill--secondary mono">{{ formatDexNumber(slot.dexNumber) }}</span>
+                <h2 id="dex-sheet-title">{{ slot.pokemonName }}</h2>
+              </div>
+              @if (activeSlotPosition(); as pos) {
+                <p class="dex-sheet-head__sub">
+                  {{ slot.generation }} · Pagina {{ pos.page }}, Vakje {{ pos.slotInPage }} ({{ pos.label }})
+                  @if (activeSlotMatchingCards().length > 0) {
+                    · Je bezit {{ activeSlotMatchingCards().length }}
+                    {{ activeSlotMatchingCards().length === 1 ? 'versie' : 'verschillende versies' }}
+                  }
+                </p>
+              }
             </div>
-            @if (activeSlotPosition(); as pos) {
-              <p class="dex-sheet-head__sub">
-                {{ slot.generation }} · Pagina {{ pos.page }}, Vakje {{ pos.slotInPage }} ({{ pos.label }})
-                @if (activeSlotMatchingCards().length > 0) {
-                  · Je bezit {{ activeSlotMatchingCards().length }}
-                  {{ activeSlotMatchingCards().length === 1 ? 'versie' : 'verschillende versies' }}
-                }
-              </p>
-            }
-          </div>
 
-          <button
-            type="button"
-            class="pb-btn pb-btn--icon"
-            aria-label="Sluiten"
-            (click)="closeSlotSheet()"
-          >
-            <span class="material-symbols-outlined">close</span>
-          </button>
+            <button
+              type="button"
+              class="pb-btn pb-btn--icon"
+              aria-label="Sluiten"
+              (click)="closeSlotSheet()"
+            >
+              <span class="material-symbols-outlined">close</span>
+            </button>
+          </div>
         </div>
 
-        <!-- Beschikbare Kaart-varianten in Collectie -->
+        <div class="pb-sheet__body">
+          <!-- Beschikbare Kaart-varianten in Collectie -->
         @if (activeSlotMatchingCards().length > 0) {
           <div class="variants-list">
             @for (card of activeSlotMatchingCards(); track card.rowIndex + '-' + card.cardId) {
@@ -447,16 +460,19 @@
             <span class="pb-switch__thumb"></span>
           </button>
         </div>
+        </div>
 
         <!-- Actieknoppen -->
-        <div class="dex-sheet-actions">
-          <button type="button" class="pb-btn pb-btn--primary" (click)="confirmSlotSelection()">
-            <span class="material-symbols-outlined">check</span>
-            <span>Bevestig selectie</span>
-          </button>
-          <button type="button" class="pb-btn pb-btn--secondary" (click)="closeSlotSheet()">
-            Sluiten
-          </button>
+        <div class="pb-sheet__footer">
+          <div class="dex-sheet-actions">
+            <button type="button" class="pb-btn pb-btn--primary" (click)="confirmSlotSelection()">
+              <span class="material-symbols-outlined">check</span>
+              <span>Bevestig selectie</span>
+            </button>
+            <button type="button" class="pb-btn pb-btn--secondary" (click)="closeSlotSheet()">
+              Sluiten
+            </button>
+          </div>
         </div>
       </div>
     </div>

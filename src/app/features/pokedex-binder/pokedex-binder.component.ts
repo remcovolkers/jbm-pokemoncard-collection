@@ -12,9 +12,11 @@ import {
   extractCardIdFromChoice,
   formatBinderChoice,
 } from '../../core/domain/pokedex-matching.utils';
+import { HapticsService } from '../../core/platform/haptics.service';
 import { ModalScrollLockService } from '../../core/platform/modal-scroll-lock.service';
 import { CollectionStore } from '../../core/state/collection.store';
 import { CardArtworkComponent } from '../../shared/card-artwork/card-artwork.component';
+import { PbBinderSwipeDirective } from '../../shared/directives/binder-swipe.directive';
 import { PbSheetDismissDirective } from '../../shared/directives/sheet-dismiss.directive';
 
 type StatusFilter = 'all' | 'missing' | 'in_collection' | 'in_binder' | 'upgrade';
@@ -22,7 +24,7 @@ type StatusFilter = 'all' | 'missing' | 'in_collection' | 'in_binder' | 'upgrade
 @Component({
   selector: 'app-pokedex-binder',
   standalone: true,
-  imports: [FormsModule, CardArtworkComponent, PbSheetDismissDirective],
+  imports: [FormsModule, CardArtworkComponent, PbSheetDismissDirective, PbBinderSwipeDirective],
   templateUrl: './pokedex-binder.component.html',
   styleUrl: './pokedex-binder.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -30,6 +32,7 @@ type StatusFilter = 'all' | 'missing' | 'in_collection' | 'in_binder' | 'upgrade
 export class PokedexBinderComponent implements OnInit {
   readonly store = inject(CollectionStore);
   private readonly scrollLock = inject(ModalScrollLockService);
+  private readonly haptics = inject(HapticsService);
 
   readonly generations = GENERATIONS;
   readonly formatDexNumber = formatDexNumber;
@@ -219,11 +222,17 @@ export class PokedexBinderComponent implements OnInit {
   }
 
   prevPage(): void {
-    this.currentPage.set(Math.max(1, this.clampedPage() - 1));
+    const prev = this.clampedPage();
+    const next = Math.max(1, prev - 1);
+    if (next !== prev) void this.haptics.light();
+    this.currentPage.set(next);
   }
 
   nextPage(): void {
-    this.currentPage.set(Math.min(this.totalPages(), this.clampedPage() + 1));
+    const prev = this.clampedPage();
+    const next = Math.min(this.totalPages(), prev + 1);
+    if (next !== prev) void this.haptics.light();
+    this.currentPage.set(next);
   }
 
   jumpToPage(pageValue: number | string): void {
@@ -332,6 +341,7 @@ export class PokedexBinderComponent implements OnInit {
       upgradeWanted: this.draftUpgradeWanted(),
     };
 
+    void this.haptics.success();
     this.closeSlotSheet();
     this.store.showToast(
       `${formatDexNumber(slot.dexNumber)} ${slot.pokemonName} bijgewerkt in Pokédex Binder.`,
@@ -341,6 +351,7 @@ export class PokedexBinderComponent implements OnInit {
   }
 
   async quickPlaceReadySlot(slot: PokedexSlot): Promise<void> {
+    void this.haptics.success();
     const matches = this.store.getCardsForPokemon(slot.pokemonName);
     const choice = matches.length > 0 ? formatBinderChoice(matches[0]) : slot.selectedCard;
     await this.store.updatePokedexSlot({

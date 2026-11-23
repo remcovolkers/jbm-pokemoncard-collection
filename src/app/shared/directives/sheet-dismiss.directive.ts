@@ -1,8 +1,9 @@
 import { Directive, ElementRef, OnDestroy, OnInit, inject, output } from '@angular/core';
+import { HapticsService } from '../../core/platform/haptics.service';
 
 /**
  * Maakt het mogelijk om mobiele bottom sheets (.pb-sheet) natief omlaag te slepen
- * vanaf het handvat of bovenaan de scrollcontainer (scrollTop === 0) om te sluiten.
+ * vanaf het handvat, de sticky bovenbalk of bovenaan de scrollcontainer (scrollTop === 0) om te sluiten.
  */
 @Directive({
   selector: '[pbSheetDismiss]',
@@ -10,6 +11,7 @@ import { Directive, ElementRef, OnDestroy, OnInit, inject, output } from '@angul
 })
 export class PbSheetDismissDirective implements OnInit, OnDestroy {
   private readonly host = inject(ElementRef<HTMLElement>);
+  private readonly haptics = inject(HapticsService);
   readonly pbSheetDismiss = output<void>();
 
   private startY = 0;
@@ -19,6 +21,7 @@ export class PbSheetDismissDirective implements OnInit, OnDestroy {
   private tracking = false;
   private dragging = false;
   private startedOnHandle = false;
+  private thresholdHapticFired = false;
   private dismissTimer: ReturnType<typeof setTimeout> | null = null;
 
   private readonly onTouchStart = (event: TouchEvent): void => {
@@ -36,8 +39,9 @@ export class PbSheetDismissDirective implements OnInit, OnDestroy {
     this.startTime = Date.now();
     this.currentDy = 0;
     this.dragging = false;
+    this.thresholdHapticFired = false;
     this.startedOnHandle = Boolean(
-      target?.closest('.pb-sheet__handle, .pb-sheet__header')
+      target?.closest('.pb-sheet__handle, .pb-sheet__header, .pb-sheet__top')
     );
     this.tracking = this.startedOnHandle || this.host.nativeElement.scrollTop <= 1;
   };
@@ -74,6 +78,10 @@ export class PbSheetDismissDirective implements OnInit, OnDestroy {
 
     const clampedDy = Math.max(0, dy);
     this.currentDy = clampedDy;
+    if (!this.thresholdHapticFired && clampedDy >= 90) {
+      this.thresholdHapticFired = true;
+      void this.haptics.light();
+    }
     el.style.transition = 'none';
     el.style.transform = `translate3d(0, ${clampedDy}px, 0)`;
 

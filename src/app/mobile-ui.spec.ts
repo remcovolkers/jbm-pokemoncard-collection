@@ -8,6 +8,7 @@ import { routes } from './app.routes';
 import { AppsScriptSheetsAdapter } from './core/adapters/apps-script-sheets.adapter';
 import { CatalogCard, CatalogCardSummary } from './core/domain/models';
 import { FEEDBACK_HUB_ENDPOINT } from './core/platform/feedback-hub-config';
+import { HapticsService } from './core/platform/haptics.service';
 import { MobileViewportService } from './core/platform/mobile-viewport.service';
 import { ModalScrollLockService } from './core/platform/modal-scroll-lock.service';
 import { PlatformService } from './core/platform/platform.service';
@@ -187,14 +188,21 @@ describe('Mobiele UI, Gebaren, Routing & Toetsenbord Suite', () => {
       const el = fixture.nativeElement as HTMLElement;
       const backdrop = el.querySelector('[role="dialog"][aria-modal="true"]') as HTMLElement | null;
       const sheet = el.querySelector('.pb-sheet') as HTMLElement | null;
+      const top = el.querySelector('.pb-sheet__top') as HTMLElement | null;
+      const body = el.querySelector('.pb-sheet__body') as HTMLElement | null;
+      const footer = el.querySelector('.pb-sheet__footer') as HTMLElement | null;
       const handle = el.querySelector('.pb-sheet__handle') as HTMLElement | null;
       expect(backdrop).not.toBeNull();
       expect(sheet).not.toBeNull();
+      expect(sheet?.classList.contains('pb-sheet--structured')).toBe(true);
+      expect(top).not.toBeNull();
+      expect(body).not.toBeNull();
+      expect(footer).not.toBeNull();
       expect(handle).not.toBeNull();
 
       // Wanneer gebruiker al omlaag gescrollt is (scrollTop = 120), mag omlaag slepen op body het modaal NIET sluiten
       sheet!.scrollTop = 120;
-      const bodyTarget = (sheet!.querySelector('.sheet-form, .variants-list, .wl-form, .tr-form, .fb-form') ?? sheet!) as HTMLElement;
+      const bodyTarget = (sheet!.querySelector('.sheet-form, .variants-list, .wl-form, .tr-form, .pb-sheet__body') ?? sheet!) as HTMLElement;
       dispatchTouch(bodyTarget, 'touchstart', 260);
       dispatchTouch(bodyTarget, 'touchmove', 410);
       dispatchTouch(bodyTarget, 'touchend', 410);
@@ -210,10 +218,11 @@ describe('Mobiele UI, Gebaren, Routing & Toetsenbord Suite', () => {
       await new Promise((r) => setTimeout(r, 180));
       expect(isOpen()).toBe(true);
 
-      // Stevige swipe omlaag (>= 110px) sluit het bottom sheet direct
-      dispatchTouch(handle!, 'touchstart', 200);
-      dispatchTouch(handle!, 'touchmove', 340);
-      dispatchTouch(handle!, 'touchend', 340);
+      // Stevige swipe omlaag vanaf .pb-sheet__top sluit het bottom sheet óók wanneer er al gescrollt was
+      sheet!.scrollTop = 180;
+      dispatchTouch(top!, 'touchstart', 180);
+      dispatchTouch(top!, 'touchmove', 320);
+      dispatchTouch(top!, 'touchend', 320);
       await vi.waitFor(() => {
         fixture.detectChanges();
         expect(isOpen()).toBe(false);
@@ -486,6 +495,54 @@ describe('Mobiele UI, Gebaren, Routing & Toetsenbord Suite', () => {
         const text = (appFixture.nativeElement as HTMLElement).textContent ?? '';
         expect(text).toContain(route.expectedText);
       }
+    });
+  });
+
+  describe('5. Pokédex Binder swipe-bladeren, QuickAdd shimmer & Haptics', () => {
+    it('bladert in de Pokédex Binder met horizontale swipe links/rechts zonder bij verticale scroll te triggeren', () => {
+      const fixture = TestBed.createComponent(PokedexBinderComponent);
+      const comp = fixture.componentInstance;
+      fixture.detectChanges();
+
+      const binderSheet = (fixture.nativeElement as HTMLElement).querySelector('.binder-sheet') as HTMLElement;
+      expect(binderSheet).not.toBeNull();
+      expect(comp.clampedPage()).toBe(1);
+
+      // Verticale scroll mag niet per ongeluk naar pagina 2 bladeren
+      dispatchTouch(binderSheet, 'touchstart', 300, 180);
+      dispatchTouch(binderSheet, 'touchmove', 160, 188);
+      dispatchTouch(binderSheet, 'touchend', 160, 188);
+      expect(comp.clampedPage()).toBe(1);
+
+      // Horizontaal naar links vegen -> volgende pagina
+      dispatchTouch(binderSheet, 'touchstart', 300, 260);
+      dispatchTouch(binderSheet, 'touchmove', 304, 150);
+      dispatchTouch(binderSheet, 'touchend', 304, 150);
+      expect(comp.clampedPage()).toBe(2);
+
+      // Horizontaal naar rechts vegen -> vorige pagina
+      dispatchTouch(binderSheet, 'touchstart', 300, 140);
+      dispatchTouch(binderSheet, 'touchmove', 302, 250);
+      dispatchTouch(binderSheet, 'touchend', 302, 250);
+      expect(comp.clampedPage()).toBe(1);
+    });
+
+    it('toont een shimmer-skeleton tijdens het laden van Alle Sets en voert Haptics veilig uit', async () => {
+      const fixture = TestBed.createComponent(QuickAddComponent);
+      const comp = fixture.componentInstance;
+      comp.inputMode.set('sets');
+      comp.isLoadingSetCards.set(true);
+      comp.activeSetDetail.set(null);
+      fixture.detectChanges();
+
+      const skeletons = (fixture.nativeElement as HTMLElement).querySelectorAll('.pb-skeleton-tile');
+      expect(skeletons.length).toBe(6);
+
+      const haptics = TestBed.inject(HapticsService);
+      await expect(haptics.light()).resolves.toBeUndefined();
+      await expect(haptics.medium()).resolves.toBeUndefined();
+      await expect(haptics.success()).resolves.toBeUndefined();
+      await expect(haptics.warning()).resolves.toBeUndefined();
     });
   });
 });

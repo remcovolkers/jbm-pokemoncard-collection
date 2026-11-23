@@ -1,5 +1,6 @@
-import { Component, inject } from '@angular/core';
-import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { AfterViewInit, Component, ElementRef, OnDestroy, inject } from '@angular/core';
+import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { Subscription, filter } from 'rxjs';
 import { CollectionStore } from '../../core/state/collection.store';
 import { FeedbackStore } from '../../core/state/feedback.store';
 
@@ -82,6 +83,27 @@ import { FeedbackStore } from '../../core/state/feedback.store';
           display: none;
         }
 
+        &::before,
+        &::after {
+          content: '';
+          position: absolute;
+          top: 0;
+          bottom: 1px;
+          width: 22px;
+          pointer-events: none;
+          z-index: 2;
+        }
+
+        &::before {
+          left: 0;
+          background: linear-gradient(90deg, $color-surface-low 0%, transparent 100%);
+        }
+
+        &::after {
+          right: 0;
+          background: linear-gradient(270deg, $color-surface-low 0%, transparent 100%);
+        }
+
         &__inner {
           @include hide-scrollbar;
           display: flex;
@@ -89,6 +111,7 @@ import { FeedbackStore } from '../../core/state/feedback.store';
           gap: $space-sm;
           overflow-x: auto;
           padding: 0 $margin-mobile;
+          scroll-behavior: smooth;
 
           @include mq-md {
             padding: 0 $margin-desktop;
@@ -159,7 +182,31 @@ import { FeedbackStore } from '../../core/state/feedback.store';
     `,
   ],
 })
-export class MoreShellComponent {
+export class MoreShellComponent implements AfterViewInit, OnDestroy {
   readonly store = inject(CollectionStore);
   readonly feedback = inject(FeedbackStore);
+  private readonly router = inject(Router);
+  private readonly hostEl = inject(ElementRef<HTMLElement>);
+  private navSub: Subscription | null = null;
+  private centerTimer: ReturnType<typeof setTimeout> | null = null;
+
+  ngAfterViewInit(): void {
+    this.centerActiveTab();
+    this.navSub = this.router.events
+      .pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd))
+      .subscribe(() => {
+        if (this.centerTimer) clearTimeout(this.centerTimer);
+        this.centerTimer = setTimeout(() => this.centerActiveTab(), 30);
+      });
+  }
+
+  ngOnDestroy(): void {
+    this.navSub?.unsubscribe();
+    if (this.centerTimer) clearTimeout(this.centerTimer);
+  }
+
+  private centerActiveTab(): void {
+    const active = this.hostEl.nativeElement.querySelector('.more-tab.is-active') as HTMLElement | null;
+    active?.scrollIntoView?.({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+  }
 }

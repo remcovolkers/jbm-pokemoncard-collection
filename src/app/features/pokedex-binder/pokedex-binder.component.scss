@@ -9,18 +9,19 @@
 
 .dex-controls {
   @include surface-glass;
-  position: sticky;
-  top: 0;
+  position: relative;
   z-index: $z-sticky;
-  padding: $space-sm $margin-mobile;
+  padding: 0.55rem $margin-mobile;
   border-bottom: 1px solid rgba($color-outline-variant, 0.5);
   display: flex;
   flex-direction: column;
-  gap: $space-sm;
+  gap: 0.45rem;
 
   @include mq-md {
+    position: sticky;
     top: 0;
     padding: $space-md $margin-desktop;
+    gap: $space-sm;
   }
 
   &__bar {
@@ -438,6 +439,16 @@
   display: flex;
   flex-direction: column;
   gap: $space-sm;
+}
+
+.binder-swipe-hint {
+  font-size: 0.68rem;
+  color: $color-on-surface-muted;
+  text-align: center;
+
+  @include mq-md {
+    display: none;
+  }
 }
 
 .page-summary {

@@ -8,6 +8,7 @@ import {
   FeedbackPage,
   FeedbackScreenshotUpload,
 } from '../../core/domain/models';
+import { HapticsService } from '../../core/platform/haptics.service';
 import { ModalScrollLockService } from '../../core/platform/modal-scroll-lock.service';
 import { CollectionStore } from '../../core/state/collection.store';
 import { FeedbackStore } from '../../core/state/feedback.store';
@@ -26,6 +27,7 @@ export class FeedbackModalComponent {
   private readonly collectionStore = inject(CollectionStore);
   private readonly router = inject(Router);
   private readonly scrollLock = inject(ModalScrollLockService);
+  private readonly haptics = inject(HapticsService);
 
   readonly pages = FEEDBACK_PAGES;
   readonly categories: FeedbackCategory[] = ['Bug', 'Idee', 'Verbetering', 'UI / Design'];
@@ -205,6 +207,7 @@ export class FeedbackModalComponent {
           screenshot: this.pendingScreenshot(),
         });
       }
+      void this.haptics.success();
       this.title.set('');
       this.description.set('');
       this.pendingScreenshot.set(null);

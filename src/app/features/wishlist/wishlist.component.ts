@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, HostListener, computed, effect, inj
 import { FormsModule } from '@angular/forms';
 import { formatEur } from '../../core/domain/card-math.utils';
 import { WishlistItem } from '../../core/domain/models';
+import { HapticsService } from '../../core/platform/haptics.service';
 import { ModalScrollLockService } from '../../core/platform/modal-scroll-lock.service';
 import { CARD_CATALOG_PORT } from '../../core/ports/card-catalog.port';
 import { CollectionStore } from '../../core/state/collection.store';
@@ -22,6 +23,7 @@ export class WishlistComponent {
   readonly store = inject(CollectionStore);
   private readonly catalog = inject(CARD_CATALOG_PORT);
   private readonly scrollLock = inject(ModalScrollLockService);
+  private readonly haptics = inject(HapticsService);
 
   readonly formatEur = formatEur;
   readonly Math = Math;
@@ -178,14 +180,17 @@ export class WishlistComponent {
       notes: this.newNotes().trim(),
       imageUrl: this.newImageUrl(),
     });
+    void this.haptics.success();
     this.showAddSheet.set(false);
   }
 
   async markFoundAndAdd(item: WishlistItem): Promise<void> {
+    void this.haptics.success();
     await this.store.markWishlistFound(item, true);
   }
 
   async markFoundOnly(item: WishlistItem): Promise<void> {
+    void this.haptics.success();
     await this.store.markWishlistFound(item, false);
   }
 

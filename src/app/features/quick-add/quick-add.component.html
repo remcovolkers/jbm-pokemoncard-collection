@@ -386,6 +386,14 @@
           }
         </div>
 
+        @if (isLoadingSetCards() && !activeSetDetail()) {
+          <div class="pb-skeleton-grid" aria-label="Kaarten worden geladen">
+            @for (slot of [1, 2, 3, 4, 5, 6]; track slot) {
+              <div class="pb-skeleton-tile"></div>
+            }
+          </div>
+        }
+
         @if (activeSetDetail(); as setDetail) {
           <div class="sets-browser__header">
             <div class="sets-browser__meta">

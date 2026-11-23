@@ -434,6 +434,59 @@
     gap: $space-sm;
     margin-bottom: $space-md;
   }
+
+  &--structured {
+    padding: 0;
+
+    @include mq-md {
+      padding: 0;
+    }
+
+    .pb-sheet__top {
+      position: sticky;
+      top: 0;
+      z-index: 6;
+      background-color: $color-surface-low;
+      padding: $space-sm $margin-mobile 0.65rem;
+      border-bottom: 1px solid rgba($color-outline-variant, 0.4);
+      border-radius: $radius-xl $radius-xl 0 0;
+
+      @include mq-md {
+        padding: $space-lg $space-lg $space-sm;
+      }
+
+      .pb-sheet__header {
+        margin-bottom: 0;
+      }
+    }
+
+    .pb-sheet__body {
+      padding: $space-md $margin-mobile $space-md;
+
+      @include mq-md {
+        padding: $space-md $space-lg;
+      }
+    }
+
+    .pb-sheet__footer {
+      position: sticky;
+      bottom: 0;
+      z-index: 6;
+      background: linear-gradient(180deg, rgba($color-surface-low, 0.88) 0%, $color-surface-low 24%);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border-top: 1px solid rgba($color-outline-variant, 0.45);
+      padding: 0.65rem $margin-mobile calc(0.75rem + env(safe-area-inset-bottom, 0px));
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+
+      @include mq-md {
+        padding: $space-sm $space-lg $space-md;
+        border-radius: 0 0 $radius-xl $radius-xl;
+      }
+    }
+  }
 }
 
 @media (max-width: #{$bp-md - 1px}) {
@@ -441,6 +494,40 @@
     max-height: calc(var(--pb-viewport-height, 100dvh) - 12px);
     padding-bottom: 2.5rem;
   }
+
+  html.pb-keyboard-open .pb-sheet--structured {
+    padding-bottom: 1.5rem;
+
+    .pb-sheet__footer {
+      position: static;
+    }
+  }
+}
+
+// Shimmer Loading Skeletons (bijv. Alle Sets laden)
+.pb-skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.6rem;
+  margin-top: 0.35rem;
+
+  @include mq-sm {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.pb-skeleton-tile {
+  aspect-ratio: 2.5 / 3.5;
+  border-radius: $radius-md;
+  border: 1px solid rgba($color-outline-variant, 0.35);
+  background: linear-gradient(
+    90deg,
+    $color-surface-container 20%,
+    $color-surface-highest 50%,
+    $color-surface-container 80%
+  );
+  background-size: 200% 100%;
+  animation: pb-shimmer 1.3s ease-in-out infinite;
 }
 
 // Lege staat

@@ -140,24 +140,27 @@
   <!-- Bottom Sheet: Transactie Loggen -->
   @if (showLogSheet()) {
     <div class="pb-sheet-backdrop" role="dialog" aria-modal="true" (click)="closeLogSheet()">
-      <div class="pb-sheet" (pbSheetDismiss)="closeLogSheet()" (click)="$event.stopPropagation()">
-        <div class="pb-sheet__handle"></div>
-        <div class="pb-sheet__header">
-          <div>
-            <h2>Transactie loggen</h2>
-            <p class="sheet-sub">Wordt opgeslagen in tabblad “Ruil &amp; Verkoop” (rij 22+)</p>
+      <div class="pb-sheet pb-sheet--structured" (pbSheetDismiss)="closeLogSheet()" (click)="$event.stopPropagation()">
+        <div class="pb-sheet__top">
+          <div class="pb-sheet__handle"></div>
+          <div class="pb-sheet__header">
+            <div>
+              <h2>Transactie loggen</h2>
+              <p class="sheet-sub">Wordt opgeslagen in tabblad “Ruil &amp; Verkoop” (rij 22+)</p>
+            </div>
+            <button
+              type="button"
+              class="pb-btn pb-btn--icon"
+              aria-label="Sluiten"
+              (click)="closeLogSheet()"
+            >
+              <span class="material-symbols-outlined">close</span>
+            </button>
           </div>
-          <button
-            type="button"
-            class="pb-btn pb-btn--icon"
-            aria-label="Sluiten"
-            (click)="closeLogSheet()"
-          >
-            <span class="material-symbols-outlined">close</span>
-          </button>
         </div>
 
-        <div class="tr-form">
+        <div class="pb-sheet__body">
+          <div class="tr-form">
           <div class="two-col">
             <div class="pb-field">
               <label class="pb-label" for="tr-date">Datum</label>
@@ -282,7 +285,10 @@
               (ngModelChange)="notes.set($event)"
             />
           </div>
+        </div>
+        </div>
 
+        <div class="pb-sheet__footer">
           <button type="button" class="pb-btn pb-btn--primary pb-btn--full" (click)="submitTrade()">
             <span class="material-symbols-outlined">save</span>
             <span>Transactie opslaan</span>

@@ -335,7 +335,7 @@
   padding-bottom: 1.5rem;
 
   &.is-quick-add {
-    padding-bottom: calc(8.5rem + env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(5.75rem + env(safe-area-inset-bottom, 0px));
   }
 
   @include mq-md {

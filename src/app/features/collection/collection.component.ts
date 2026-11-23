@@ -14,6 +14,7 @@ import {
   formatPercent,
 } from '../../core/domain/card-math.utils';
 import { CollectionCard, DEFAULT_DROPDOWN_SETTINGS } from '../../core/domain/models';
+import { HapticsService } from '../../core/platform/haptics.service';
 import { ModalScrollLockService } from '../../core/platform/modal-scroll-lock.service';
 import { CARD_CATALOG_PORT } from '../../core/ports/card-catalog.port';
 import { CollectionStore } from '../../core/state/collection.store';
@@ -34,6 +35,7 @@ export class CollectionComponent implements OnInit {
   readonly store = inject(CollectionStore);
   private readonly catalog = inject(CARD_CATALOG_PORT);
   private readonly scrollLock = inject(ModalScrollLockService);
+  private readonly haptics = inject(HapticsService);
 
   readonly formatEur = formatEur;
   readonly formatPercent = formatPercent;
@@ -240,6 +242,7 @@ export class CollectionComponent implements OnInit {
   }
 
   adjustDraftQty(delta: number): void {
+    void this.haptics.light();
     this.editDraft.update((prev) =>
       prev ? { ...prev, quantity: Math.max(1, (prev.quantity || 1) + delta) } : null
     );
@@ -250,6 +253,7 @@ export class CollectionComponent implements OnInit {
     const draft = this.editDraft();
     if (!orig || !draft) return;
 
+    void this.haptics.success();
     const cardName = draft.name;
     const patch: Partial<CollectionCard> = {
       quantity: draft.quantity,
@@ -274,6 +278,7 @@ export class CollectionComponent implements OnInit {
   async deleteActiveCard(): Promise<void> {
     const card = this.activeCard();
     if (!card) return;
+    void this.haptics.warning();
     this.closeDetail();
     await this.store.deleteCard(card);
   }
