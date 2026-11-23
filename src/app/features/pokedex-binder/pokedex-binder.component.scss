@@ -177,6 +177,10 @@
     padding: 1.25rem 1.25rem 1.25rem 2.25rem;
   }
 
+  &.is-wide {
+    max-width: 960px;
+  }
+
   &__spine {
     position: absolute;
     left: 0.55rem;
@@ -224,6 +228,49 @@
 
     @include mq-md {
       gap: 0.65rem;
+    }
+
+    @media (max-width: 639px) {
+      .pocket {
+        padding: 0.18rem;
+        gap: 0.2rem;
+      }
+
+      .pocket__num {
+        top: 2px;
+        left: 2px;
+        padding: 0.06rem 0.22rem;
+        font-size: 0.5rem;
+      }
+
+      .pocket__star {
+        top: 2px;
+        right: 2px;
+        width: 14px;
+        height: 14px;
+
+        .material-symbols-outlined {
+          font-size: 10px;
+        }
+      }
+
+      .pocket__name {
+        font-size: 0.62rem;
+      }
+
+      .pocket__sub {
+        font-size: 0.52rem;
+      }
+
+      .pocket__empty-icon {
+        font-size: 16px;
+      }
+    }
+
+    @media (max-width: 479px) {
+      .pocket__empty-hint {
+        display: none;
+      }
     }
   }
 }

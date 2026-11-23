@@ -1,4 +1,4 @@
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import {
   FEEDBACK_PAGES,
@@ -18,7 +18,7 @@ type StatusFilter = 'all' | FeedbackStatus;
   templateUrl: './feedback-hub.component.html',
   styleUrl: './feedback-hub.component.scss',
 })
-export class FeedbackHubComponent implements OnInit {
+export class FeedbackHubComponent implements OnInit, OnDestroy {
   readonly feedback = inject(FeedbackStore);
   private readonly store = inject(CollectionStore);
 
@@ -29,6 +29,9 @@ export class FeedbackHubComponent implements OnInit {
   readonly pageFilter = signal<string>('ALL');
   readonly categoryFilter = signal<string>('ALL');
   readonly searchQuery = signal<string>('');
+  readonly copiedKey = signal<string | null>(null);
+
+  private copyResetTimer: ReturnType<typeof setTimeout> | null = null;
 
   readonly filteredItems = computed(() => {
     const status = this.statusFilter();
@@ -48,8 +51,23 @@ export class FeedbackHubComponent implements OnInit {
     });
   });
 
+  /**
+   * Items voor de bulk "Copy to prompt"-knop: op tabblad Alle slaan we afgeronde
+   * items over zolang er nog open/bezig items in de huidige selectie staan.
+   */
+  readonly promptTargetItems = computed(() => {
+    const list = this.filteredItems();
+    if (this.statusFilter() !== 'all') return list;
+    const active = list.filter((i) => i.status !== 'done');
+    return active.length > 0 ? active : list;
+  });
+
   ngOnInit(): void {
     void this.feedback.refreshPublicIssues(true);
+  }
+
+  ngOnDestroy(): void {
+    if (this.copyResetTimer) clearTimeout(this.copyResetTimer);
   }
 
   openNewFeedback(): void {
@@ -89,26 +107,32 @@ export class FeedbackHubComponent implements OnInit {
   }
 
   formatItemAsPrompt(item: FeedbackItem): string {
+    const dateStr = this.formatDate(item.createdAt);
+    const metaParts = [item.author, dateStr, this.sourceLabel(item.source)].filter(Boolean);
     const lines = [
-      `[${item.category}] ${item.page} — ${item.title} (status: ${this.statusLabel(item.status)}, stemmen: ${item.votes})`,
+      `### [${item.category}] ${item.page} — ${item.title}`,
+      `Status: ${this.statusLabel(item.status)} | Stemmen: ${item.votes} | Ingediend door: ${metaParts.join(' · ')}`,
     ];
     if (item.description?.trim()) {
-      lines.push(item.description.trim());
+      lines.push('', item.description.trim());
     }
-    lines.push(`Ingediend door: ${item.author} (${this.sourceLabel(item.source)})`);
     return lines.join('\n');
   }
 
   buildFilteredPrompt(): string {
-    const items = this.filteredItems();
+    const items = this.promptTargetItems();
     if (items.length === 0) return '';
-    const header = `Kun je de volgende ${items.length === 1 ? 'feedback' : `${items.length} feedback-items`} uit PokéBinder oppakken en oplossen?\n`;
-    return header + '\n' + items.map((item, idx) => `${idx + 1}. ${this.formatItemAsPrompt(item)}`).join('\n\n---\n\n');
+    const header =
+      items.length === 1
+        ? 'Kun je het volgende feedback-item uit PokéBinder oppakken en oplossen?'
+        : `Kun je de volgende ${items.length} feedback-items uit PokéBinder oppakken en oplossen?`;
+    return `${header}\n\n${items.map((item, idx) => `${idx + 1}. ${this.formatItemAsPrompt(item)}`).join('\n\n---\n\n')}`;
   }
 
   async copyItemPrompt(item: FeedbackItem): Promise<void> {
     const text = `Kun je dit feedback-item uit PokéBinder oppakken?\n\n${this.formatItemAsPrompt(item)}`;
     const ok = await this.copyToClipboard(text);
+    if (ok) this.markCopied(item.id);
     this.store.showToast(
       ok ? 'Feedback gekopieerd als prompt voor in de chat!' : 'Kopiëren mislukt — selecteer de tekst handmatig.',
       ok ? 'success' : 'warning'
@@ -116,18 +140,28 @@ export class FeedbackHubComponent implements OnInit {
   }
 
   async copyFilteredPrompt(): Promise<void> {
+    const items = this.promptTargetItems();
     const text = this.buildFilteredPrompt();
     if (!text) {
-      this.store.showToast('Geen zichtbare feedback-items om te kopiëren.', 'info');
+      this.store.showToast('Geen feedback-items om te kopiëren.', 'info');
       return;
     }
     const ok = await this.copyToClipboard(text);
+    if (ok) this.markCopied('bulk');
     this.store.showToast(
       ok
-        ? `${this.filteredItems().length} feedback-item(s) gekopieerd als prompt!`
+        ? `${items.length} feedback-item(s) gekopieerd als prompt!`
         : 'Kopiëren mislukt — selecteer de tekst handmatig.',
       ok ? 'success' : 'warning'
     );
+  }
+
+  private markCopied(key: string): void {
+    this.copiedKey.set(key);
+    if (this.copyResetTimer) clearTimeout(this.copyResetTimer);
+    this.copyResetTimer = setTimeout(() => {
+      this.copiedKey.set(null);
+    }, 2000);
   }
 
   private async copyToClipboard(text: string): Promise<boolean> {

@@ -144,9 +144,11 @@ export class QuickAddComponent implements OnDestroy {
   readonly quickExamples = ['DLR 11', 'MEW 181', 'OBF 125', 'BS 44', 'EVS 215'];
 
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
+  private focusTimer: ReturnType<typeof setTimeout> | null = null;
 
   ngOnDestroy(): void {
     if (this.debounceTimer) clearTimeout(this.debounceTimer);
+    if (this.focusTimer) clearTimeout(this.focusTimer);
   }
 
   togglePackMode(): void {
@@ -328,11 +330,7 @@ export class QuickAddComponent implements OnDestroy {
     const existing = this.existingMatch();
     if (!existing) return;
     await this.store.incrementExistingCard(existing, this.quantity());
-    if (this.packMode()) {
-      this.prepareNextPackCard();
-    } else {
-      void this.router.navigateByUrl('/collectie');
-    }
+    this.prepareNextCard(this.packMode());
   }
 
   async saveCard(stayOnPage: boolean, enablePackMode = false): Promise<void> {
@@ -385,8 +383,8 @@ export class QuickAddComponent implements OnDestroy {
         setTotalCards: card?.officialCardCount || card?.totalCardCount,
       });
 
-      if (stayOnPage || nextPackMode) {
-        this.prepareNextPackCard(nextPackMode);
+      if (stayOnPage) {
+        this.prepareNextCard(nextPackMode);
       } else {
         void this.router.navigateByUrl('/collectie');
       }
@@ -395,7 +393,7 @@ export class QuickAddComponent implements OnDestroy {
     }
   }
 
-  private prepareNextPackCard(rememberSet = this.packMode()): void {
+  private prepareNextCard(rememberSet = this.packMode()): void {
     const rememberedSet = rememberSet ? this.store.packDefaults().setCode : '';
     this.previewCard.set(null);
     this.nameResults.set([]);
@@ -404,10 +402,26 @@ export class QuickAddComponent implements OnDestroy {
     this.manualSet.set('');
     this.manualNumber.set('');
     this.quantity.set(1);
+    this.purchasePrice.set(0);
+    this.forTrade.set(false);
     this.grade.set('');
     this.notes.set('');
-    this.codeQuery.set(rememberedSet ? `${rememberedSet} ` : '');
+    this.codeQuery.set(rememberSet && this.inputMode() !== 'sets' && rememberedSet ? `${rememberedSet} ` : '');
     this.nameQuery.set('');
+
+    if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+      if (this.focusTimer) clearTimeout(this.focusTimer);
+      this.focusTimer = setTimeout(() => {
+        try {
+          window.scrollTo?.({ top: 0, behavior: 'smooth' });
+        } catch {
+          // Negeer in omgevingen zonder scrollTo-implementatie (bijv. jsdom)
+        }
+        const targetId = this.inputMode() === 'name' ? 'qa-name-input' : 'qa-code-input';
+        const el = document.getElementById(targetId) as HTMLInputElement | null;
+        el?.focus();
+      }, 0);
+    }
   }
 
   closePage(): void {

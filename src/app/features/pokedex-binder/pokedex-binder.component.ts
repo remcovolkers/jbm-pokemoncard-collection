@@ -288,6 +288,18 @@ export class PokedexBinderComponent implements OnInit {
   }
 
   async chooseVariant(card: CollectionCard): Promise<void> {
+    const slot = this.activeSlot();
+    if (!slot) return;
+
+    const alreadySelected =
+      this.isChoiceSelected(card) &&
+      slot.inBinder &&
+      this.draftUpgradeWanted() === slot.upgradeWanted;
+    if (alreadySelected) {
+      this.closeSlotSheet();
+      return;
+    }
+
     this.draftSelectedCard.set(formatBinderChoice(card));
     this.draftInBinder.set(true);
     await this.confirmSlotSelection();

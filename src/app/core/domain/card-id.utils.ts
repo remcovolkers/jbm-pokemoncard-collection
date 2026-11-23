@@ -449,8 +449,8 @@ export function buildTcgdexAssetUrl(
 export function buildCardmarketSearchUrl(cardName: string, _setName?: string, cardNumber?: string): string {
   const cleanName = (cardName || '').trim();
   const rawNum = (cardNumber || '').split('/')[0].trim();
-  // Cardmarket gebruikt vaak geen volledige setnaam in de titel (wel Kaartnaam + nummer zonder voorloopnullen)
+  // Cardmarket Singles gebruikt kaartnaam + nummer zonder voorloopnullen (geen volledige setnaam)
   const cleanNum = /^\d+$/.test(rawNum) ? String(parseInt(rawNum, 10)) : rawNum;
   const query = [cleanName, cleanNum].filter(Boolean).join(' ').trim();
-  return `https://www.cardmarket.com/en/Pokemon/Products/Search?searchString=${encodeURIComponent(query)}`;
+  return `https://www.cardmarket.com/en/Pokemon/Products/Singles?searchString=${encodeURIComponent(query)}`;
 }

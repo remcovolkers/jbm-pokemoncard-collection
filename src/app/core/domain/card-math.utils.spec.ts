@@ -40,6 +40,19 @@ describe('card-math.utils', () => {
       // 4x4 (16 vakjes)
       expect(calculateBinderPosition(16, 16)).toMatchObject({ page: 1, row: 4, column: 4 });
       expect(calculateBinderPosition(1025, 16)).toMatchObject({ page: 65, slotInPage: 1, row: 1, column: 1 });
+
+      // 5x4 (20 vakjes)
+      expect(calculateBinderPosition(20, 20)).toEqual({
+        page: 1,
+        slotInPage: 20,
+        row: 4,
+        column: 5,
+        columnsPerPage: 5,
+        rowsPerPage: 4,
+        label: 'P1 · R4K5',
+      });
+      expect(calculateBinderPosition(21, 20)).toMatchObject({ page: 2, slotInPage: 1, row: 1, column: 1, label: 'P2 · R1K1' });
+      expect(calculateBinderPosition(1025, 20)).toMatchObject({ page: 52, slotInPage: 5, row: 1, column: 5, label: 'P52 · R1K5' });
     });
 
     it('klamt ongeldige of lage dex-nummers veilig naar 1', () => {

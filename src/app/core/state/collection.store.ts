@@ -59,6 +59,7 @@ export class CollectionStore {
   // Derived Computed Signals
   readonly collection = computed(() => this.snapshot().collection);
   readonly setProgress = computed(() => this.snapshot().setProgress);
+  readonly activeSets = computed(() => this.setProgress().filter((s) => s.ownedUnique > 0));
   readonly pokedex = computed(() => this.snapshot().pokedex);
   readonly binderSlotsPerPage = computed(() => this.snapshot().binderSlotsPerPage);
   readonly wishlist = computed(() => this.snapshot().wishlist);

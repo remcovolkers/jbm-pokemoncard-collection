@@ -468,6 +468,22 @@ describe('apps-script/Code.gs Backend API & Formule-integriteit', () => {
     assert.equal(sheets['Pokédex Binder']._grid[8][9], true);
     assert.equal(sheets['Pokédex Binder']._grid[8][4], '=E9');
 
+    // 5x4 bulk binder indeling (20 vakjes) opslaan en via bootstrap teruggeven
+    const res20 = JSON.parse(
+      sandbox.doPost({
+        postData: {
+          contents: JSON.stringify({
+            token: 'test-secret-token',
+            action: 'updatePokedexSlot',
+            payload: { slotsPerPage: 20 },
+          }),
+        },
+      }).getContent()
+    );
+    assert.equal(res20.ok, true);
+    assert.equal(sheets['Pokédex Binder']._grid[3][7], 20);
+    assert.equal(res20.data.binderSlotsPerPage, 20);
+
     // Onbekende actie moet netjes lock vrijgeven
     const errRes = JSON.parse(
       sandbox.doPost({
@@ -578,7 +594,7 @@ describe('apps-script/Code.gs Backend API & Formule-integriteit', () => {
     assert.equal(row[11], 1);
     assert.equal(row[16], 24.75); // Holo-prijs gekozen i.p.v. normale prijs!
     assert.equal(row[17], '=FORMULA_TOTAL_VAL'); // R:T formules onaangeroerd
-    assert.match(row[21], /^https:\/\/www\.cardmarket\.com\//);
+    assert.match(row[21], /^https:\/\/www\.cardmarket\.com\/en\/Pokemon\/Products\/Singles\?searchString=/);
     assert.equal(sheets['Set Voortgang']._grid[1][0], '151');
     assert.equal(sheets['Pokédex Binder']._grid[10][3], true); // Mew (#151) aangevinkt
 

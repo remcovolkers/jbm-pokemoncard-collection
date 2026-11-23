@@ -235,9 +235,9 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
   });
 
   describe('QuickAddComponent', () => {
-    it('detecteert duplicaten en verhoogt bestaande kaart met +1 knop', async () => {
+    it('detecteert duplicaten, verhoogt bestaande kaart met +1 en blijft schoon op het scherm', async () => {
       const router = TestBed.inject(Router);
-      vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
+      const navSpy = vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
       const fixture = TestBed.createComponent(QuickAddComponent);
       const comp = fixture.componentInstance;
       const store = TestBed.inject(CollectionStore);
@@ -250,9 +250,14 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
 
       await comp.incrementDuplicate();
       expect(store.collection().find((c) => c.cardId === 'sv03.5-181')?.quantity).toBe(beforeQty + 1);
+      expect(navSpy).not.toHaveBeenCalled();
+      expect(comp.codeQuery()).toBe('');
+      expect(comp.previewCard()).toBeNull();
     });
 
-    it('ondersteunt Zoek op Naam, Pack Opening Mode en handmatige offline fallback', async () => {
+    it('ondersteunt Zoek op Naam, op scherm blijven zonder set-geheugen, Pack Opening Mode en handmatige offline fallback', async () => {
+      const router = TestBed.inject(Router);
+      const navSpy = vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
       const fixture = TestBed.createComponent(QuickAddComponent);
       const comp = fixture.componentInstance;
       const store = TestBed.inject(CollectionStore);
@@ -266,15 +271,20 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
       expect(comp.previewCard()?.id).toBe('sv03-125');
       expect(comp.matchedPokedexEntry()?.dexNumber).toBe(6);
 
-      // Opslaan & op scherm blijven ZONDER Pack Mode -> reset zoekveld zonder set te onthouden!
+      // Opslaan & op scherm blijven ZONDER Pack Mode -> reset zoekveld, prijs en te-ruil vlag!
+      comp.purchasePrice.set(12.5);
+      comp.forTrade.set(true);
       const before = store.collection().length;
       await comp.saveCard(true);
       expect(store.collection().length).toBe(before + 1);
       expect(comp.packMode()).toBe(false);
       expect(comp.codeQuery()).toBe('');
+      expect(comp.purchasePrice()).toBe(0);
+      expect(comp.forTrade()).toBe(false);
       expect(comp.previewCard()).toBeNull();
 
       // Handmatige invoer met Pack Opening Mode AAN -> houdt scherm open en onthoudt setcode
+      comp.inputMode.set('code');
       comp.codeQuery.set('OBF 999');
       comp.previewCard.set(null);
       comp.manualName.set('Custom Promo Pikachu');
@@ -284,6 +294,11 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
       expect(comp.packMode()).toBe(true);
       expect(comp.codeQuery()).toBe('OBF ');
       expect(store.collection().some((c) => c.name === 'Custom Promo Pikachu')).toBe(true);
+
+      // Expliciet "Opslaan & Naar Collectie" navigeert óók als Pack Opening Mode aan staat
+      comp.manualName.set('Final Card');
+      await comp.saveCard(false);
+      expect(navSpy).toHaveBeenCalledWith('/collectie');
     });
   });
 
@@ -335,6 +350,13 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
       expect(updatedSlot.selectedCard).toContain('base1-15');
       expect(updatedSlot.inBinder).toBe(true);
 
+      // Opnieuw klikken op de al actieve kaart sluit zonder extra write naar Google Sheets
+      const updateSpy = vi.spyOn(store, 'updatePokedexSlot');
+      comp.openSlotSheet(updatedSlot);
+      await comp.chooseVariant(baseVenusaur);
+      expect(comp.activeSlot()).toBeNull();
+      expect(updateSpy).not.toHaveBeenCalled();
+
       // Escape sluit sheet
       comp.openSlotSheet(venusaurSlot);
       comp.onEscapeKey();
@@ -380,6 +402,15 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
         ],
       }));
       expect(comp.stats().count).toBe(activeBefore);
+      // Standaard worden lege 0-kaart sets ook verborgen zodat lijst exact klopt met teller
+      expect(comp.filteredSets().length).toBe(activeBefore);
+      expect(comp.inactiveSetsCount()).toBe(1);
+      expect(comp.filteredSets().some((s) => s.setName === 'Lege Testset')).toBe(false);
+
+      // Gebruiker kan lege sets optioneel toch tonen
+      comp.showInactiveSets.set(true);
+      expect(comp.filteredSets().some((s) => s.setName === 'Lege Testset')).toBe(true);
+      comp.showInactiveSets.set(false);
 
       comp.query.set('151');
       expect(comp.filteredSets().length).toBe(1);
@@ -576,11 +607,16 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
       await feedback.toggleUpvote(itemA);
       expect(feedback.items().find((i) => i.id === itemA.id)?.votes).toBe(beforeVotes - 1);
 
-      // Copy-to-prompt formatteert zowel enkel item als gefilterde lijst netjes voor de chat
+      // Copy-to-prompt: slaat op tabblad 'Alle' afgeronde items over, maar neemt ze wel mee op 'Afgerond'
       comp.searchQuery.set('');
-      const bulkPrompt = comp.buildFilteredPrompt();
-      expect(bulkPrompt).toContain('[Idee] Dashboard — Home screen Widget');
-      expect(bulkPrompt).toContain('[Bug] Collectie — Zoekbalk ellipsis');
+      const bulkActivePrompt = comp.buildFilteredPrompt();
+      expect(bulkActivePrompt).toContain('[Idee] Dashboard — Home screen Widget');
+      expect(bulkActivePrompt).not.toContain('Zoekbalk ellipsis');
+
+      comp.statusFilter.set('done');
+      const bulkDonePrompt = comp.buildFilteredPrompt();
+      expect(bulkDonePrompt).toContain('[Bug] Collectie — Zoekbalk ellipsis');
+
       const writeTextSpy = vi.fn().mockResolvedValue(undefined);
       Object.defineProperty(navigator, 'clipboard', {
         value: { writeText: writeTextSpy },
@@ -588,6 +624,9 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
       });
       await comp.copyItemPrompt(itemA);
       expect(writeTextSpy).toHaveBeenCalledWith(expect.stringContaining('Home screen Widget'));
+      expect(comp.copiedKey()).toBe(itemA.id);
+      await comp.copyFilteredPrompt();
+      expect(comp.copiedKey()).toBe('bulk');
     });
 
     it('toont desktop feedback-knop in App shell die huidige route meegeeft aan de modal', async () => {

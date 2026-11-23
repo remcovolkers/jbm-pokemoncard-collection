@@ -39,7 +39,7 @@ export class DashboardComponent {
     });
   });
 
-  readonly topMasterSets = computed(() => this.store.setProgress().slice(0, 4));
+  readonly topMasterSets = computed(() => this.store.activeSets().slice(0, 4));
 
   readonly syncedTimeAgo = computed(() => {
     const iso = this.store.syncedAt();

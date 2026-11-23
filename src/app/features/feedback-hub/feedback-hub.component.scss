@@ -211,6 +211,7 @@
   &__foot-actions {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: 0.4rem;
   }
 }
@@ -306,6 +307,12 @@
 
   &:hover {
     background-color: rgba($color-secondary, 0.24);
+  }
+
+  &.is-copied {
+    background-color: $color-secondary;
+    border-color: $color-secondary;
+    color: $color-on-secondary;
   }
 }
 

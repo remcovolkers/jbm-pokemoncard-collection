@@ -39,6 +39,23 @@
     </select>
   </div>
 
+  @if (inactiveSetsCount() > 0) {
+    <div class="sets-inactive-bar">
+      <button
+        type="button"
+        class="pb-pill pb-pill--interactive"
+        [class.is-active]="showInactiveSets()"
+        (click)="showInactiveSets.set(!showInactiveSets())"
+      >
+        {{
+          showInactiveSets()
+            ? 'Verberg lege sets'
+            : 'Toon ook ' + inactiveSetsCount() + ' lege ' + (inactiveSetsCount() === 1 ? 'set' : 'sets')
+        }}
+      </button>
+    </div>
+  }
+
   <!-- Set Overzichtskaarten -->
   @if (filteredSets().length === 0) {
     <div class="pb-empty">
@@ -51,7 +68,12 @@
   } @else {
     <div class="sets-list">
       @for (set of filteredSets(); track set.setName) {
-        <button type="button" class="pb-card set-item" (click)="openSetInCollection(set)">
+        <button
+          type="button"
+          class="pb-card set-item"
+          [class.set-item--empty]="set.ownedUnique === 0"
+          (click)="openSetInCollection(set)"
+        >
           <div class="set-item__top">
             <div class="set-item__left">
               <div class="set-item__code mono">

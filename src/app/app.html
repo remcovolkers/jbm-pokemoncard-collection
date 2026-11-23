@@ -39,8 +39,8 @@
       <a class="sidebar__link" routerLink="/meer/sets" routerLinkActive="is-active">
         <span class="material-symbols-outlined">fact_check</span>
         <span>Set Voortgang</span>
-        @if (store.setProgress().length > 0) {
-          <span class="sidebar__badge">{{ store.setProgress().length }}</span>
+        @if (store.activeSets().length > 0) {
+          <span class="sidebar__badge">{{ store.activeSets().length }}</span>
         }
       </a>
       <a class="sidebar__link" routerLink="/meer/verlanglijst" routerLinkActive="is-active">

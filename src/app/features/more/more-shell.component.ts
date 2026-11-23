@@ -14,8 +14,8 @@ import { FeedbackStore } from '../../core/state/feedback.store';
           <a routerLink="sets" routerLinkActive="is-active" class="more-tab">
             <span class="material-symbols-outlined">fact_check</span>
             <span>Set Voortgang</span>
-            @if (store.setProgress().length > 0) {
-              <span class="more-tab__badge mono">{{ store.setProgress().length }}</span>
+            @if (store.activeSets().length > 0) {
+              <span class="more-tab__badge mono">{{ store.activeSets().length }}</span>
             }
           </a>
 

@@ -147,7 +147,7 @@
       </div>
     } @else if (viewMode() === 'binder') {
       <!-- Visuele Binder Pagina (Obsidian Leather Sleeve Metaphor) -->
-      <section class="binder-sheet">
+      <section class="binder-sheet" [class.is-wide]="gridCols() === 5">
         <!-- Binder Ring / Spine Dots links -->
         <div class="binder-sheet__spine" aria-hidden="true">
           <span></span>
@@ -394,7 +394,7 @@
 
                 <div class="variant-option__radio">
                   <span class="radio-dot" [class.is-checked]="isChoiceSelected(card)"></span>
-                  <span class="mono">{{ isChoiceSelected(card) ? 'Actief' : 'Kies deze' }}</span>
+                  <span class="mono">{{ isChoiceSelected(card) ? 'Actief' : 'Kies' }}</span>
                 </div>
               </button>
             }

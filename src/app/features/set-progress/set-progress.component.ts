@@ -21,12 +21,18 @@ export class SetProgressComponent {
 
   readonly query = signal('');
   readonly sortBy = signal<'progress' | 'value' | 'name'>('progress');
+  readonly showInactiveSets = signal(false);
+
+  readonly inactiveSetsCount = computed(
+    () => this.store.setProgress().filter((s) => s.ownedUnique <= 0).length
+  );
 
   readonly filteredSets = computed(() => {
     const q = this.query().trim().toLowerCase();
     const sort = this.sortBy();
+    const source = this.showInactiveSets() ? this.store.setProgress() : this.store.activeSets();
 
-    const list = this.store.setProgress().filter((s) => {
+    const list = source.filter((s) => {
       if (!q) return true;
       return `${s.setName} ${s.series} ${s.setCode ?? ''}`.toLowerCase().includes(q);
     });
@@ -39,8 +45,7 @@ export class SetProgressComponent {
   });
 
   readonly stats = computed(() => {
-    const sets = this.store.setProgress();
-    const activeSets = sets.filter((s) => s.ownedUnique > 0);
+    const activeSets = this.store.activeSets();
     const totalValue = activeSets.reduce((acc, s) => acc + s.totalSetValue, 0);
     const totalOwned = activeSets.reduce((acc, s) => acc + s.ownedUnique, 0);
     const avgPct =

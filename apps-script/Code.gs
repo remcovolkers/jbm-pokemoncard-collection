@@ -1585,10 +1585,12 @@ function fetchAndPopulateRow_(ss, sheet, row, rawInput, priceOnly) {
     sheet.getRange(row, 17).setValue(price);
   }
 
-  // Cardmarket zoeklink in kolom V (Notities) alleen als nog leeg
+  // Cardmarket Singles-zoeklink in kolom V (Notities) alleen als nog leeg
   if (!sheet.getRange(row, 22).getValue()) {
-    var query = encodeURIComponent((card.name || '') + ' ' + (card.localId || ''));
-    sheet.getRange(row, 22).setValue('https://www.cardmarket.com/en/Pokemon/Products/Search?searchString=' + query);
+    var rawLocal = String(card.localId || '').trim();
+    var cleanLocal = /^\d+$/.test(rawLocal) ? String(parseInt(rawLocal, 10)) : rawLocal;
+    var query = encodeURIComponent(((card.name || '') + ' ' + cleanLocal).trim());
+    sheet.getRange(row, 22).setValue('https://www.cardmarket.com/en/Pokemon/Products/Singles?searchString=' + query);
   }
 
   if (setName) {
