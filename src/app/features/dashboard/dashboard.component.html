@@ -20,7 +20,12 @@
             · {{ store.pendingQueue().length }} in wachtrij
           }
         } @else {
-          Google Sheets Live Sync: <strong>{{ syncedTimeAgo() }}</strong> · 100% up-to-date
+          Google Sheets Live Sync: <strong>{{ syncedTimeAgo() }}</strong>
+          @if (store.activeProfile(); as prof) {
+            · <strong>{{ prof.name }}</strong> ({{ prof.role === 'test' ? 'Test' : 'Live' }})
+          } @else {
+            · 100% up-to-date
+          }
         }
       </p>
     </div>

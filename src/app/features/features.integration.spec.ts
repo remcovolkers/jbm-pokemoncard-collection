@@ -516,6 +516,33 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
       fbBtn.click();
       expect(feedback.isComposerOpen()).toBe(true);
       expect(feedback.composerDefaultPage()).toBe('Algemeen / Hele app');
+
+      // Spreadsheet-profielen aanmaken en wisselen via dropdown (Test <-> Live)
+      comp.profileName.set('Remco Test');
+      comp.profileRole.set('test');
+      comp.webAppUrl.set('https://script.google.com/macros/s/test/exec');
+      comp.apiToken.set('tok-test');
+      comp.saveConnectionOnly();
+      const testId = comp.selectedProfileId();
+
+      comp.startNewProfile();
+      comp.profileName.set('Mel Echte Sheet');
+      comp.profileRole.set('live');
+      comp.webAppUrl.set('https://script.google.com/macros/s/mel/exec');
+      comp.apiToken.set('tok-mel');
+      comp.saveConnectionOnly();
+      fixture.detectChanges();
+
+      expect(store.sheetProfiles().length).toBe(2);
+      expect(el.textContent).toContain('Test · Remco Test');
+      expect(el.textContent).toContain('Live · Mel Echte Sheet');
+
+      // Wissel via de dropdown terug naar Remco Test
+      await comp.onProfileSelect(testId);
+      fixture.detectChanges();
+      expect(store.activeProfile()?.id).toBe(testId);
+      expect(comp.webAppUrl()).toBe('https://script.google.com/macros/s/test/exec');
+      expect(el.textContent).toContain('Test: Remco Test');
     });
 
     it('ondersteunt de Alle Sets Catalogus browser in QuickAddComponent met in-bezit detectie', async () => {

@@ -238,4 +238,51 @@ describe('CollectionStore (Signals, Optimistic UI & Offline Queue)', () => {
     await store.syncFromRemote(true);
     expect(store.binderSlotsPerPage()).toBe(9);
   });
+
+  it('beheert meerdere spreadsheet-profielen (Test vs Live) met strikte snapshot-isolatie', async () => {
+    const testSnap = createDemoSnapshot();
+    testSnap.collection = [testSnap.collection[0]];
+    const liveSnap = createDemoSnapshot();
+    liveSnap.collection = liveSnap.collection.slice(0, 3);
+
+    vi.mocked(mockRepo.bootstrap).mockImplementation(async (cfg) =>
+      cfg.apiToken === 'tok-test' ? testSnap : liveSnap
+    );
+
+    const testProf = store.saveSheetProfile(
+      {
+        name: 'Remco (Test)',
+        role: 'test',
+        webAppUrl: 'https://script.google.com/macros/s/test/exec',
+        apiToken: 'tok-test',
+      },
+      { activate: true, disableDemo: true }
+    );
+    await store.syncFromRemote(true);
+    expect(store.collection().length).toBe(1);
+    expect(store.activeProfile()?.role).toBe('test');
+
+    const liveProf = store.saveSheetProfile(
+      {
+        name: 'Mel (Live)',
+        role: 'live',
+        webAppUrl: 'https://script.google.com/macros/s/mel/exec',
+        apiToken: 'tok-mel',
+      },
+      { activate: true, disableDemo: true }
+    );
+    await store.syncFromRemote(true);
+    expect(store.collection().length).toBe(3);
+    expect(store.activeProfile()?.name).toBe('Mel (Live)');
+
+    // Schakelen naar Remco (Test) laadt direct diens geïsoleerde cache (1 kaart) zonder Mel's kaarten te lekken
+    await store.switchSheetProfile(testProf.id);
+    expect(store.collection().length).toBe(1);
+    expect(store.config().apiToken).toBe('tok-test');
+
+    // Verwijderen van actieve test-profiel valt netjes terug op Mel (Live)
+    store.deleteSheetProfile(testProf.id);
+    expect(store.activeProfile()?.id).toBe(liveProf.id);
+    expect(store.config().apiToken).toBe('tok-mel');
+  });
 });

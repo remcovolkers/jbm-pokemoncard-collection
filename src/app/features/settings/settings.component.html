@@ -6,14 +6,18 @@
         <h2>Demo-modus</h2>
         <span
           class="pb-pill"
-          [class.pb-pill--tertiary]="store.config().demoMode"
-          [class.pb-pill--secondary]="!store.config().demoMode && store.isSheetConfigured()"
+          [class.pb-pill--tertiary]="store.config().demoMode || store.activeProfile()?.role === 'test'"
+          [class.pb-pill--secondary]="!store.config().demoMode && store.isSheetConfigured() && store.activeProfile()?.role !== 'test'"
           [class.pb-pill--neutral]="!store.config().demoMode && !store.isSheetConfigured()"
         >
           @if (store.config().demoMode) {
             Demo actief
           } @else if (store.isSheetConfigured()) {
-            Live Google Sheets
+            @if (store.activeProfile(); as prof) {
+              {{ prof.role === 'test' ? 'Test' : 'Live' }}: {{ prof.name }}
+            } @else {
+              Live Google Sheets
+            }
           } @else {
             Niet gekoppeld
           }
@@ -82,6 +86,83 @@
     </div>
 
     <form class="config-form" (ngSubmit)="saveConnectionOnly()">
+      <!-- Spreadsheet-profielen Switcher (Test vs Live) -->
+      <div class="profile-bar">
+        <div class="pb-field profile-bar__select">
+          <label class="pb-label" for="cfg-profile">Actieve spreadsheet (snel wisselen)</label>
+          <select
+            id="cfg-profile"
+            name="activeProfileId"
+            class="pb-select"
+            [ngModel]="selectedProfileId()"
+            (ngModelChange)="onProfileSelect($event)"
+          >
+            @if (store.sheetProfiles().length === 0) {
+              <option value="">— Nieuwe spreadsheet koppelen —</option>
+            } @else {
+              @for (prof of store.sheetProfiles(); track prof.id) {
+                <option [value]="prof.id">
+                  {{ prof.role === 'test' ? '🧪 Test' : '🟢 Live' }} · {{ prof.name }}
+                </option>
+              }
+              <option value="">+ Nieuwe spreadsheet toevoegen…</option>
+            }
+          </select>
+        </div>
+
+        <div class="profile-bar__actions">
+          <button
+            type="button"
+            class="pb-btn pb-btn--secondary"
+            (click)="startNewProfile()"
+          >
+            <span class="material-symbols-outlined">add</span>
+            <span>Nieuw profiel</span>
+          </button>
+
+          @if (selectedProfileId()) {
+            <button
+              type="button"
+              class="pb-btn pb-btn--danger"
+              aria-label="Geselecteerd profiel verwijderen"
+              (click)="deleteSelectedProfile()"
+            >
+              <span class="material-symbols-outlined">delete</span>
+              <span>Verwijder</span>
+            </button>
+          }
+        </div>
+      </div>
+
+      <div class="profile-meta-grid">
+        <div class="pb-field">
+          <label class="pb-label" for="cfg-profile-name">Naam spreadsheet</label>
+          <input
+            id="cfg-profile-name"
+            name="profileName"
+            type="text"
+            class="pb-input"
+            placeholder="bijv. Remco (Test) of Mel (Live)"
+            [ngModel]="profileName()"
+            (ngModelChange)="profileName.set($event)"
+          />
+        </div>
+
+        <div class="pb-field">
+          <label class="pb-label" for="cfg-profile-role">Omgeving / Type</label>
+          <select
+            id="cfg-profile-role"
+            name="profileRole"
+            class="pb-select"
+            [ngModel]="profileRole()"
+            (ngModelChange)="profileRole.set($event)"
+          >
+            <option value="live">🟢 Live (Echte collectie)</option>
+            <option value="test">🧪 Test (Testdatabase)</option>
+          </select>
+        </div>
+      </div>
+
       <div class="pb-field">
         <label class="pb-label" for="cfg-url">Web App URL (eindigend op /exec)</label>
         <input
@@ -235,7 +316,7 @@
               Totaal) worden ingevuld; formules in <code>D:H</code> blijven intact.
             </li>
             <li>
-              <strong>Pokédex Binder</strong> — Cel <code>H4</code> = vakjes per pagina (<code>4 / 9 / 12 / 16</code>),
+              <strong>Pokédex Binder</strong> — Cel <code>H4</code> = vakjes per pagina (<code>4 / 9 / 12 / 16 / 20</code>),
               Pokémon <code>#0001–#1025</code> vanaf rij 8 (<code>D</code> = In Binder, <code>I</code> = Gekozen kaart,
               <code>J</code> = Upgrade gewenst; formules in <code>E:H</code> blijven intact).
             </li>

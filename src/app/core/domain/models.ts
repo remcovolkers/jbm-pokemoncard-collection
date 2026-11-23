@@ -200,11 +200,24 @@ export interface CatalogSetDetail extends CatalogSetSummary {
   cards: CatalogCardSummary[];
 }
 
+export type SheetProfileRole = 'live' | 'test';
+
+export interface SheetProfile {
+  id: string;
+  name: string;
+  role: SheetProfileRole;
+  webAppUrl: string;
+  apiToken: string;
+  monthlyBudget?: number;
+}
+
 export interface AppConnectionConfig {
   webAppUrl: string;
   apiToken: string;
   demoMode: boolean;
   monthlyBudget: number;
+  activeProfileId?: string;
+  profiles?: SheetProfile[];
 }
 
 export interface PendingMutation {

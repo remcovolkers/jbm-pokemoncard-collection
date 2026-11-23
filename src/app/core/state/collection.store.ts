@@ -13,6 +13,7 @@ import {
   DEFAULT_DROPDOWN_SETTINGS,
   PendingMutation,
   PokedexSlot,
+  SheetProfile,
   ToastMessage,
   TradeEntry,
   WishlistItem,
@@ -100,6 +101,14 @@ export class CollectionStore {
     return Boolean(cfg.webAppUrl?.trim() && cfg.apiToken?.trim());
   });
 
+  readonly sheetProfiles = computed<SheetProfile[]>(() => this.config().profiles ?? []);
+
+  readonly activeProfile = computed<SheetProfile | null>(() => {
+    const id = this.config().activeProfileId;
+    if (!id) return null;
+    return this.sheetProfiles().find((p) => p.id === id) ?? null;
+  });
+
   readonly syncStatus = computed<SyncStatus>(() => {
     if (this.isSyncing()) return 'syncing';
     if (this.config().demoMode) return 'demo';
@@ -112,14 +121,14 @@ export class CollectionStore {
   private toastCounter = 0;
 
   constructor() {
-    // Persist snapshot & config gescheiden per modus zodat demo-data nooit lekt naar live-modus
+    // Persist snapshot & config gescheiden per modus én per profiel zodat test/live nooit door elkaar lekken
     effect(() => {
       const cfg = this.config();
       const snap = this.snapshot();
       if (cfg.demoMode) {
         this.cache.saveDemoSnapshot(snap);
       } else if (cfg.webAppUrl?.trim() && cfg.apiToken?.trim()) {
-        this.cache.saveSnapshot(snap);
+        this.cache.saveSnapshot(snap, cfg.activeProfileId);
       }
     });
 
@@ -173,7 +182,7 @@ export class CollectionStore {
       return createEmptySnapshot();
     }
 
-    const liveCached = this.cache.loadSnapshot();
+    const liveCached = this.cache.loadSnapshot(cfg.activeProfileId);
     if (
       liveCached &&
       Array.isArray(liveCached.collection) &&
@@ -269,9 +278,157 @@ export class CollectionStore {
         );
       }
     } else if (partial.demoMode === false && prev.demoMode && hasSheet) {
-      const liveCached = this.cache.loadSnapshot();
-      this.snapshot.set(liveCached ? this.hydrateArtwork(liveCached) : createEmptySnapshot());
+      const liveCached = this.cache.loadSnapshot(next.activeProfileId);
+      this.snapshot.set(
+        liveCached ? this.applyBinderLayoutPrefIfNeeded(this.hydrateArtwork(liveCached)) : createEmptySnapshot()
+      );
       void this.syncFromRemote();
+    }
+  }
+
+  /**
+   * Slaat een spreadsheet-profiel op (nieuw of bestaand) met eigen cache-isolatie (bijv. Remco Test vs Mel Live).
+   */
+  saveSheetProfile(
+    input: Omit<SheetProfile, 'id'> & { id?: string },
+    options: { activate?: boolean; disableDemo?: boolean } = {}
+  ): SheetProfile {
+    const prev = this.config();
+    const list = [...(prev.profiles ?? [])];
+    const cleanId = input.id?.trim() || `sheet-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const profile: SheetProfile = {
+      id: cleanId,
+      name: input.name.trim() || (input.role === 'test' ? 'Test Spreadsheet' : 'Live Spreadsheet'),
+      role: input.role,
+      webAppUrl: input.webAppUrl.trim(),
+      apiToken: input.apiToken.trim(),
+      monthlyBudget: input.monthlyBudget ?? prev.monthlyBudget,
+    };
+
+    const existingIdx = list.findIndex((p) => p.id === profile.id);
+    if (existingIdx >= 0) {
+      list[existingIdx] = profile;
+    } else {
+      list.push(profile);
+    }
+
+    const activate = options.activate !== false;
+    if (activate) {
+      const switched = prev.activeProfileId !== profile.id;
+      if (switched) {
+        this.binderLayoutPref = null;
+        this.cache.saveBinderLayoutPreference(null);
+        this.pendingQueue.set([]);
+      }
+      this.lastError.set(null);
+
+      const nextDemo = options.disableDemo ? false : prev.demoMode;
+      this.config.set({
+        ...prev,
+        profiles: list,
+        activeProfileId: profile.id,
+        webAppUrl: profile.webAppUrl,
+        apiToken: profile.apiToken,
+        monthlyBudget: profile.monthlyBudget ?? prev.monthlyBudget,
+        demoMode: nextDemo,
+      });
+
+      if (switched && !nextDemo) {
+        const cached = this.cache.loadSnapshot(profile.id);
+        this.snapshot.set(cached ? this.hydrateArtwork(cached) : createEmptySnapshot());
+      }
+    } else {
+      this.config.set({
+        ...prev,
+        profiles: list,
+      });
+    }
+
+    return profile;
+  }
+
+  /**
+   * Schakelt direct over naar een opgeslagen spreadsheet-profiel (bijv. van Test naar Mel Live)
+   * zonder dat oude testdata of wachtrij-items meelekken.
+   */
+  async switchSheetProfile(profileId: string): Promise<boolean> {
+    const prev = this.config();
+    const profile = (prev.profiles ?? []).find((p) => p.id === profileId);
+    if (!profile) return false;
+
+    const changedProfile = prev.activeProfileId !== profile.id;
+    this.binderLayoutPref = null;
+    this.cache.saveBinderLayoutPreference(null);
+    this.lastError.set(null);
+    if (changedProfile) {
+      this.pendingQueue.set([]);
+    }
+
+    this.config.set({
+      ...prev,
+      activeProfileId: profile.id,
+      webAppUrl: profile.webAppUrl,
+      apiToken: profile.apiToken,
+      monthlyBudget: profile.monthlyBudget ?? prev.monthlyBudget,
+      demoMode: false,
+    });
+
+    const cached = this.cache.loadSnapshot(profile.id);
+    this.snapshot.set(cached ? this.hydrateArtwork(cached) : createEmptySnapshot());
+
+    this.showToast(
+      `Overgeschakeld naar ${profile.name} (${profile.role === 'test' ? 'Test' : 'Live'}).`,
+      'info'
+    );
+    return this.syncFromRemote(true);
+  }
+
+  /**
+   * Verwijdert een spreadsheet-profiel inclusief diens eigen snapshot-cache.
+   */
+  deleteSheetProfile(profileId: string): void {
+    const prev = this.config();
+    const remaining = (prev.profiles ?? []).filter((p) => p.id !== profileId);
+    this.cache.removeProfileSnapshot(profileId);
+
+    if (prev.activeProfileId === profileId) {
+      this.binderLayoutPref = null;
+      this.cache.saveBinderLayoutPreference(null);
+      this.pendingQueue.set([]);
+      this.lastError.set(null);
+
+      const fallback = remaining[0];
+      if (fallback) {
+        this.config.set({
+          ...prev,
+          profiles: remaining,
+          activeProfileId: fallback.id,
+          webAppUrl: fallback.webAppUrl,
+          apiToken: fallback.apiToken,
+          monthlyBudget: fallback.monthlyBudget ?? prev.monthlyBudget,
+        });
+        if (!prev.demoMode) {
+          const cached = this.cache.loadSnapshot(fallback.id);
+          this.snapshot.set(cached ? this.hydrateArtwork(cached) : createEmptySnapshot());
+          void this.syncFromRemote(true);
+        }
+      } else {
+        this.config.set({
+          ...prev,
+          profiles: remaining,
+          activeProfileId: undefined,
+          webAppUrl: '',
+          apiToken: '',
+        });
+        if (!prev.demoMode) {
+          this.snapshot.set(createEmptySnapshot());
+        }
+      }
+    } else {
+      this.config.set({
+        ...prev,
+        profiles: remaining,
+      });
     }
   }
 

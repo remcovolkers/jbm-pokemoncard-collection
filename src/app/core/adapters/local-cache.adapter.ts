@@ -50,12 +50,27 @@ export class LocalCacheAdapter {
     }
   }
 
-  loadSnapshot(): AppSnapshot | null {
-    return this.readJson<AppSnapshot>(STORAGE_KEYS.SNAPSHOT);
+  private snapshotStorageKey(profileId?: string): string {
+    const clean = profileId?.trim();
+    return clean ? `${STORAGE_KEYS.SNAPSHOT}_${clean}` : STORAGE_KEYS.SNAPSHOT;
   }
 
-  saveSnapshot(snapshot: AppSnapshot): void {
-    this.writeJson(STORAGE_KEYS.SNAPSHOT, snapshot);
+  loadSnapshot(profileId?: string): AppSnapshot | null {
+    return this.readJson<AppSnapshot>(this.snapshotStorageKey(profileId));
+  }
+
+  saveSnapshot(snapshot: AppSnapshot, profileId?: string): void {
+    this.writeJson(this.snapshotStorageKey(profileId), snapshot);
+  }
+
+  removeProfileSnapshot(profileId: string): void {
+    const s = this.storage;
+    if (!s || !profileId?.trim()) return;
+    try {
+      s.removeItem(this.snapshotStorageKey(profileId));
+    } catch {
+      // Negeer opslagfout
+    }
   }
 
   loadDemoSnapshot(): AppSnapshot | null {
@@ -142,15 +157,32 @@ export class LocalCacheAdapter {
     s.removeItem(STORAGE_KEYS.OFFLINE_QUEUE);
     s.removeItem(STORAGE_KEYS.ARTWORK_CACHE);
     s.removeItem(STORAGE_KEYS.CARDMARKET_ID_CACHE);
+
+    // Ruim ook alle per-profiel snapshots (pokebinder_snapshot_v1_<id>) op
+    const toRemove: string[] = [];
+    for (let i = 0; i < s.length; i++) {
+      const k = s.key(i);
+      if (k && k.startsWith(`${STORAGE_KEYS.SNAPSHOT}_`)) {
+        toRemove.push(k);
+      }
+    }
+    for (const k of toRemove) {
+      s.removeItem(k);
+    }
   }
 
   getEstimatedCacheSizeKb(): number {
     const s = this.storage;
     if (!s) return 0;
+    const baseKeys = new Set<string>(Object.values(STORAGE_KEYS));
     let bytes = 0;
-    for (const key of Object.values(STORAGE_KEYS)) {
-      const item = s.getItem(key);
-      if (item) bytes += item.length * 2;
+    for (let i = 0; i < s.length; i++) {
+      const k = s.key(i);
+      if (!k) continue;
+      if (baseKeys.has(k) || k.startsWith(`${STORAGE_KEYS.SNAPSHOT}_`)) {
+        const item = s.getItem(k);
+        if (item) bytes += item.length * 2;
+      }
     }
     return Math.round((bytes / 1024) * 10) / 10;
   }

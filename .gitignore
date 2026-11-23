@@ -42,3 +42,10 @@ __screenshots__/
 # System files
 .DS_Store
 Thumbs.db
+
+# Google Apps Script clasp (bevat persoonlijke Script-IDs / OAuth)
+.clasp.json
+.clasp.*.json
+.clasprc.json
+apps-script/.clasp.json
+apps-script/.clasp.*.json

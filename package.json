@@ -15,7 +15,12 @@
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
     "test:apps-script": "node --test apps-script/code.test.mjs",
-    "test:all": "npm test -- --watch=false && npm run test:apps-script"
+    "test:all": "npm test -- --watch=false && npm run test:apps-script",
+    "gas:login": "node scripts/deploy-gas.mjs login",
+    "gas:init": "node scripts/deploy-gas.mjs init",
+    "gas:push": "node scripts/deploy-gas.mjs push",
+    "gas:deploy": "node scripts/deploy-gas.mjs deploy",
+    "gas:deployments": "node scripts/deploy-gas.mjs deployments"
   },
   "private": true,
   "packageManager": "npm@11.6.2",

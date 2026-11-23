@@ -87,6 +87,43 @@
   gap: $space-md;
 }
 
+.profile-bar {
+  display: flex;
+  flex-direction: column;
+  gap: $space-sm;
+  padding: 0.75rem;
+  border-radius: $radius-md;
+  background-color: $color-surface-low;
+  border: 1px solid rgba($color-outline-variant, 0.55);
+
+  @include mq-sm {
+    flex-direction: row;
+    align-items: flex-end;
+  }
+
+  &__select {
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__actions {
+    display: flex;
+    gap: $space-xs;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+  }
+}
+
+.profile-meta-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: $space-sm;
+
+  @include mq-sm {
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  }
+}
+
 .token-row {
   display: flex;
   gap: $space-sm;
