@@ -53,6 +53,8 @@ export class App implements OnInit {
   );
 
   readonly isQuickAddRoute = computed(() => this.currentUrl().startsWith('/toevoegen'));
+  readonly isMoreSubRoute = computed(() => /^\/meer\/.+/.test(this.currentUrl()));
+  readonly showTopbarBack = computed(() => this.isQuickAddRoute() || this.isMoreSubRoute());
 
   readonly pageSubtitle = computed(() => {
     const url = this.currentUrl();
@@ -64,6 +66,7 @@ export class App implements OnInit {
     if (url.startsWith('/meer/ruil-verkoop')) return 'Ruil & Verkoop';
     if (url.startsWith('/meer/instellingen')) return 'Instellingen';
     if (url.startsWith('/meer/feedback') || url.startsWith('/feedback')) return 'Feedback Hub';
+    if (url === '/meer') return 'Meer';
     return 'Dashboard';
   });
 

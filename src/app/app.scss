@@ -234,6 +234,12 @@
       color: $color-on-surface;
       background-color: $color-surface-high;
     }
+
+    &.is-active {
+      color: $color-primary-container;
+      border-color: rgba($color-primary-container, 0.55);
+      background-color: rgba($color-primary-container, 0.14);
+    }
   }
 }
 

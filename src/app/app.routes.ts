@@ -40,7 +40,9 @@ export const routes: Routes = [
       {
         path: '',
         pathMatch: 'full',
-        redirectTo: 'verlanglijst',
+        title: 'PokéBinder — Meer',
+        loadComponent: () =>
+          import('./features/more/more-hub.component').then((m) => m.MoreHubComponent),
       },
       {
         path: 'sets',

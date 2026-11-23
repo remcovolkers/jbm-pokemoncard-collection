@@ -110,7 +110,7 @@
   <header class="topbar">
     <div class="topbar__inner">
       <div class="topbar__left">
-        @if (isQuickAddRoute()) {
+        @if (showTopbarBack()) {
           <button
             type="button"
             class="topbar__icon-btn"
@@ -146,7 +146,7 @@
 
         <a
           routerLink="/meer/instellingen"
-          [replaceUrl]="true"
+          routerLinkActive="is-active"
           class="topbar__profile-btn"
           aria-label="Instellingen"
         >

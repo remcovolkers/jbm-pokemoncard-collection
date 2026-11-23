@@ -17,6 +17,7 @@ import { COLLECTION_REPOSITORY } from './core/ports/collection-repository.port';
 import { CollectionStore } from './core/state/collection.store';
 import { FeedbackStore } from './core/state/feedback.store';
 import { CollectionComponent } from './features/collection/collection.component';
+import { MoreHubComponent } from './features/more/more-hub.component';
 import { MoreShellComponent } from './features/more/more-shell.component';
 import { PokedexBinderComponent } from './features/pokedex-binder/pokedex-binder.component';
 import { QuickAddComponent } from './features/quick-add/quick-add.component';
@@ -158,6 +159,7 @@ describe('Mobiele UI, Gebaren, Routing & Toetsenbord Suite', () => {
         FeedbackModalComponent,
         QuickAddComponent,
         MoreShellComponent,
+        MoreHubComponent,
       ],
       providers: [
         provideRouter(routes),
@@ -276,15 +278,16 @@ describe('Mobiele UI, Gebaren, Routing & Toetsenbord Suite', () => {
     });
   });
 
-  describe('2. Vereenvoudigde mobiele routing & Android hardware Back-knop', () => {
-    it('gebruikt replaceUrl op alle hoofd- en sub-tabs behalve de /toevoegen FAB', async () => {
+  describe('2. Vereenvoudigde mobiele routing, Meer Hub & Android hardware Back-knop', () => {
+    it('gebruikt replaceUrl op de 4 hoofd-tabs + merklink (niet op + FAB) en toont een volwaardig Meer Hub menu zonder scroll-tabbalk', async () => {
+      const router = TestBed.inject(Router);
       const fixture = TestBed.createComponent(App);
       fixture.detectChanges();
 
       const navLinks = fixture.debugElement
-        .queryAll(By.css('.bottom-nav__item, .topbar__brand, .topbar__profile-btn'))
+        .queryAll(By.css('.bottom-nav__item, .topbar__brand'))
         .map((de) => de.injector.get(RouterLink));
-      expect(navLinks.length).toBe(6);
+      expect(navLinks.length).toBe(5);
       for (const link of navLinks) {
         expect(link.replaceUrl).toBe(true);
       }
@@ -292,18 +295,23 @@ describe('Mobiele UI, Gebaren, Routing & Toetsenbord Suite', () => {
       const fabLink = fixture.debugElement.query(By.css('.bottom-nav__fab')).injector.get(RouterLink);
       expect(fabLink.replaceUrl).toBe(false);
 
-      const moreFixture = TestBed.createComponent(MoreShellComponent);
-      moreFixture.detectChanges();
-      const moreTabs = moreFixture.debugElement
-        .queryAll(By.css('.more-tab'))
-        .map((de) => de.injector.get(RouterLink));
-      expect(moreTabs.length).toBe(5);
-      for (const tab of moreTabs) {
-        expect(tab.replaceUrl).toBe(true);
-      }
+      // /meer toont de overzichtelijke Hub met alle 5 tools in één oogopslag en zonder dubbele tabbalk
+      await router.navigateByUrl('/meer');
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      const el = fixture.nativeElement as HTMLElement;
+      expect(el.querySelector('.more-tabs')).toBeNull();
+      expect(el.querySelectorAll('.hub-row').length).toBe(5);
+      const text = el.textContent ?? '';
+      expect(text).toContain('Set Voortgang');
+      expect(text).toContain('Verlanglijst');
+      expect(text).toContain('Ruil & Verkoop');
+      expect(text).toContain('Feedback Hub');
+      expect(text).toContain('Instellingen & Sync');
     });
 
-    it('handelt Android Back-knop voorspelbaar af: eerst overlays sluiten, dan /toevoegen terug, nooit terug naar vorige tab', async () => {
+    it('handelt Android Back-knop & topbar terugpijl voorspelbaar af over tabs, /meer/* detailpagina en /toevoegen', async () => {
       const router = TestBed.inject(Router);
       const platform = TestBed.inject(PlatformService);
       const scrollLock = TestBed.inject(ModalScrollLockService);
@@ -321,7 +329,24 @@ describe('Mobiele UI, Gebaren, Routing & Toetsenbord Suite', () => {
       expect(platform.handleMobileBackButton()).toBe('exit');
       expect(router.url).toBe('/pokedex');
 
+      // Tab wissel naar /meer -> Back op /meer zelf verlaat app (keert niet terug naar Pokédex)
+      await router.navigateByUrl('/meer', { replaceUrl: true });
+      appFixture.detectChanges();
+      expect(platform.handleMobileBackButton()).toBe('exit');
+      expect((appFixture.nativeElement as HTMLElement).querySelector('.topbar__icon-btn')).toBeNull();
+
+      // Vanuit /meer doorboren naar /meer/verlanglijst toont de topbar terugpijl en Back gaat terug naar /meer
+      await router.navigateByUrl('/meer/verlanglijst');
+      appFixture.detectChanges();
+      await appFixture.whenStable();
+      expect((appFixture.nativeElement as HTMLElement).querySelector('.topbar__icon-btn')).not.toBeNull();
+      expect(platform.handleMobileBackButton()).toBe('popped_stack');
+      await appFixture.whenStable();
+      expect(router.url).toBe('/meer');
+
       // Open modal op Pokédex -> Back sluit eerst de modal en blijft op /pokedex
+      await router.navigateByUrl('/pokedex', { replaceUrl: true });
+      appFixture.detectChanges();
       const modalOpen = signal(true);
       TestBed.runInInjectionContext(() => {
         scrollLock.registerDismissHandler(() => modalOpen(), () => modalOpen.set(false));
@@ -481,6 +506,7 @@ describe('Mobiele UI, Gebaren, Routing & Toetsenbord Suite', () => {
         { path: '/collectie', expectedText: 'Collectie' },
         { path: '/toevoegen', expectedText: 'Kaart Toevoegen' },
         { path: '/pokedex', expectedText: 'Pokédex' },
+        { path: '/meer', expectedText: 'Instellingen & Sync' },
         { path: '/meer/sets', expectedText: 'Actieve Sets' },
         { path: '/meer/verlanglijst', expectedText: 'Maandbudget Kaarten' },
         { path: '/meer/ruil-verkoop', expectedText: 'Live Trade Binder' },
