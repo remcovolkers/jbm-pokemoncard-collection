@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -16,8 +16,63 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build:
+  detect-changes:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      apk_changed: ${{ steps.detect.outputs.apk_changed }}
+      target_native_version: ${{ steps.detect.outputs.target_native_version }}
+      reasons: ${{ steps.detect.outputs.reasons }}
+      web_build_number: ${{ steps.detect.outputs.web_build_number }}
+    steps:
+      - name: Checkout repository with full git history & tags
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Detecteer APK-wijzigingen en bepaal versienummers
+        id: detect
+        run: |
+          node scripts/detect-apk-changes.mjs --github-output "$GITHUB_OUTPUT"
+          COMMIT_TS=$(git show -s --format=%ct HEAD 2>/dev/null || date +%s)
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            NOW_TS=$(date +%s)
+            if [ "${NOW_TS}" -gt "${COMMIT_TS}" ]; then
+              BUILD_NUM="${NOW_TS}"
+            else
+              BUILD_NUM="${COMMIT_TS}"
+            fi
+          else
+            BUILD_NUM="${COMMIT_TS}"
+          fi
+          echo "web_build_number=${BUILD_NUM}" >> "$GITHUB_OUTPUT"
+
+  release-apk:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.apk_changed == 'true'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/android-apk.yml
+    with:
+      release_version: ${{ needs.detect-changes.outputs.target_native_version }}
+      release_notes: "Automatische Android APK-release (${{ needs.detect-changes.outputs.reasons }}). Commit: ${{ github.event.head_commit.message }}"
+      web_build_number: ${{ needs.detect-changes.outputs.web_build_number }}
+    secrets: inherit
+
+  build:
+    needs: [detect-changes, release-apk]
+    if: always() && needs.detect-changes.result == 'success' && (needs.release-apk.result == 'success' || needs.release-apk.result == 'skipped')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -39,25 +94,14 @@ jobs:
       - name: Refresh physical Pokémon TCG sets catalog
         run: node scripts/sync-sets-catalog.mjs || echo "Using committed public/sets-catalog.json fallback"
 
-      - name: Resolve consistent OTA build number
-        run: |
-          COMMIT_TS=$(git show -s --format=%ct HEAD 2>/dev/null || date +%s)
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            NOW_TS=$(date +%s)
-            if [ "${NOW_TS}" -gt "${COMMIT_TS}" ]; then
-              BUILD_NUM="${NOW_TS}"
-            else
-              BUILD_NUM="${COMMIT_TS}"
-            fi
-          else
-            BUILD_NUM="${COMMIT_TS}"
-          fi
-          echo "WEB_BUILD_NUMBER=${BUILD_NUM}" >> "$GITHUB_ENV"
-
       - name: Stamp release version for PWA & OTA bundle
         env:
           RELEASE_NOTES: ${{ github.event.head_commit.message }}
-        run: node scripts/write-version.mjs --repo "${GITHUB_REPOSITORY}"
+          WEB_BUILD_NUMBER: ${{ needs.detect-changes.outputs.web_build_number }}
+        run: |
+          node scripts/write-version.mjs \
+            --repo "${GITHUB_REPOSITORY}" \
+            --native-version "${{ needs.detect-changes.outputs.target_native_version }}"
 
       - name: Build Capacitor OTA web bundle (for Android APK live updates)
         run: |
@@ -77,10 +121,12 @@ jobs:
       - name: Generate public version.json manifest
         env:
           RELEASE_NOTES: ${{ github.event.head_commit.message }}
+          WEB_BUILD_NUMBER: ${{ needs.detect-changes.outputs.web_build_number }}
         run: |
           node scripts/write-version.mjs \
             --manifest-only \
             --repo "${GITHUB_REPOSITORY}" \
+            --native-version "${{ needs.detect-changes.outputs.target_native_version }}" \
             --bundle-file dist/pokebinder/browser/ota/web-bundle.zip \
             --out-manifest dist/pokebinder/browser/version.json
 
@@ -98,6 +144,9 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     needs: build
+    permissions:
+      pages: write
+      id-token: write
     steps:
       - name: Deploy to GitHub Pages
         id: deployment

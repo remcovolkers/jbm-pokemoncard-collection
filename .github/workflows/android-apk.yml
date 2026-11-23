@@ -14,6 +14,23 @@ on:
         description: 'Korte release notes voor gebruikers'
         required: false
         default: 'Nieuwe Android APK-release van PokéBinder.'
+  workflow_call:
+    inputs:
+      release_version:
+        description: 'APK-versie om te bouwen (bijv. 1.0.3)'
+        required: false
+        type: string
+        default: ''
+      release_notes:
+        description: 'Release notes voor deze APK'
+        required: false
+        type: string
+        default: ''
+      web_build_number:
+        description: 'Optioneel consistent buildnummer voor webVersion'
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: write
@@ -50,8 +67,8 @@ jobs:
         id: ver
         run: |
           PKG_VER=$(node -p "require('./package.json').version")
-          if [ -n "${{ github.event.inputs.release_version }}" ]; then
-            VERSION="${{ github.event.inputs.release_version }}"
+          if [ -n "${{ inputs.release_version }}" ]; then
+            VERSION="${{ inputs.release_version }}"
           elif [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
             VERSION="${GITHUB_REF#refs/tags/v}"
           else
@@ -60,9 +77,11 @@ jobs:
           VERSION="${VERSION#v}"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "code=$((100 + ${GITHUB_RUN_NUMBER}))" >> "$GITHUB_OUTPUT"
+          echo "code=$(($(date +%s) / 60))" >> "$GITHUB_OUTPUT"
 
       - name: Stamp version, build Capacitor bundle & sync Android
+        env:
+          WEB_BUILD_NUMBER: ${{ inputs.web_build_number }}
         run: |
           node scripts/write-version.mjs \
             --repo "${GITHUB_REPOSITORY}" \
@@ -129,7 +148,7 @@ jobs:
           tag_name: ${{ steps.ver.outputs.tag }}
           name: PokéBinder v${{ steps.ver.outputs.version }}
           body: |
-            ${{ github.event.inputs.release_notes || 'Nieuwe Android APK-release van PokéBinder.' }}
+            ${{ inputs.release_notes || 'Nieuwe Android APK-release van PokéBinder.' }}
 
             ### Directe Android APK download
             Klik op **`pokebinder-release.apk`** hieronder (of gebruik altijd de vaste directe link:

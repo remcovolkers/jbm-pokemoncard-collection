@@ -102,18 +102,19 @@ Deze repository bevat al een kant-en-klare GitHub Actions workflow in [`.github/
 
 PokéBinder is ingepakt met **Capacitor 8** ([`capacitor.config.ts`](capacitor.config.ts) + `android/`), zonder dat de bestaande web/PWA-logica verandert. De PWA op GitHub Pages blijft 100% zelfstandig werken én installeerbaar.
 
-#### 1. Automatische updates zonder nieuwe APK (*"Nieuwe versie beschikbaar"*)
-Elke push naar `main` bouwt via [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) zowel de GitHub Pages PWA als een Capacitor OTA web-bundle (`ota/web-bundle.zip`) + `version.json`:
-- **Op de PWA (Web):** Angular `SwUpdate` detecteert direct de nieuwe versie en toont bovenin de banner **"Nieuwe versie beschikbaar → Nu bijwerken"**.
-- **In de Android APK:** `@capgo/capacitor-updater` (100% self-hosted op GitHub Pages, geen betaald account nodig) downloadt `ota/web-bundle.zip` op de achtergrond en past de update met 1 tik toe zonder nieuwe APK te installeren — terwijl de app volledig **offline-first** blijft werken.
+#### 1. Automatische updates zonder nieuwe APK (*WebView OTA*)
+Bij elke push naar `main` controleert [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) via [`scripts/detect-apk-changes.mjs`](scripts/detect-apk-changes.mjs) automatisch of er alleen webwijzigingen zijn of ook native APK-wijzigingen:
+- **Alleen webwijzigingen:** Er wordt géén nieuwe APK gebouwd. De workflow publiceert direct de GitHub Pages PWA + `ota/web-bundle.zip` + `version.json`:
+  - **Op de PWA (Web):** Angular `SwUpdate` detecteert direct de nieuwe versie en toont bovenin de banner **"Nieuwe versie beschikbaar → Nu bijwerken"**.
+  - **In de Android APK:** `@capgo/capacitor-updater` (100% self-hosted op GitHub Pages, geen betaald account nodig) downloadt `ota/web-bundle.zip` op de achtergrond en zet deze klaar met `next()`, zodat de WebView vanzelf of met 1 tik bijwerkt — terwijl de app volledig **offline-first** blijft werken.
 
-#### 2. Nieuwe Android APK bouwen & direct downloaden
-Wanneer je een nieuwe APK wilt uitbrengen (bijvoorbeeld zodra je later Android-only plugins toevoegt zoals `@capacitor/local-notifications` of een Android home-screen widget):
-1. Verhoog `"version"` (en bij verplicht nieuwe native plugins ook `"pokebinder.minNativeVersion"`) in `package.json`.
-2. Push een tag (bijv. `git tag v1.1.0 && git push origin v1.1.0`) **óf** klik op GitHub bij **Actions → Build & Release Android APK → Run workflow**.
-3. GitHub Actions bouwt de APK volledig in de cloud (zonder dat je lokaal Android Studio nodig hebt) en publiceert deze automatisch onder **GitHub Releases** met de vaste directe downloadlink:
+#### 2. Automatische Android APK-release bij native wijzigingen
+Zodra op `main` bestanden onder `android/`, `capacitor.config.*`, native `@capacitor/*`/`@capgo/*`-dependencies in `package.json`, `pokebinder.minNativeVersion` of `package.json` `version` wijzigen sinds de laatste `v*`-tag, roept [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) automatisch [`.github/workflows/android-apk.yml`](.github/workflows/android-apk.yml) aan **voordat** `version.json` live gaat:
+1. De nieuwe APK-versie wordt automatisch bepaald (handmatige hogere `"version"` in `package.json`, of automatisch een patch-bump zoals `1.0.2 → 1.0.3`).
+2. GitHub Actions bouwt de APK volledig in de cloud, maakt automatisch een nieuwe `v*`-tag + GitHub Release met de vaste directe downloadlink:
    **`https://github.com/remcovolkers/jbm-pokemoncard-collection/releases/latest/download/pokebinder-release.apk`**
-4. Gebruikers met een oudere APK zien automatisch een melding **"Nieuwe Android-app (APK) beschikbaar"** met een 1-klik **APK downloaden**-knop (ook altijd bereikbaar onder **Meer → Instellingen → App-versie & Android APK**).
+3. Pas daarna wordt `version.json` op GitHub Pages bijgewerkt, zodat gebruikers met een oudere APK direct de melding **"Nieuwe Android-app (APK) beschikbaar"** zien met een 1-klik **APK downloaden**-knop (ook altijd bereikbaar onder **Meer → Instellingen → App-versie & Android APK**).
+4. Handmatig releasen kan nog steeds via een `git tag vX.Y.Z` push of **Actions → Build & Release Android APK → Run workflow**.
 
 *(Optioneel voor permanente Play Store / upgrade-signing: voeg in GitHub Settings → Secrets de variabelen `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` en `ANDROID_KEY_PASSWORD` toe. Zonder secrets tekent de workflow de APK automatisch met de debug keystore zodat je hem direct kunt delen en installeren.)*
 
