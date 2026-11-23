@@ -1,5 +1,10 @@
 import { Injectable, computed, effect, inject, signal } from '@angular/core';
-import { buildTcgdexAssetUrl } from '../domain/card-id.utils';
+import {
+  buildTcgdexAssetUrl,
+  getDisplaySetCode,
+  inferCardIdFromSetAndNumber,
+  resolveCardArtworkUrl,
+} from '../domain/card-id.utils';
 import {
   calculateBinderPosition,
   calculatePortfolioSummary,
@@ -9,10 +14,12 @@ import {
   AppConnectionConfig,
   AppSnapshot,
   BinderSlotsPerPage,
+  CatalogSetSummary,
   CollectionCard,
   DEFAULT_DROPDOWN_SETTINGS,
   PendingMutation,
   PokedexSlot,
+  SetProgress,
   SheetProfile,
   ToastMessage,
   TradeEntry,
@@ -37,6 +44,8 @@ import { LocalCacheAdapter, PackOpeningDefaults } from '../adapters/local-cache.
 
 export type SyncStatus = 'synced' | 'syncing' | 'offline' | 'demo' | 'unconfigured' | 'error';
 
+const WISHLIST_ARTWORK_CACHE_KEY = 'pokebinder_wishlist_artwork_v1';
+
 @Injectable({ providedIn: 'root' })
 export class CollectionStore {
   private readonly repo = inject(COLLECTION_REPOSITORY);
@@ -44,6 +53,15 @@ export class CollectionStore {
   private readonly cache = inject(LocalCacheAdapter);
 
   private deviceBinderLayout: BinderSlotsPerPage | null = this.cache.loadBinderLayoutPreference();
+  private localRevision = 0;
+  private mutationChain: Promise<void> = Promise.resolve();
+  private activeSyncCount = 0;
+  private tempRowCounter = 0;
+  private setsCatalogCache: CatalogSetSummary[] = [];
+  private wishlistArtworkCache: Record<string, { cardId?: string; imageUrl?: string }> =
+    this.loadWishlistArtworkCache();
+  private wishlistLookupAttempted = new Set<string>();
+  private isHydratingWishlist = false;
 
   // Core Reactive Signals
   readonly config = signal<AppConnectionConfig>(this.cache.loadConfig());
@@ -183,7 +201,7 @@ export class CollectionStore {
         Array.isArray(demoCached.pokedex) &&
         demoCached.pokedex.length > 0
       ) {
-        return this.applyDeviceBinderLayout(this.hydrateArtwork(demoCached));
+        return this.reconcileSetProgress(this.applyDeviceBinderLayout(this.hydrateArtwork(demoCached)));
       }
       return this.applyDeviceBinderLayout(createDemoSnapshot());
     }
@@ -199,7 +217,7 @@ export class CollectionStore {
       Array.isArray(liveCached.pokedex) &&
       liveCached.pokedex.length > 0
     ) {
-      return this.applyDeviceBinderLayout(this.hydrateArtwork(liveCached));
+      return this.reconcileSetProgress(this.applyDeviceBinderLayout(this.hydrateArtwork(liveCached)));
     }
     return this.applyDeviceBinderLayout(createEmptySnapshot());
   }
@@ -220,22 +238,132 @@ export class CollectionStore {
   }
 
   private reconcileRemoteSnapshot(remote: AppSnapshot): AppSnapshot {
-    return this.applyDeviceBinderLayout(this.hydrateArtwork(remote));
+    const currentWishlist = this.snapshot?.()?.wishlist;
+    return this.reconcileSetProgress(
+      this.applyDeviceBinderLayout(this.hydrateArtwork(remote, currentWishlist))
+    );
   }
 
-  private hydrateArtwork(snap: AppSnapshot): AppSnapshot {
+  private hydrateArtwork(snap: AppSnapshot, previousWishlist?: WishlistItem[]): AppSnapshot {
     return {
       ...snap,
       collection: snap.collection.map((c) => ({
         ...c,
-        imageUrl: c.imageUrl || this.catalog.getCachedArtworkUrl(c.cardId) || buildTcgdexAssetUrl(c.cardId, 'high'),
-      })),
-      wishlist: snap.wishlist.map((w) => ({
-        ...w,
         imageUrl:
-          w.imageUrl ||
-          (w.cardId ? this.catalog.getCachedArtworkUrl(w.cardId) || buildTcgdexAssetUrl(w.cardId, 'high') : undefined),
+          c.imageUrl ||
+          (c.cardId ? this.catalog.getCachedArtworkUrl(c.cardId) || resolveCardArtworkUrl(c.cardId, undefined, 'high') : undefined),
       })),
+      wishlist: snap.wishlist.map((w) => {
+        const key = this.wishlistCacheKey(w);
+        const prevMatch = previousWishlist?.find(
+          (p) => (w.rowIndex >= 2 && p.rowIndex === w.rowIndex) || this.wishlistCacheKey(p) === key
+        );
+        const cached = this.wishlistArtworkCache[key];
+
+        const resolvedCardId =
+          w.cardId?.trim() ||
+          prevMatch?.cardId?.trim() ||
+          cached?.cardId ||
+          inferCardIdFromSetAndNumber(w.setName, w.cardNumber, this.setsCatalogCache) ||
+          undefined;
+
+        const resolvedImageUrl =
+          w.imageUrl?.trim() ||
+          prevMatch?.imageUrl?.trim() ||
+          cached?.imageUrl ||
+          (resolvedCardId
+            ? this.catalog.getCachedArtworkUrl(resolvedCardId) || resolveCardArtworkUrl(resolvedCardId, undefined, 'high')
+            : undefined);
+
+        return {
+          ...w,
+          cardId: resolvedCardId,
+          imageUrl: resolvedImageUrl,
+        };
+      }),
+    };
+  }
+
+  private reconcileSetProgress(snap: AppSnapshot): AppSnapshot {
+    const collectionBySet = new Map<string, CollectionCard[]>();
+    for (const c of snap.collection) {
+      const key = c.setName.trim().toLowerCase();
+      if (!key) continue;
+      const bucket = collectionBySet.get(key);
+      if (bucket) bucket.push(c);
+      else collectionBySet.set(key, [c]);
+    }
+
+    const seenKeys = new Set<string>();
+    const reconciled: SetProgress[] = snap.setProgress.map((s) => {
+      const key = s.setName.trim().toLowerCase();
+      seenKeys.add(key);
+      const cardsInSet = collectionBySet.get(key) ?? [];
+      const setCode =
+        s.setCode ||
+        (cardsInSet[0]?.cardId ? getDisplaySetCode(cardsInSet[0].cardId, s.setName) : undefined);
+
+      if (cardsInSet.length === 0) {
+        return { ...s, setCode };
+      }
+
+      const uniqueIds = new Set(
+        cardsInSet.map((c) => (c.cardId || `${c.name}-${c.cardNumber}`).toLowerCase())
+      );
+      const computedOwned = uniqueIds.size;
+      const computedValue = roundCurrency(
+        cardsInSet.reduce((sum, c) => sum + (c.marketPrice || 0) * Math.max(1, c.quantity || 1), 0)
+      );
+
+      const ownedUnique = s.ownedUnique > 0 ? s.ownedUnique : computedOwned;
+      const totalCards = Math.max(s.totalCards, ownedUnique);
+      const remaining = Math.max(0, totalCards - ownedUnique);
+      const progressPercent =
+        s.ownedUnique > 0 && s.progressPercent > 0
+          ? s.progressPercent
+          : totalCards > 0
+            ? Math.round((ownedUnique / totalCards) * 1000) / 10
+            : 0;
+      const totalSetValue = computedValue > 0 ? computedValue : s.totalSetValue;
+
+      return {
+        ...s,
+        setCode,
+        ownedUnique,
+        totalCards,
+        remaining,
+        progressPercent,
+        totalSetValue,
+      };
+    });
+
+    for (const [key, cardsInSet] of collectionBySet.entries()) {
+      if (seenKeys.has(key) || cardsInSet.length === 0) continue;
+      const sample = cardsInSet[0];
+      const uniqueIds = new Set(
+        cardsInSet.map((c) => (c.cardId || `${c.name}-${c.cardNumber}`).toLowerCase())
+      );
+      const ownedUnique = uniqueIds.size;
+      const denom = parseInt((sample.cardNumber.split('/')[1] || '0').replace(/\D/g, ''), 10) || 100;
+      const totalCards = Math.max(denom, ownedUnique);
+      const totalSetValue = roundCurrency(
+        cardsInSet.reduce((sum, c) => sum + (c.marketPrice || 0) * Math.max(1, c.quantity || 1), 0)
+      );
+      reconciled.push({
+        setName: sample.setName.trim(),
+        setCode: sample.cardId ? getDisplaySetCode(sample.cardId, sample.setName) : undefined,
+        series: 'Pokémon TCG',
+        totalCards,
+        ownedUnique,
+        remaining: Math.max(0, totalCards - ownedUnique),
+        progressPercent: totalCards > 0 ? Math.round((ownedUnique / totalCards) * 1000) / 10 : 0,
+        totalSetValue,
+      });
+    }
+
+    return {
+      ...snap,
+      setProgress: reconciled,
     };
   }
 
@@ -250,13 +378,17 @@ export class CollectionStore {
     this.config.set(next);
 
     if (partial.demoMode === true && !prev.demoMode) {
+      this.bumpLocalRevision();
       const demoCached = this.cache.loadDemoSnapshot();
       this.snapshot.set(
-        this.applyDeviceBinderLayout(demoCached ? this.hydrateArtwork(demoCached) : createDemoSnapshot())
+        demoCached
+          ? this.reconcileSetProgress(this.applyDeviceBinderLayout(this.hydrateArtwork(demoCached)))
+          : this.applyDeviceBinderLayout(createDemoSnapshot())
       );
       this.lastError.set(null);
       this.showToast('Demo-modus ingeschakeld met voorbeeldcollectie.', 'info');
     } else if (!next.demoMode && !hasSheet) {
+      this.bumpLocalRevision();
       // Geen spreadsheet gekoppeld -> geen demodata tonen, maar schone lege staat
       this.snapshot.set(this.applyDeviceBinderLayout(createEmptySnapshot()));
       this.lastError.set(null);
@@ -267,10 +399,11 @@ export class CollectionStore {
         );
       }
     } else if (partial.demoMode === false && prev.demoMode && hasSheet) {
+      this.bumpLocalRevision();
       const liveCached = this.cache.loadSnapshot(next.activeProfileId);
       this.snapshot.set(
         liveCached
-          ? this.applyDeviceBinderLayout(this.hydrateArtwork(liveCached))
+          ? this.reconcileSetProgress(this.applyDeviceBinderLayout(this.hydrateArtwork(liveCached)))
           : this.applyDeviceBinderLayout(createEmptySnapshot())
       );
       void this.syncFromRemote();
@@ -307,6 +440,7 @@ export class CollectionStore {
     if (activate) {
       const switched = prev.activeProfileId !== profile.id;
       if (switched) {
+        this.bumpLocalRevision();
         this.pendingQueue.set([]);
       }
       this.lastError.set(null);
@@ -325,7 +459,9 @@ export class CollectionStore {
       if (switched && !nextDemo) {
         const cached = this.cache.loadSnapshot(profile.id);
         this.snapshot.set(
-          this.applyDeviceBinderLayout(cached ? this.hydrateArtwork(cached) : createEmptySnapshot())
+          cached
+            ? this.reconcileSetProgress(this.applyDeviceBinderLayout(this.hydrateArtwork(cached)))
+            : this.applyDeviceBinderLayout(createEmptySnapshot())
         );
       }
     } else {
@@ -350,6 +486,7 @@ export class CollectionStore {
     const changedProfile = prev.activeProfileId !== profile.id;
     this.lastError.set(null);
     if (changedProfile) {
+      this.bumpLocalRevision();
       this.pendingQueue.set([]);
     }
 
@@ -364,7 +501,9 @@ export class CollectionStore {
 
     const cached = this.cache.loadSnapshot(profile.id);
     this.snapshot.set(
-      this.applyDeviceBinderLayout(cached ? this.hydrateArtwork(cached) : createEmptySnapshot())
+      cached
+        ? this.reconcileSetProgress(this.applyDeviceBinderLayout(this.hydrateArtwork(cached)))
+        : this.applyDeviceBinderLayout(createEmptySnapshot())
     );
 
     this.showToast(
@@ -383,6 +522,7 @@ export class CollectionStore {
     this.cache.removeProfileSnapshot(profileId);
 
     if (prev.activeProfileId === profileId) {
+      this.bumpLocalRevision();
       this.pendingQueue.set([]);
       this.lastError.set(null);
 
@@ -399,7 +539,9 @@ export class CollectionStore {
         if (!prev.demoMode) {
           const cached = this.cache.loadSnapshot(fallback.id);
           this.snapshot.set(
-            this.applyDeviceBinderLayout(cached ? this.hydrateArtwork(cached) : createEmptySnapshot())
+            cached
+              ? this.reconcileSetProgress(this.applyDeviceBinderLayout(this.hydrateArtwork(cached)))
+              : this.applyDeviceBinderLayout(createEmptySnapshot())
           );
           void this.syncFromRemote(true);
         }
@@ -450,12 +592,16 @@ export class CollectionStore {
       return false;
     }
 
-    this.isSyncing.set(true);
+    this.beginSync();
     this.lastError.set(null);
     try {
-      await this.flushOfflineQueue(true);
+      await this.mutationChain.catch(() => undefined);
+      await this.flushOfflineQueueInternal(true);
+      const revBefore = this.localRevision;
       const remote = await this.repo.bootstrap(cfg);
-      this.snapshot.set(this.reconcileRemoteSnapshot(remote));
+      if (this.canApplyRemoteSnapshot(revBefore)) {
+        this.snapshot.set(this.reconcileRemoteSnapshot(remote));
+      }
       if (!silent) this.showToast('Google Sheets succesvol gesynchroniseerd!', 'success');
       return true;
     } catch (err) {
@@ -464,13 +610,13 @@ export class CollectionStore {
       if (!silent) this.showToast(msg, 'error');
       return false;
     } finally {
-      this.isSyncing.set(false);
+      this.endSync();
     }
   }
 
   async refreshPrices(): Promise<void> {
     const cfg = this.config();
-    this.isSyncing.set(true);
+    this.beginSync();
     try {
       if (cfg.demoMode) {
         // In demo-modus verversen we direct live EUR-prijzen via TCGdex voor maximaal 12 kaarten!
@@ -500,17 +646,22 @@ export class CollectionStore {
         return;
       }
 
+      await this.mutationChain.catch(() => undefined);
+      const revBefore = this.localRevision;
       const result = await this.repo.refreshPrices(cfg);
-      this.snapshot.set(this.reconcileRemoteSnapshot(result.snapshot));
+      if (this.canApplyRemoteSnapshot(revBefore)) {
+        this.snapshot.set(this.reconcileRemoteSnapshot(result.snapshot));
+      }
       this.showToast(`${result.updated} van ${result.total} kaartprijzen bijgewerkt in Google Sheets.`, 'success');
     } catch (err) {
       this.showToast(err instanceof Error ? err.message : 'Prijzen verversen mislukt.', 'error');
     } finally {
-      this.isSyncing.set(false);
+      this.endSync();
     }
   }
 
   clearOfflineCache(): void {
+    this.bumpLocalRevision();
     this.cache.clearDataCaches();
     this.pendingQueue.set([]);
     if (this.config().demoMode) {
@@ -531,7 +682,7 @@ export class CollectionStore {
 
   async addCard(payload: AddCardPayload): Promise<void> {
     const today = new Date().toISOString().slice(0, 10);
-    const nextRowIndex = this.getNextLocalRowIndex(this.collection().map((c) => c.rowIndex));
+    const nextRowIndex = this.allocateLocalRowIndex(this.collection().map((c) => c.rowIndex));
     const newCard: CollectionCard = {
       rowIndex: nextRowIndex,
       cardId: (payload.cardId ?? '').trim(),
@@ -551,7 +702,7 @@ export class CollectionStore {
       purchaseDate: payload.purchaseDate ?? today,
       purchasePrice: roundCurrency(Math.max(0, Number(payload.purchasePrice) || 0)),
       marketPrice: roundCurrency(payload.marketPrice ?? 0),
-      imageUrl: payload.imageUrl || buildTcgdexAssetUrl(payload.cardId ?? '', 'high'),
+      imageUrl: payload.imageUrl || resolveCardArtworkUrl(payload.cardId ?? '', undefined, 'high'),
       trendPercent: payload.trendPercent,
       forTrade: Boolean(payload.forTrade),
       acquisitionMethod: (payload.acquisitionMethod ?? '').trim(),
@@ -559,6 +710,7 @@ export class CollectionStore {
     };
 
     const nextCollection = [newCard, ...this.collection()];
+    this.bumpLocalRevision();
     this.applyLocalSnapshotUpdate({
       collection: nextCollection,
       addedSetMeta:
@@ -593,6 +745,7 @@ export class CollectionStore {
     const nextCollection = this.collection().map((card) =>
       card.rowIndex === rowIndex && card.cardId === cardId ? { ...card, ...normalizedPatch } : card
     );
+    this.bumpLocalRevision();
     this.applyLocalSnapshotUpdate({ collection: nextCollection });
 
     const payload = { rowIndex, cardId, ...normalizedPatch };
@@ -614,6 +767,7 @@ export class CollectionStore {
     const nextCollection = this.collection().filter(
       (c) => !(c.rowIndex === card.rowIndex && c.cardId === card.cardId)
     );
+    this.bumpLocalRevision();
     this.applyLocalSnapshotUpdate({ collection: nextCollection });
 
     const payload = { rowIndex: card.rowIndex, cardId: card.cardId };
@@ -663,6 +817,7 @@ export class CollectionStore {
       };
     });
 
+    this.bumpLocalRevision();
     this.snapshot.set({
       ...current,
       binderSlotsPerPage: nextSpp,
@@ -689,14 +844,27 @@ export class CollectionStore {
   // ==========================================================================
 
   async addWishlistItem(item: Omit<WishlistItem, 'rowIndex' | 'found'>): Promise<void> {
-    const nextRow = this.getNextLocalRowIndex(this.wishlist().map((w) => w.rowIndex));
+    const nextRow = this.allocateLocalRowIndex(this.wishlist().map((w) => w.rowIndex));
+    const inferredCardId =
+      item.cardId?.trim() ||
+      inferCardIdFromSetAndNumber(item.setName, item.cardNumber, this.setsCatalogCache) ||
+      undefined;
+    const resolvedImageUrl =
+      item.imageUrl ||
+      (inferredCardId
+        ? this.catalog.getCachedArtworkUrl(inferredCardId) || resolveCardArtworkUrl(inferredCardId, undefined, 'high')
+        : undefined);
+
     const newItem: WishlistItem = {
       ...item,
+      cardId: inferredCardId,
       rowIndex: nextRow,
       found: false,
-      imageUrl: item.imageUrl || (item.cardId ? buildTcgdexAssetUrl(item.cardId, 'high') : undefined),
+      imageUrl: resolvedImageUrl,
     };
 
+    this.rememberWishlistArtwork(newItem);
+    this.bumpLocalRevision();
     this.snapshot.update((snap) => ({
       ...snap,
       wishlist: [newItem, ...snap.wishlist],
@@ -705,9 +873,9 @@ export class CollectionStore {
 
     await this.dispatchRemoteMutation(
       'addWishlist',
-      item as Record<string, unknown>,
+      { ...item, cardId: inferredCardId } as Record<string, unknown>,
       `Verlanglijst: ${item.cardName}`,
-      () => this.repo.addWishlist(this.config(), item)
+      () => this.repo.addWishlist(this.config(), { ...item, cardId: inferredCardId })
     );
     this.showToast(`${item.cardName} toegevoegd aan Verlanglijst.`, 'success');
   }
@@ -742,10 +910,11 @@ export class CollectionStore {
         }
       : undefined;
 
+    this.bumpLocalRevision();
     if (cardPayload) {
       const nextCollection: CollectionCard[] = [
         {
-          rowIndex: this.getNextLocalRowIndex(this.collection().map((c) => c.rowIndex)),
+          rowIndex: this.allocateLocalRowIndex(this.collection().map((c) => c.rowIndex)),
           cardId: cardPayload.cardId!,
           name: cardPayload.name!,
           setName: cardPayload.setName!,
@@ -800,10 +969,11 @@ export class CollectionStore {
     const netResult = roundCurrency(entry.saleValue - entry.purchasePrice - entry.platformFees);
     const newEntry: TradeEntry = {
       ...entry,
-      rowIndex: this.getNextLocalRowIndex(this.trades().map((t) => t.rowIndex), 22),
+      rowIndex: this.allocateLocalRowIndex(this.trades().map((t) => t.rowIndex), 22),
       netResult,
     };
 
+    this.bumpLocalRevision();
     this.snapshot.update((snap) => ({
       ...snap,
       trades: [newEntry, ...snap.trades],
@@ -819,63 +989,177 @@ export class CollectionStore {
     this.showToast(`Transactie voor ${entry.cardName} gelogd.`, 'success');
   }
 
+  /**
+   * Vult ontbrekende cardId/imageUrl op de verlanglijst aan vanuit sets-catalogus of naamzoekopdracht.
+   */
+  async hydrateWishlistArtworkFromCatalog(): Promise<void> {
+    if (this.isHydratingWishlist) return;
+    const currentWishlist = this.wishlist();
+    if (!currentWishlist.some((w) => !w.imageUrl || !w.cardId)) return;
+
+    this.isHydratingWishlist = true;
+    try {
+      if (this.setsCatalogCache.length === 0 && this.catalog.listAllSets) {
+        this.setsCatalogCache = await this.catalog.listAllSets().catch(() => []);
+      }
+
+      let changed = false;
+      const updated = await Promise.all(
+        this.wishlist().map(async (w) => {
+          const cacheKey = this.wishlistCacheKey(w);
+          const cached = this.wishlistArtworkCache[cacheKey];
+
+          let cardId =
+            w.cardId?.trim() ||
+            cached?.cardId ||
+            inferCardIdFromSetAndNumber(w.setName, w.cardNumber, this.setsCatalogCache) ||
+            undefined;
+          let imageUrl =
+            w.imageUrl?.trim() ||
+            cached?.imageUrl ||
+            (cardId
+              ? this.catalog.getCachedArtworkUrl(cardId) || resolveCardArtworkUrl(cardId, undefined, 'high')
+              : undefined);
+
+          if (!imageUrl && w.cardName.trim().length >= 2 && !this.wishlistLookupAttempted.has(cacheKey)) {
+            this.wishlistLookupAttempted.add(cacheKey);
+            try {
+              const results = await this.catalog.searchByName(w.cardName.trim(), 6);
+              const wantedLocal = (w.cardNumber || '').trim().split('/')[0].replace(/^#/, '').trim();
+              const wantedUnpadded = /^\d+$/.test(wantedLocal)
+                ? String(parseInt(wantedLocal, 10))
+                : wantedLocal.toLowerCase();
+
+              const matched =
+                (wantedLocal
+                  ? results.find((r) => {
+                      const rl = r.localId.trim().toLowerCase();
+                      const ru = /^\d+$/.test(rl) ? String(parseInt(rl, 10)) : rl;
+                      return rl === wantedLocal.toLowerCase() || ru === wantedUnpadded;
+                    })
+                  : undefined) ?? results.find((r) => Boolean(r.imageUrl)) ?? results[0];
+
+              if (matched) {
+                cardId = cardId || matched.id;
+                imageUrl = resolveCardArtworkUrl(matched.id, matched.imageBase, 'high') || matched.imageUrl;
+              }
+            } catch {
+              // Offline / lookup mislukt: behoud huidige state
+            }
+          }
+
+          if (cardId || imageUrl) {
+            this.rememberWishlistArtwork({ ...w, cardId, imageUrl });
+          }
+
+          if (cardId !== w.cardId || imageUrl !== w.imageUrl) {
+            changed = true;
+            return { ...w, cardId, imageUrl };
+          }
+          return w;
+        })
+      );
+
+      if (changed) {
+        this.snapshot.update((snap) => ({
+          ...snap,
+          wishlist: updated,
+        }));
+      }
+    } finally {
+      this.isHydratingWishlist = false;
+    }
+  }
+
+  applyRemoteFeedbackSnapshot(remote: AppSnapshot): void {
+    if (this.activeSyncCount === 0 && this.pendingQueue().length === 0) {
+      this.snapshot.set(this.reconcileRemoteSnapshot(remote));
+    } else if (remote.feedback) {
+      this.snapshot.update((snap) => ({
+        ...snap,
+        feedback: remote.feedback,
+      }));
+    }
+  }
+
   // ==========================================================================
   // OFFLINE QUEUE & TOASTS
   // ==========================================================================
 
   async flushOfflineQueue(silent = false): Promise<void> {
+    const run = async (): Promise<void> => {
+      await this.flushOfflineQueueInternal(silent);
+    };
+    const chained = this.mutationChain.then(run, run);
+    this.mutationChain = chained.catch(() => undefined);
+    await chained;
+  }
+
+  private async flushOfflineQueueInternal(silent = false): Promise<void> {
     const cfg = this.config();
     if (cfg.demoMode || !this.isOnline() || !cfg.webAppUrl || !cfg.apiToken) return;
     const queue = this.pendingQueue();
     if (!queue.length) return;
 
+    this.beginSync();
+    const revBefore = this.localRevision;
     const remaining: PendingMutation[] = [];
-    for (const item of queue) {
-      try {
-        let updatedSnap: AppSnapshot | null = null;
-        switch (item.action) {
-          case 'addCard':
-            updatedSnap = await this.repo.addCard(cfg, item.payload as AddCardPayload);
-            break;
-          case 'updateCard':
-            updatedSnap = await this.repo.updateCard(cfg, item.payload as Partial<CollectionCard>);
-            break;
-          case 'deleteCard':
-            updatedSnap = await this.repo.deleteCard(cfg, item.payload as { rowIndex?: number; cardId?: string });
-            break;
-          case 'updatePokedexSlot':
-            updatedSnap = await this.repo.updatePokedexSlot(cfg, item.payload as UpdatePokedexSlotPayload);
-            break;
-          case 'addWishlist':
-            updatedSnap = await this.repo.addWishlist(
-              cfg,
-              item.payload as unknown as Omit<WishlistItem, 'rowIndex' | 'found'>
-            );
-            break;
-          case 'markWishlistFound':
-            updatedSnap = await this.repo.markWishlistFound(
-              cfg,
-              item.payload as unknown as MarkWishlistFoundPayload
-            );
-            break;
-          case 'logTrade':
-            updatedSnap = await this.repo.logTrade(
-              cfg,
-              item.payload as unknown as Omit<TradeEntry, 'rowIndex' | 'netResult'>
-            );
-            break;
+    let lastUpdatedSnap: AppSnapshot | null = null;
+    try {
+      for (const item of queue) {
+        try {
+          switch (item.action) {
+            case 'addCard':
+              lastUpdatedSnap = await this.repo.addCard(cfg, item.payload as AddCardPayload);
+              break;
+            case 'updateCard':
+              lastUpdatedSnap = await this.repo.updateCard(cfg, item.payload as Partial<CollectionCard>);
+              break;
+            case 'deleteCard':
+              lastUpdatedSnap = await this.repo.deleteCard(
+                cfg,
+                item.payload as { rowIndex?: number; cardId?: string }
+              );
+              break;
+            case 'updatePokedexSlot':
+              lastUpdatedSnap = await this.repo.updatePokedexSlot(
+                cfg,
+                item.payload as UpdatePokedexSlotPayload
+              );
+              break;
+            case 'addWishlist':
+              lastUpdatedSnap = await this.repo.addWishlist(
+                cfg,
+                item.payload as unknown as Omit<WishlistItem, 'rowIndex' | 'found'>
+              );
+              break;
+            case 'markWishlistFound':
+              lastUpdatedSnap = await this.repo.markWishlistFound(
+                cfg,
+                item.payload as unknown as MarkWishlistFoundPayload
+              );
+              break;
+            case 'logTrade':
+              lastUpdatedSnap = await this.repo.logTrade(
+                cfg,
+                item.payload as unknown as Omit<TradeEntry, 'rowIndex' | 'netResult'>
+              );
+              break;
+          }
+        } catch {
+          remaining.push(item);
         }
-        if (updatedSnap) {
-          this.snapshot.set(this.reconcileRemoteSnapshot(updatedSnap));
-        }
-      } catch {
-        remaining.push(item);
       }
-    }
 
-    this.pendingQueue.set(remaining);
-    if (!silent && remaining.length === 0) {
-      this.showToast(`${queue.length} offline wijziging(en) gesynchroniseerd met Google Sheets!`, 'success');
+      this.pendingQueue.set(remaining);
+      if (lastUpdatedSnap && remaining.length === 0 && this.localRevision === revBefore) {
+        this.snapshot.set(this.reconcileRemoteSnapshot(lastUpdatedSnap));
+      }
+      if (!silent && remaining.length === 0) {
+        this.showToast(`${queue.length} offline wijziging(en) gesynchroniseerd met Google Sheets!`, 'success');
+      }
+    } finally {
+      this.endSync();
     }
   }
 
@@ -951,18 +1235,94 @@ export class CollectionStore {
       return;
     }
 
-    this.isSyncing.set(true);
-    this.lastError.set(null);
+    const myRevision = this.localRevision;
+    const run = async (): Promise<void> => {
+      this.beginSync();
+      this.lastError.set(null);
+      try {
+        if (this.pendingQueue().length > 0) {
+          await this.flushOfflineQueueInternal(true);
+        }
+        if (this.pendingQueue().length > 0) {
+          this.enqueueMutation(action, payload, description);
+          return;
+        }
+        const updated = await remoteCall();
+        if (this.canApplyRemoteSnapshot(myRevision)) {
+          this.snapshot.set(this.reconcileRemoteSnapshot(updated));
+        }
+      } catch (err) {
+        this.enqueueMutation(action, payload, description);
+        const msg = err instanceof Error ? err.message : 'Kon wijziging niet direct naar Sheets sturen.';
+        this.lastError.set(msg);
+        this.showToast('Lokaal bijgewerkt; opgeslagen in sync-wachtrij.', 'warning');
+      } finally {
+        this.endSync();
+      }
+    };
+
+    const chained = this.mutationChain.then(run, run);
+    this.mutationChain = chained.catch(() => undefined);
+    await chained;
+  }
+
+  private beginSync(): void {
+    this.activeSyncCount++;
+    this.isSyncing.set(this.activeSyncCount > 0);
+  }
+
+  private endSync(): void {
+    this.activeSyncCount = Math.max(0, this.activeSyncCount - 1);
+    this.isSyncing.set(this.activeSyncCount > 0);
+  }
+
+  private bumpLocalRevision(): number {
+    return ++this.localRevision;
+  }
+
+  private canApplyRemoteSnapshot(expectedRevision: number): boolean {
+    return this.localRevision === expectedRevision && this.pendingQueue().length === 0;
+  }
+
+  private allocateLocalRowIndex(existing: number[], startAt = 2): number {
+    const cfg = this.config();
+    if (!cfg.demoMode && this.isSheetConfigured()) {
+      return --this.tempRowCounter;
+    }
+    return this.getNextLocalRowIndex(existing, startAt);
+  }
+
+  private wishlistCacheKey(w: Pick<WishlistItem, 'cardName' | 'setName' | 'cardNumber'>): string {
+    return `${(w.setName || '').trim().toLowerCase()}|${(w.cardNumber || '').trim().toLowerCase()}|${(w.cardName || '').trim().toLowerCase()}`;
+  }
+
+  private rememberWishlistArtwork(
+    w: Pick<WishlistItem, 'cardName' | 'setName' | 'cardNumber' | 'cardId' | 'imageUrl'>
+  ): void {
+    if (!w.cardId && !w.imageUrl) return;
+    const key = this.wishlistCacheKey(w);
+    const prev = this.wishlistArtworkCache[key];
+    if (prev?.cardId === w.cardId && prev?.imageUrl === w.imageUrl) return;
+    this.wishlistArtworkCache[key] = {
+      cardId: w.cardId || prev?.cardId,
+      imageUrl: w.imageUrl || prev?.imageUrl,
+    };
     try {
-      const updated = await remoteCall();
-      this.snapshot.set(this.reconcileRemoteSnapshot(updated));
-    } catch (err) {
-      this.enqueueMutation(action, payload, description);
-      const msg = err instanceof Error ? err.message : 'Kon wijziging niet direct naar Sheets sturen.';
-      this.lastError.set(msg);
-      this.showToast('Lokaal bijgewerkt; opgeslagen in sync-wachtrij.', 'warning');
-    } finally {
-      this.isSyncing.set(false);
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(WISHLIST_ARTWORK_CACHE_KEY, JSON.stringify(this.wishlistArtworkCache));
+      }
+    } catch {
+      // negeer opslaglimiet
+    }
+  }
+
+  private loadWishlistArtworkCache(): Record<string, { cardId?: string; imageUrl?: string }> {
+    try {
+      if (typeof window === 'undefined') return {};
+      const raw = window.localStorage.getItem(WISHLIST_ARTWORK_CACHE_KEY);
+      return raw ? (JSON.parse(raw) as Record<string, { cardId?: string; imageUrl?: string }>) : {};
+    } catch {
+      return {};
     }
   }
 

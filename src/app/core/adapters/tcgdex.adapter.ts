@@ -70,6 +70,9 @@ interface TcgdexCardResponse {
       low?: number | null;
       'trend-holo'?: number | null;
       'avg7-holo'?: number | null;
+      'avg-holo'?: number | null;
+      'avg30-holo'?: number | null;
+      'low-holo'?: number | null;
     };
   };
 }
@@ -453,10 +456,27 @@ export class TcgdexAdapter implements CardCatalogPort {
     const avg7 = this.positiveNumber(cm.avg7);
     const avg30 = this.positiveNumber(cm.avg30);
     const avg = this.positiveNumber(cm.avg);
+    const avg1 = this.positiveNumber(cm.avg1);
     const low = this.positiveNumber(cm.low);
     const trendHolo = this.positiveNumber(cm['trend-holo']);
+    const avg7Holo = this.positiveNumber(cm['avg7-holo']);
+    const avg30Holo = this.positiveNumber(cm['avg30-holo']);
+    const avgHolo = this.positiveNumber(cm['avg-holo']);
+    const lowHolo = this.positiveNumber(cm['low-holo']);
 
-    const best = trend || avg7 || avg30 || avg || trendHolo || low || 0;
+    const best =
+      trend ||
+      avg7 ||
+      avg30 ||
+      avg ||
+      avg1 ||
+      trendHolo ||
+      avg7Holo ||
+      avg30Holo ||
+      avgHolo ||
+      low ||
+      lowHolo ||
+      0;
     let trendPercent: number | undefined;
     if (trend > 0 && avg30 > 0) {
       trendPercent = roundOneDecimal(((trend - avg30) / avg30) * 100);

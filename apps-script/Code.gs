@@ -709,9 +709,10 @@ function jsonResponse_(obj) {
 // ============================================================================
 
 function buildBootstrapPayload_(ss) {
+  var collection = readCollection_(ss);
   return {
-    collection: readCollection_(ss),
-    setProgress: readSetProgress_(ss),
+    collection: collection,
+    setProgress: readSetProgress_(ss, collection),
     pokedex: readPokedex_(ss),
     binderSlotsPerPage: readBinderSlotsPerPage_(ss),
     wishlist: readWishlist_(ss),
@@ -772,35 +773,103 @@ function readCollection_(ss) {
   return items;
 }
 
-function readSetProgress_(ss) {
+function readSetProgress_(ss, collection) {
+  var fallbackBySet = {};
+  if (collection && collection.length) {
+    for (var c = 0; c < collection.length; c++) {
+      var card = collection[c];
+      var setKey = String(card.setName || '').trim().toLowerCase();
+      if (!setKey) continue;
+      if (!fallbackBySet[setKey]) {
+        fallbackBySet[setKey] = {
+          setName: String(card.setName || '').trim(),
+          uniqueIds: {},
+          ownedUnique: 0,
+          totalSetValue: 0,
+          sampleCardNumber: String(card.cardNumber || '').trim()
+        };
+      }
+      var bucket = fallbackBySet[setKey];
+      var uid = String(card.cardId || (card.name + '-' + card.cardNumber)).toLowerCase();
+      if (!bucket.uniqueIds[uid]) {
+        bucket.uniqueIds[uid] = true;
+        bucket.ownedUnique++;
+      }
+      var qty = Math.max(1, toNumber_(card.quantity, 1));
+      bucket.totalSetValue += toNumber_(card.marketPrice, 0) * qty;
+    }
+  }
+
   var sheet = ss.getSheetByName(SHEET_NAMES.SET_PROGRESS);
-  if (!sheet) return [];
-  var lastRow = sheet.getLastRow();
-  if (lastRow < 2) return [];
-  var values = sheet.getRange(2, 1, lastRow - 1, 8).getValues();
   var sets = [];
+  var seenSets = {};
 
-  for (var i = 0; i < values.length; i++) {
-    var row = values[i];
-    var setName = String(row[0] || '').trim();
-    if (!setName) continue;
-    var totalCards = toNumber_(row[2], 0);
-    var ownedUnique = toNumber_(row[3], 0);
-    var remaining = toNumber_(row[4], Math.max(0, totalCards - ownedUnique));
-    var rawPct = toNumber_(row[5], totalCards > 0 ? ownedUnique / totalCards : 0);
-    var progressPercent = rawPct <= 1 && rawPct > 0 ? rawPct * 100 : rawPct;
+  if (sheet) {
+    var lastRow = sheet.getLastRow();
+    if (lastRow >= 2) {
+      var values = sheet.getRange(2, 1, lastRow - 1, 8).getValues();
+      for (var i = 0; i < values.length; i++) {
+        var row = values[i];
+        var setName = String(row[0] || '').trim();
+        if (!setName) continue;
+        var key = setName.toLowerCase();
+        seenSets[key] = true;
+        var fb = fallbackBySet[key];
 
+        var totalCards = toNumber_(row[2], 0);
+        var ownedUnique = toNumber_(row[3], 0);
+        if (ownedUnique === 0 && fb && fb.ownedUnique > 0) {
+          ownedUnique = fb.ownedUnique;
+        }
+        if (totalCards < ownedUnique) {
+          totalCards = ownedUnique;
+        }
+        var remaining = toNumber_(row[4], Math.max(0, totalCards - ownedUnique));
+        if (ownedUnique > 0 && remaining === 0 && totalCards > ownedUnique) {
+          remaining = Math.max(0, totalCards - ownedUnique);
+        }
+        var rawPct = toNumber_(row[5], totalCards > 0 ? ownedUnique / totalCards : 0);
+        var progressPercent = rawPct <= 1 && rawPct > 0 ? rawPct * 100 : rawPct;
+        if (progressPercent === 0 && ownedUnique > 0 && totalCards > 0) {
+          progressPercent = (ownedUnique / totalCards) * 100;
+        }
+        var totalSetValue = toNumber_(row[7], 0);
+        if (totalSetValue === 0 && fb && fb.totalSetValue > 0) {
+          totalSetValue = Math.round(fb.totalSetValue * 100) / 100;
+        }
+
+        sets.push({
+          rowIndex: i + 2,
+          setName: setName,
+          series: String(row[1] || '').trim(),
+          totalCards: totalCards,
+          ownedUnique: ownedUnique,
+          remaining: remaining,
+          progressPercent: Math.round(progressPercent * 10) / 10,
+          totalSetValue: totalSetValue
+        });
+      }
+    }
+  }
+
+  for (var fbKey in fallbackBySet) {
+    if (!Object.prototype.hasOwnProperty.call(fallbackBySet, fbKey) || seenSets[fbKey]) continue;
+    var missingFb = fallbackBySet[fbKey];
+    if (missingFb.ownedUnique <= 0) continue;
+    var denomParts = missingFb.sampleCardNumber.split('/');
+    var parsedDenom = denomParts.length > 1 ? parseInt(denomParts[1].replace(/\D/g, ''), 10) : 0;
+    var fbTotal = Math.max(parsedDenom || 100, missingFb.ownedUnique);
     sets.push({
-      rowIndex: i + 2,
-      setName: setName,
-      series: String(row[1] || '').trim(),
-      totalCards: totalCards,
-      ownedUnique: ownedUnique,
-      remaining: remaining,
-      progressPercent: Math.round(progressPercent * 10) / 10,
-      totalSetValue: toNumber_(row[7], 0)
+      setName: missingFb.setName,
+      series: 'Pokémon TCG',
+      totalCards: fbTotal,
+      ownedUnique: missingFb.ownedUnique,
+      remaining: Math.max(0, fbTotal - missingFb.ownedUnique),
+      progressPercent: fbTotal > 0 ? Math.round((missingFb.ownedUnique / fbTotal) * 1000) / 10 : 0,
+      totalSetValue: Math.round(missingFb.totalSetValue * 100) / 100
     });
   }
+
   return sets;
 }
 
@@ -847,7 +916,9 @@ function readWishlist_(ss) {
   if (!sheet) return [];
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return [];
-  var values = sheet.getRange(2, 1, lastRow - 1, 12).getValues();
+  var hasCol13 = !sheet.getLastColumn || sheet.getLastColumn() >= 13;
+  var numCols = hasCol13 ? 13 : 12;
+  var values = sheet.getRange(2, 1, lastRow - 1, numCols).getValues();
   var items = [];
 
   for (var i = 0; i < values.length; i++) {
@@ -856,8 +927,10 @@ function readWishlist_(ss) {
     if (!name) continue;
     var maxBudget = toNumber_(row[6], 0);
     var marketPrice = toNumber_(row[7], 0);
+    var cardId = hasCol13 ? String(row[12] || '').trim() : '';
     items.push({
       rowIndex: i + 2,
+      cardId: cardId || undefined,
       cardName: name,
       setName: String(row[1] || '').trim(),
       cardNumber: String(row[2] || '').trim(),
@@ -1198,6 +1271,15 @@ function handleUpdatePokedexSlot_(ss, payload) {
   return { updated: true };
 }
 
+function ensureWishlistCardIdColumn_(sheet) {
+  if (sheet.getMaxColumns && sheet.getMaxColumns() < 13 && sheet.insertColumnAfter) {
+    sheet.insertColumnAfter(sheet.getMaxColumns());
+  }
+  if (!String(sheet.getRange(1, 13).getValue() || '').trim()) {
+    sheet.getRange(1, 13).setValue('Kaart-ID');
+  }
+}
+
 function handleAddWishlist_(ss, payload) {
   var sheet = ss.getSheetByName(SHEET_NAMES.WISHLIST);
   if (!sheet) throw new Error('Tabblad "' + SHEET_NAMES.WISHLIST + '" niet gevonden.');
@@ -1215,6 +1297,13 @@ function handleAddWishlist_(ss, payload) {
     toNumber_(payload.marketPrice, 0)
   ]]);
   sheet.getRange(targetRow, 11, 1, 2).setValues([[String(payload.notes || '').trim(), false]]);
+
+  var cardId = String(payload.cardId || '').trim();
+  var alreadyHasCol13 = sheet.getLastColumn ? sheet.getLastColumn() >= 13 : false;
+  if (cardId || alreadyHasCol13) {
+    ensureWishlistCardIdColumn_(sheet);
+    sheet.getRange(targetRow, 13).setValue(cardId);
+  }
   return { rowIndex: targetRow };
 }
 
@@ -1444,6 +1533,34 @@ function ensureSetInProgress_(ss, setName, seriesName, totalCards, setId) {
     resolvedSeries,
     resolvedTotal
   ]]);
+
+  // Kopieer formules in D:H vanaf de bovenliggende rij als de nieuwe rij in D:H nog helemaal leeg is
+  if (nextRow > 2) {
+    try {
+      var prevRange = sheet.getRange(nextRow - 1, 4, 1, 5);
+      var targetRange = sheet.getRange(nextRow, 4, 1, 5);
+      if (prevRange.getFormulas && targetRange.getValues && prevRange.copyTo) {
+        var targetVals = targetRange.getValues()[0];
+        var targetFormulas = targetRange.getFormulas ? targetRange.getFormulas()[0] : [];
+        var isTargetEmpty = targetVals.every(function (v, idx) {
+          return String(v || '').trim() === '' && String(targetFormulas[idx] || '').trim() === '';
+        });
+        var prevFormulas = prevRange.getFormulas()[0];
+        var hasPrevFormula = prevFormulas.some(function (f) {
+          return String(f || '').indexOf('=') === 0;
+        });
+        if (isTargetEmpty && hasPrevFormula) {
+          if (SpreadsheetApp.CopyPasteType && SpreadsheetApp.CopyPasteType.PASTE_FORMULA) {
+            prevRange.copyTo(targetRange, SpreadsheetApp.CopyPasteType.PASTE_FORMULA, false);
+          } else {
+            prevRange.copyTo(targetRange);
+          }
+        }
+      }
+    } catch (e) {
+      // Negeer als copyTo/getFormulas niet ondersteund wordt
+    }
+  }
 }
 
 /**
@@ -1814,7 +1931,7 @@ function resolveCandidateCardIds_(rawInput, ss) {
 
   for (var i = 0; i < targetSets.length; i++) {
     var setId = targetSets[i];
-    var prefersPadded = /^(?:sv|me)\d|^30th/i.test(setId);
+    var prefersPadded = /^(?:sv|me)\d|^30th|^(?:svp|sve|mep|mee)$/i.test(setId);
     if (prefersPadded) {
       pushUnique(setId + '-' + padded3);
       pushUnique(setId + '-' + unpadded);

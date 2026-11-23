@@ -532,4 +532,70 @@ describe('FeedbackStore', () => {
     await hubStore.deleteItem(created);
     expect(hubStore.items().some((i) => i.id === created.id)).toBe(false);
   });
+
+  it('voorkomt dat overlappende Hub CRUD-acties of refreshHub verwijderde items terugzetten', async () => {
+    const itemA: FeedbackItem = {
+      id: 'fb-race-1',
+      createdAt: '2026-11-23T12:00:00Z',
+      page: 'Dashboard',
+      category: 'Idee',
+      title: 'Item A',
+      description: '',
+      status: 'open',
+      votes: 1,
+      author: 'Remco',
+      platform: 'Web',
+      source: 'hub',
+    };
+    const itemB: FeedbackItem = {
+      ...itemA,
+      id: 'fb-race-2',
+      title: 'Item B',
+    };
+
+    let serverList: FeedbackItem[] = [itemA, itemB];
+    let resolveFirstDelete!: (list: FeedbackItem[]) => void;
+    const firstDeletePromise = new Promise<FeedbackItem[]>((resolve) => {
+      resolveFirstDelete = resolve;
+    });
+
+    const hubMock: Partial<FeedbackHubAdapter> = {
+      isConfigured: () => true,
+      listItems: vi.fn(async () => [...serverList]),
+      deleteItem: vi
+        .fn()
+        .mockImplementationOnce(() => firstDeletePromise)
+        .mockImplementationOnce(async (id) => {
+          serverList = serverList.filter((i) => i.id !== id);
+          return [...serverList];
+        }),
+    };
+
+    TestBed.resetTestingModule();
+    window.localStorage.clear();
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: FeedbackHubAdapter, useValue: hubMock },
+        { provide: COLLECTION_REPOSITORY, useExisting: AppsScriptSheetsAdapter },
+        { provide: CARD_CATALOG_PORT, useExisting: TcgdexAdapter },
+      ],
+    });
+
+    const raceStore = TestBed.inject(FeedbackStore);
+    await raceStore.refreshHub(true);
+    expect(raceStore.items().length).toBe(2);
+
+    const p1 = raceStore.deleteItem(itemA);
+    const p2 = raceStore.deleteItem(itemB);
+    expect(raceStore.items().length).toBe(0);
+
+    // Tijdens in-flight mutaties wordt een extra refreshHub netjes overgeslagen
+    await raceStore.refreshHub(true);
+
+    serverList = serverList.filter((i) => i.id !== itemA.id);
+    resolveFirstDelete([...serverList]);
+
+    await Promise.all([p1, p2]);
+    expect(raceStore.items().length).toBe(0);
+  });
 });

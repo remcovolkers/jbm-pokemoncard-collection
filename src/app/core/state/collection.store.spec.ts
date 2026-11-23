@@ -307,4 +307,130 @@ describe('CollectionStore (Signals, Optimistic UI & Offline Queue)', () => {
     expect(store.activeProfile()?.id).toBe(liveProf.id);
     expect(store.config().apiToken).toBe('tok-mel');
   });
+
+  it('serialiseert snelle overlappende CRUD-mutaties zodat verwijderde of bewerkte items nooit terugkomen', async () => {
+    const baseSnap = createDemoSnapshot();
+    const cardA = baseSnap.collection[0];
+    const cardB = baseSnap.collection[1];
+    let serverCollection = [...baseSnap.collection];
+
+    let resolveFirstDelete!: (snap: AppSnapshot) => void;
+    const firstDeletePromise = new Promise<AppSnapshot>((resolve) => {
+      resolveFirstDelete = resolve;
+    });
+
+    vi.mocked(mockRepo.bootstrap).mockResolvedValueOnce(baseSnap);
+    vi.mocked(mockRepo.deleteCard)
+      .mockImplementationOnce(() => firstDeletePromise)
+      .mockImplementationOnce(async (_cfg, payload) => {
+        serverCollection = serverCollection.filter((c) => c.cardId !== payload.cardId);
+        return { ...baseSnap, collection: [...serverCollection] };
+      });
+
+    store.updateConfig({
+      demoMode: false,
+      webAppUrl: 'https://script.google.com/macros/s/test/exec',
+      apiToken: 'tok',
+    });
+    await store.syncFromRemote(true);
+
+    // Start 2 deletes vlak achter elkaar terwijl de 1e nog in-flight is
+    const p1 = store.deleteCard(cardA);
+    const p2 = store.deleteCard(cardB);
+
+    // Optimistisch zijn beide al weg
+    expect(store.collection().some((c) => c.cardId === cardA.cardId)).toBe(false);
+    expect(store.collection().some((c) => c.cardId === cardB.cardId)).toBe(false);
+
+    // Oude snapshot van delete 1 bevat cardB nog -> mag cardB NIET terugzetten!
+    serverCollection = serverCollection.filter((c) => c.cardId !== cardA.cardId);
+    resolveFirstDelete({ ...baseSnap, collection: [...serverCollection] });
+
+    await Promise.all([p1, p2]);
+    expect(store.collection().some((c) => c.cardId === cardA.cardId)).toBe(false);
+    expect(store.collection().some((c) => c.cardId === cardB.cardId)).toBe(false);
+    expect(mockRepo.deleteCard).toHaveBeenCalledTimes(2);
+  });
+
+  it('negeert verouderde syncFromRemote-responses bij nieuwe CRUD-mutaties en verrekent Set Voortgang + Verlanglijst previews', async () => {
+    const snap = createDemoSnapshot();
+    snap.collection = [
+      {
+        ...snap.collection[0],
+        rowIndex: 2,
+        cardId: 'svp-044',
+        name: 'Charmander',
+        setName: 'SVP Black Star Promos',
+        cardNumber: '044',
+        quantity: 1,
+        marketPrice: 46.21,
+      },
+    ];
+    snap.setProgress = [
+      {
+        rowIndex: 2,
+        setName: 'SVP Black Star Promos',
+        series: 'Scarlet & Violet',
+        totalCards: 226,
+        ownedUnique: 1,
+        remaining: 225,
+        progressPercent: 0.4,
+        totalSetValue: 0, // Bug uit screenshot: € 0,00 ondanks Charmander van € 46,21
+      },
+    ];
+    snap.wishlist = [
+      {
+        rowIndex: 2,
+        // Geen cardId of imageUrl uit Google Sheets (Bug 3: Dragonair 151 181/165)
+        cardName: 'Dragonair',
+        setName: '151',
+        cardNumber: '181/165',
+        desiredVariant: 'Full Art',
+        minCondition: 'Near Mint (NM)',
+        priority: 'Hoog',
+        maxBudget: 47,
+        marketPrice: 44.76,
+        notes: '',
+        found: false,
+      },
+    ];
+
+    vi.mocked(mockRepo.bootstrap).mockResolvedValue(snap);
+    store.updateConfig({
+      demoMode: false,
+      webAppUrl: 'https://script.google.com/macros/s/test/exec',
+      apiToken: 'tok',
+    });
+    await store.syncFromRemote(true);
+
+    // Set Voortgang moet € 46,21 + setCode SVP tonen
+    const svpProgress = store.setProgress().find((s) => s.setName === 'SVP Black Star Promos');
+    expect(svpProgress?.totalSetValue).toBe(46.21);
+    expect(svpProgress?.setCode).toBe('SVP');
+
+    // Verlanglijst moet sv03.5-181 en artwork URL hebben afgeleid
+    const dragonair = store.wishlist().find((w) => w.cardName === 'Dragonair');
+    expect(dragonair?.cardId).toBe('sv03.5-181');
+    expect(dragonair?.imageUrl).toContain('sv03.5-181');
+
+    // Verouderde bootstrap tijdens een nieuwe CRUD-mutatie (bijv. delete) mag de nieuwere mutatie niet terugdraaien
+    let resolveStaleBootstrap!: (s: AppSnapshot) => void;
+    vi.mocked(mockRepo.bootstrap).mockImplementationOnce(
+      () =>
+        new Promise<AppSnapshot>((resolve) => {
+          resolveStaleBootstrap = resolve;
+        })
+    );
+    const staleSync = store.syncFromRemote(true);
+    await new Promise((r) => setTimeout(r, 0));
+
+    const charmander = store.collection()[0];
+    vi.mocked(mockRepo.deleteCard).mockResolvedValueOnce({ ...snap, collection: [] });
+    await store.deleteCard(charmander);
+    expect(store.collection().length).toBe(0);
+
+    resolveStaleBootstrap(snap);
+    await staleSync;
+    expect(store.collection().length).toBe(0);
+  });
 });

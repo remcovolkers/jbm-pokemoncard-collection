@@ -353,8 +353,8 @@ export function parseCardIdInput(rawInput: string): ParsedCardId | null {
   const unpaddedNum = isPureDigits ? String(parseInt(rawNum, 10)) : rawNum.toUpperCase();
   const padded3 = isPureDigits ? unpaddedNum.padStart(3, '0') : unpaddedNum;
 
-  // Scarlet & Violet, Mega Evolution en 30th sets gebruiken in TCGdex standaard 3-cijferige voorloopnullen (me06-001)
-  const prefersPaddedPrimary = /^(?:sv|me)\d|^30th/i.test(tcgdexSetId);
+  // Scarlet & Violet, Mega Evolution en 30th sets gebruiken in TCGdex standaard 3-cijferige voorloopnullen (me06-001, svp-044)
+  const prefersPaddedPrimary = /^(?:sv|me)\d|^30th|^(?:svp|sve|mep|mee)$/i.test(tcgdexSetId);
   const primaryNum = prefersPaddedPrimary ? padded3 : unpaddedNum;
   const normalizedId = `${tcgdexSetId}-${primaryNum}`;
 
@@ -364,7 +364,7 @@ export function parseCardIdInput(rawInput: string): ParsedCardId | null {
   };
 
   for (const setId of targetSetIds) {
-    const prefersPadded = /^(?:sv|me)\d|^30th/i.test(setId);
+    const prefersPadded = /^(?:sv|me)\d|^30th|^(?:svp|sve|mep|mee)$/i.test(setId);
     if (prefersPadded) {
       pushUnique(`${setId}-${padded3}`);
       pushUnique(`${setId}-${unpaddedNum}`);
@@ -620,6 +620,91 @@ export function resolveCardmarketUrl(opts: {
   const stored = extractCardmarketUrlFromNotes(opts.notes);
   if (stored) return stored;
   return buildCardmarketSearchUrl(opts.name, opts.setName, opts.cardNumber);
+}
+
+const KNOWN_SET_NAME_TO_ID: Record<string, string> = {
+  '151': 'sv03.5',
+  'scarlet & violet': 'sv01',
+  'paldea evolved': 'sv02',
+  'obsidian flames': 'sv03',
+  'paradox rift': 'sv04',
+  'paldean fates': 'sv04.5',
+  'temporal forces': 'sv05',
+  'twilight masquerade': 'sv06',
+  'shrouded fable': 'sv06.5',
+  'stellar crown': 'sv07',
+  'surging sparks': 'sv08',
+  'prismatic evolutions': 'sv08.5',
+  'journey together': 'sv09',
+  'destined rivals': 'sv10',
+  'black bolt': 'sv10.5b',
+  'white flare': 'sv10.5w',
+  'svp black star promos': 'svp',
+  'evolving skies': 'swsh7',
+  'fusion strike': 'swsh8',
+  'brilliant stars': 'swsh9',
+  'astral radiance': 'swsh10',
+  'lost origin': 'swsh11',
+  'silver tempest': 'swsh12',
+  'crown zenith': 'swsh12.5',
+  'shining fates': 'swsh4.5',
+  'shining fates shiny vault': 'swsh4.5sv',
+  'base set': 'base1',
+  jungle: 'base2',
+  fossil: 'base3',
+  'base set 2': 'base4',
+  'team rocket': 'base5',
+  'expedition base set': 'ecard1',
+  expedition: 'ecard1',
+  aquapolis: 'ecard2',
+  skyridge: 'ecard3',
+  'mega evolution': 'me01',
+  'phantasmal flames': 'me02',
+  'ascended heroes': 'me02.5',
+  'perfect order': 'me03',
+  'chaos rising': 'me04',
+  'pitch black': 'me05',
+  'delta reign': 'me06',
+};
+
+/**
+ * Leidt een TCGdex kaart-ID af op basis van een setnaam (of setcode) en kaartnummer (bijv. "151" + "181/165" -> "sv03.5-181").
+ */
+export function inferCardIdFromSetAndNumber(
+  setName: string,
+  cardNumber: string,
+  setsCatalog?: ReadonlyArray<{ id: string; code?: string; name: string }>
+): string | null {
+  const localNum = (cardNumber || '').trim().split('/')[0].replace(/^#/, '').trim();
+  const setKey = (setName || '').trim().toLowerCase();
+  if (!localNum || !setKey) return null;
+
+  let setId: string | undefined;
+  if (setsCatalog && setsCatalog.length > 0) {
+    const match = setsCatalog.find(
+      (s) =>
+        s.name.trim().toLowerCase() === setKey ||
+        (s.code ?? '').trim().toLowerCase() === setKey ||
+        s.id.trim().toLowerCase() === setKey
+    );
+    if (match) {
+      setId = match.id;
+    }
+  }
+
+  if (!setId) {
+    setId = KNOWN_SET_NAME_TO_ID[setKey];
+  }
+
+  if (!setId) {
+    const upper = setName.trim().toUpperCase();
+    setId = SET_CODE_ALIASES[upper] || SET_CODE_MULTI_ALIASES[upper]?.[0];
+  }
+
+  if (!setId) return null;
+
+  const parsed = parseCardIdInput(`${setId} ${localNum}`);
+  return parsed?.normalizedId ?? `${setId}-${localNum}`;
 }
 
 export function buildCardmarketSearchUrl(cardName: string, _setName?: string, cardNumber?: string): string {

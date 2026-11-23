@@ -8,6 +8,7 @@ import {
   extractCardmarketUrlFromNotes,
   getDisplaySetCode,
   hasKnownSetCode,
+  inferCardIdFromSetAndNumber,
   inferTcgdexSeriesFolder,
   parseCardIdInput,
   registerDynamicSetCodes,
@@ -94,6 +95,15 @@ describe('card-id.utils', () => {
       const shf = parseCardIdInput('SHF SV001');
       expect(shf?.candidateIds).toContain('swsh4.5-SV001');
       expect(shf?.candidateIds).toContain('swsh4.5sv-SV001');
+
+      expect(parseCardIdInput('SVP 44')?.normalizedId).toBe('svp-044');
+      expect(inferCardIdFromSetAndNumber('151', '181/165')).toBe('sv03.5-181');
+      expect(inferCardIdFromSetAndNumber('SVP Black Star Promos', '44')).toBe('svp-044');
+      expect(
+        inferCardIdFromSetAndNumber('Stellar Crown', '142/142', [
+          { id: 'sv07', code: 'SCR', name: 'Stellar Crown' },
+        ])
+      ).toBe('sv07-142');
     });
 
     it('behoudt onbekende setcodes in lowercase zonder te crashen', () => {

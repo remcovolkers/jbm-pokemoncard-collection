@@ -56,6 +56,10 @@ export class FeedbackStore {
   readonly lastSyncedHubAt = signal<string | null>(null);
   readonly lastSyncedPublicAt = signal<string | null>(null);
 
+  private hubMutationRevision = 0;
+  private hubMutationChain: Promise<void> = Promise.resolve();
+  private inFlightHubCount = 0;
+
   /**
    * Gecombineerde to-do lijst onafhankelijk van collectie-spreadsheets:
    *  1. Centrale PokéBinder Feedback Hub (vast gekoppeld aan app + Google Drive screenshots)
@@ -155,14 +159,24 @@ export class FeedbackStore {
   }
 
   async refreshHub(silent = true): Promise<void> {
-    if (!this.hub.isConfigured() || this.isLoadingHub() || !this.collectionStore.isOnline()) return;
+    if (
+      !this.hub.isConfigured() ||
+      this.isLoadingHub() ||
+      this.inFlightHubCount > 0 ||
+      !this.collectionStore.isOnline()
+    ) {
+      return;
+    }
     this.isLoadingHub.set(true);
+    const revBefore = this.hubMutationRevision;
     try {
       const items = await this.hub.listItems();
-      this.hubItems.set(items);
-      const syncedIds = new Set(items.map((i) => i.id));
-      this.localItems.update((list) => list.filter((i) => !syncedIds.has(i.id)));
-      this.lastSyncedHubAt.set(new Date().toISOString());
+      if (this.hubMutationRevision === revBefore && this.inFlightHubCount === 0) {
+        this.hubItems.set(items);
+        const syncedIds = new Set(items.map((i) => i.id));
+        this.localItems.update((list) => list.filter((i) => !syncedIds.has(i.id)));
+        this.lastSyncedHubAt.set(new Date().toISOString());
+      }
       if (!silent) {
         this.collectionStore.showToast(
           `Centrale Feedback Hub gesynchroniseerd (${items.length} items).`,
@@ -247,44 +261,48 @@ export class FeedbackStore {
 
     let resultItem = item;
     if (useHub && this.collectionStore.isOnline()) {
+      this.hubMutationRevision++;
       this.hubItems.update((list) => [item, ...list]);
-      try {
-        const res = await this.hub.addItem({
-          id: item.id,
-          createdAt: item.createdAt,
-          page: item.page,
-          category: item.category,
-          title: item.title,
-          description: item.description,
-          status: item.status,
-          votes: item.votes,
-          author: item.author,
-          platform: item.platform,
-          screenshot: input.screenshot
-            ? {
-                base64: input.screenshot.base64,
-                mimeType: input.screenshot.mimeType,
-                fileName: input.screenshot.fileName,
-              }
-            : undefined,
-        });
-        this.hubItems.set(res.items);
-        this.localItems.update((list) => list.filter((i) => i.id !== item.id));
+      const res = await this.runSerializedHubMutation(
+        () =>
+          this.hub.addItem({
+            id: item.id,
+            createdAt: item.createdAt,
+            page: item.page,
+            category: item.category,
+            title: item.title,
+            description: item.description,
+            status: item.status,
+            votes: item.votes,
+            author: item.author,
+            platform: item.platform,
+            screenshot: input.screenshot
+              ? {
+                  base64: input.screenshot.base64,
+                  mimeType: input.screenshot.mimeType,
+                  fileName: input.screenshot.fileName,
+                }
+              : undefined,
+          }),
+        (r) => r.items,
+        () => {
+          this.hubItems.update((list) => list.filter((i) => i.id !== item.id));
+          const fallbackLocal: FeedbackItem = { ...item, source: 'local' };
+          this.localItems.update((list) => [fallbackLocal, ...list]);
+          resultItem = fallbackLocal;
+          this.collectionStore.showToast(
+            'Feedback lokaal bewaard (centrale Hub reageerde niet — controleer verbinding).',
+            'warning'
+          );
+        }
+      );
+      if (res) {
         resultItem = res.item;
         this.collectionStore.showToast(
           input.screenshot
             ? 'Feedback + screenshot opgeslagen in centrale Feedback Hub!'
             : 'Bedankt! Je feedback staat in de centrale Feedback Hub.',
           'success'
-        );
-      } catch {
-        this.hubItems.update((list) => list.filter((i) => i.id !== item.id));
-        const fallbackLocal: FeedbackItem = { ...item, source: 'local' };
-        this.localItems.update((list) => [fallbackLocal, ...list]);
-        resultItem = fallbackLocal;
-        this.collectionStore.showToast(
-          'Feedback lokaal bewaard (centrale Hub reageerde niet — controleer verbinding).',
-          'warning'
         );
       }
     } else {
@@ -304,7 +322,7 @@ export class FeedbackStore {
             author: item.author,
             platform: item.platform,
           });
-          this.collectionStore.snapshot.set(snap);
+          this.collectionStore.applyRemoteFeedbackSnapshot(snap);
         } catch {
           // Lokaal item blijft behouden
         }
@@ -355,29 +373,29 @@ export class FeedbackStore {
     };
 
     if (item.source === 'hub') {
+      this.hubMutationRevision++;
       this.hubItems.update((list) => list.map((i) => (i.id === item.id ? updated : i)));
       if (this.hub.isConfigured() && this.collectionStore.isOnline()) {
-        try {
-          const syncedList = await this.hub.updateItem({
-            id: item.id,
-            page: updated.page,
-            category: updated.category,
-            title: updated.title,
-            description: updated.description,
-            author: updated.author,
-            screenshot: input.screenshot
-              ? {
-                  base64: input.screenshot.base64,
-                  mimeType: input.screenshot.mimeType,
-                  fileName: input.screenshot.fileName,
-                }
-              : undefined,
-            removeScreenshot: input.removeScreenshot,
-          });
-          this.hubItems.set(syncedList);
-        } catch {
-          // Optimistische update blijft zichtbaar
-        }
+        await this.runSerializedHubMutation(
+          () =>
+            this.hub.updateItem({
+              id: item.id,
+              page: updated.page,
+              category: updated.category,
+              title: updated.title,
+              description: updated.description,
+              author: updated.author,
+              screenshot: input.screenshot
+                ? {
+                    base64: input.screenshot.base64,
+                    mimeType: input.screenshot.mimeType,
+                    fileName: input.screenshot.fileName,
+                  }
+                : undefined,
+              removeScreenshot: input.removeScreenshot,
+            }),
+          (syncedList) => syncedList
+        );
       }
       this.collectionStore.showToast('Feedback-item bijgewerkt!', 'success');
       return this.hubItems().find((i) => i.id === item.id) ?? updated;
@@ -408,7 +426,7 @@ export class FeedbackStore {
           description: updated.description,
           author: updated.author,
         });
-        this.collectionStore.snapshot.set(snap);
+        this.collectionStore.applyRemoteFeedbackSnapshot(snap);
       } catch {
         // Blijft lokaal/optimistisch bijgewerkt
       }
@@ -427,16 +445,15 @@ export class FeedbackStore {
     }
 
     if (item.source === 'hub') {
+      this.hubMutationRevision++;
       this.hubItems.update((list) =>
         list.map((i) => (i.id === item.id ? { ...i, status: nextStatus } : i))
       );
       if (this.hub.isConfigured() && this.collectionStore.isOnline()) {
-        try {
-          const syncedList = await this.hub.updateItem({ id: item.id, status: nextStatus });
-          this.hubItems.set(syncedList);
-        } catch {
-          // Blijft optimistisch bijgewerkt
-        }
+        await this.runSerializedHubMutation(
+          () => this.hub.updateItem({ id: item.id, status: nextStatus }),
+          (syncedList) => syncedList
+        );
       }
       return;
     }
@@ -464,7 +481,7 @@ export class FeedbackStore {
           id: item.id,
           status: nextStatus,
         });
-        this.collectionStore.snapshot.set(snap);
+        this.collectionStore.applyRemoteFeedbackSnapshot(snap);
       } catch {
         // Blijft lokaal/optimistisch bijgewerkt
       }
@@ -497,16 +514,15 @@ export class FeedbackStore {
     }
 
     if (item.source === 'hub') {
+      this.hubMutationRevision++;
       this.hubItems.update((list) =>
         list.map((i) => (i.id === item.id ? { ...i, votes: nextVotes } : i))
       );
       if (this.hub.isConfigured() && this.collectionStore.isOnline()) {
-        try {
-          const syncedList = await this.hub.updateItem({ id: item.id, votes: nextVotes });
-          this.hubItems.set(syncedList);
-        } catch {
-          // Blijft optimistisch bijgewerkt
-        }
+        await this.runSerializedHubMutation(
+          () => this.hub.updateItem({ id: item.id, votes: nextVotes }),
+          (syncedList) => syncedList
+        );
       }
       return;
     }
@@ -534,7 +550,7 @@ export class FeedbackStore {
           id: item.id,
           votes: nextVotes,
         });
-        this.collectionStore.snapshot.set(snap);
+        this.collectionStore.applyRemoteFeedbackSnapshot(snap);
       } catch {
         // Blijft lokaal/optimistisch bijgewerkt
       }
@@ -544,14 +560,13 @@ export class FeedbackStore {
   async deleteItem(item: FeedbackItem): Promise<void> {
     this.localItems.update((list) => list.filter((i) => i.id !== item.id));
     if (item.source === 'hub') {
+      this.hubMutationRevision++;
       this.hubItems.update((list) => list.filter((i) => i.id !== item.id));
       if (this.hub.isConfigured() && this.collectionStore.isOnline()) {
-        try {
-          const syncedList = await this.hub.deleteItem(item.id);
-          this.hubItems.set(syncedList);
-        } catch {
-          // Negeer
-        }
+        await this.runSerializedHubMutation(
+          () => this.hub.deleteItem(item.id),
+          (syncedList) => syncedList
+        );
       }
       this.collectionStore.showToast('Feedback-item verwijderd.', 'info');
       return;
@@ -565,12 +580,42 @@ export class FeedbackStore {
     if (item.source === 'sheets' && this.isSheetsLive() && this.repo.deleteFeedback) {
       try {
         const snap = await this.repo.deleteFeedback(this.collectionStore.config(), { id: item.id });
-        this.collectionStore.snapshot.set(snap);
+        this.collectionStore.applyRemoteFeedbackSnapshot(snap);
       } catch {
         // Negeer
       }
     }
     this.collectionStore.showToast('Feedback-item verwijderd.', 'info');
+  }
+
+  private async runSerializedHubMutation<T>(
+    remoteCall: () => Promise<T>,
+    getItems: (res: T) => FeedbackItem[],
+    onError?: () => void
+  ): Promise<T | null> {
+    const myRevision = this.hubMutationRevision;
+    let result: T | null = null;
+    const run = async (): Promise<void> => {
+      this.inFlightHubCount++;
+      try {
+        const res = await remoteCall();
+        result = res;
+        if (this.hubMutationRevision === myRevision) {
+          const items = getItems(res);
+          this.hubItems.set(items);
+          const syncedIds = new Set(items.map((i) => i.id));
+          this.localItems.update((list) => list.filter((i) => !syncedIds.has(i.id)));
+        }
+      } catch {
+        onError?.();
+      } finally {
+        this.inFlightHubCount--;
+      }
+    };
+    const chained = this.hubMutationChain.then(run, run);
+    this.hubMutationChain = chained.catch(() => undefined);
+    await chained;
+    return result;
   }
 
   buildGitHubIssueUrl(item: Pick<FeedbackItem, 'page' | 'category' | 'title' | 'description' | 'platform'>): string {

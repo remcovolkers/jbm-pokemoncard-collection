@@ -839,4 +839,47 @@ describe('apps-script/Code.gs Backend API & Formule-integriteit', () => {
     assert.equal(sheets.Collectie._grid[1][22], '');
     assert.equal(sheets.Collectie._grid[1][17], '=FORMULA_TOTAL_VAL');
   });
+
+  it('rekent ontbrekende Set Voortgang waarde (kolom H = 0) live uit Collectie en bewaart Verlanglijst cardId in kolom M zonder I:J formules te raken', () => {
+    const { sandbox, sheets } = createGasEnvironment();
+
+    // Voeg SVP Charmander (€ 46,21) toe aan Collectie en een Set Voortgang rij met kolom H = 0
+    sheets.Collectie._grid[1][0] = 'svp-044';
+    sheets.Collectie._grid[1][1] = 'Charmander';
+    sheets.Collectie._grid[1][2] = 'SVP Black Star Promos';
+    sheets.Collectie._grid[1][3] = '044';
+    sheets.Collectie._grid[1][11] = 1;
+    sheets.Collectie._grid[1][16] = 46.21;
+
+    sheets['Set Voortgang']._grid[1] = ['SVP Black Star Promos', 'Scarlet & Violet', 226, 1, 225, 0.004, '', 0];
+
+    const addWl = JSON.parse(
+      sandbox.doPost({
+        postData: {
+          contents: JSON.stringify({
+            token: 'test-secret-token',
+            action: 'addWishlist',
+            payload: {
+              cardId: 'sv03.5-181',
+              cardName: 'Dragonair',
+              setName: '151',
+              cardNumber: '181/165',
+              maxBudget: 47,
+              marketPrice: 44.76,
+            },
+          }),
+        },
+      }).getContent()
+    );
+
+    assert.equal(addWl.ok, true);
+    assert.equal(sheets.Verlanglijst._grid[0][12], 'Kaart-ID');
+    assert.equal(sheets.Verlanglijst._grid[1][12], 'sv03.5-181');
+    assert.equal(sheets.Verlanglijst._grid[1][8], '=FORMULA_DIFF');
+    assert.equal(sheets.Verlanglijst._grid[1][9], '=FORMULA_DEAL');
+    assert.equal(addWl.data.wishlist[0].cardId, 'sv03.5-181');
+
+    const svp = addWl.data.setProgress.find((s) => s.setName === 'SVP Black Star Promos');
+    assert.equal(svp.totalSetValue, 46.21);
+  });
 });

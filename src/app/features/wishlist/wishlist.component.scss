@@ -305,6 +305,44 @@
   gap: $space-sm;
 }
 
+.wl-lookup-preview {
+  display: flex;
+  align-items: center;
+  gap: $space-sm;
+  padding: 0.6rem;
+  border-radius: $radius-md;
+  background-color: $color-surface-container;
+  border: 1px solid rgba($color-outline-variant, 0.55);
+
+  &__art {
+    width: 56px;
+    flex-shrink: 0;
+  }
+
+  &__meta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+
+    strong {
+      font-size: 0.9rem;
+      @include truncate;
+    }
+
+    span {
+      font-size: 0.72rem;
+      color: $color-on-surface-muted;
+      @include truncate;
+    }
+  }
+
+  &__price {
+    color: $color-secondary !important;
+    font-weight: 700;
+  }
+}
+
 .two-col {
   display: grid;
   grid-template-columns: 1fr 1fr;

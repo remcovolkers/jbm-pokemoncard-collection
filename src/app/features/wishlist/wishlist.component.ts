@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, HostListener, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, HostListener, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { formatEur } from '../../core/domain/card-math.utils';
 import { WishlistItem } from '../../core/domain/models';
@@ -30,6 +30,12 @@ export class WishlistComponent {
 
   constructor() {
     this.scrollLock.bind(() => this.showAddSheet());
+    effect(() => {
+      const items = this.store.wishlist();
+      if (items.some((w) => !w.imageUrl || !w.cardId)) {
+        void this.store.hydrateWishlistArtworkFromCatalog();
+      }
+    });
   }
 
   // TCGdex lookup & nieuwe wens formulier

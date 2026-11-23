@@ -253,6 +253,26 @@
             </div>
           </div>
 
+          @if (newCardId() || newImageUrl()) {
+            <div class="wl-lookup-preview">
+              <div class="wl-lookup-preview__art">
+                <pb-card-artwork
+                  [cardId]="newCardId()"
+                  [src]="newImageUrl()"
+                  [alt]="newCardName() || 'Kaart preview'"
+                  [compact]="true"
+                />
+              </div>
+              <div class="wl-lookup-preview__meta">
+                <strong>{{ newCardName() }}</strong>
+                <span class="mono">{{ newSetName() }} {{ newCardNumber() ? '· #' + newCardNumber() : '' }}</span>
+                @if (newMarketPrice() > 0) {
+                  <span class="mono wl-lookup-preview__price">Cardmarket trend: {{ formatEur(newMarketPrice()) }}</span>
+                }
+              </div>
+            </div>
+          }
+
           <div class="two-col">
             <div class="pb-field">
               <label class="pb-label" for="wl-name">Kaartnaam *</label>
