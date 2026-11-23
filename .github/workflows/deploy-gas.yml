@@ -1,0 +1,85 @@
+name: Deploy Google Apps Script (Test & Live)
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'apps-script/Code.gs'
+      - 'apps-script/appsscript.json'
+      - 'apps-script/.claspignore'
+      - 'scripts/deploy-gas.mjs'
+      - '.github/workflows/deploy-gas.yml'
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Welk Apps Script-doel uitrollen?'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - test
+          - live
+
+concurrency:
+  group: gas-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy-gas:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Run Apps Script unit & formula-integrity tests
+        run: npm run test:apps-script
+
+      - name: Deploy Apps Script via clasp (Test -> Live)
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+          GAS_TARGETS_JSON: ${{ secrets.GAS_TARGETS_JSON }}
+          INPUT_TARGET: ${{ inputs.target || 'all' }}
+        run: |
+          if [ -z "${CLASPRC_JSON}" ] || [ -z "${GAS_TARGETS_JSON}" ]; then
+            echo "GitHub Secrets CLASPRC_JSON en/of GAS_TARGETS_JSON ontbreken nog."
+            echo "Voeg beide toe onder Repo Settings -> Secrets and variables -> Actions om automatisch te deployen naar test & live."
+            exit 0
+          fi
+
+          printf '%s' "${CLASPRC_JSON}" > "$HOME/.clasprc.json"
+          chmod 600 "$HOME/.clasprc.json"
+
+          node -e "
+            const fs = require('node:fs');
+            const cfg = JSON.parse(process.env.GAS_TARGETS_JSON);
+            for (const name of ['test', 'live']) {
+              const entry = cfg[name];
+              if (entry && entry.scriptId) {
+                const claspCfg = {
+                  scriptId: String(entry.scriptId).trim(),
+                  rootDir: 'apps-script',
+                  ...(entry.deploymentId ? { deploymentId: String(entry.deploymentId).trim() } : {})
+                };
+                fs.writeFileSync('.clasp.' + name + '.json', JSON.stringify(claspCfg, null, 2) + '\n');
+              }
+            }
+          "
+
+          if [ "${INPUT_TARGET}" = "test" ]; then
+            npm run gas:deploy -- --target test
+          elif [ "${INPUT_TARGET}" = "live" ]; then
+            npm run gas:deploy -- --target live
+          else
+            npm run gas:deploy:all
+          fi
+
+      - name: Cleanup clasp credentials & target configs
+        if: always()
+        run: rm -f "$HOME/.clasprc.json" .clasp.test.json .clasp.live.json

@@ -62,11 +62,33 @@ function printHelp() {
 
 Gebruik:
   npm run gas:login
-  npm run gas:init -- <SCRIPT_ID> [DEPLOYMENT_ID] [--target test|mel]
-  npm run gas:push -- [--target test|mel]
-  npm run gas:deploy -- [--target test|mel]
-  npm run gas:deployments -- [--target test|mel]
+  npm run gas:init -- <SCRIPT_ID> [DEPLOYMENT_ID] [--target test|live]
+  npm run gas:push -- [--target test|live]
+  npm run gas:deploy -- [--target test|live]
+  npm run gas:deploy:all
+  npm run gas:deployments -- [--target test|live]
 `);
+}
+
+function deployTarget(targetName) {
+  const configPath = getConfigPath(targetName);
+  const cfg = readClaspConfig(configPath);
+  const label = targetName || 'default';
+  console.log(`\n=== PokéBinder Apps Script deploy (${label}) ===`);
+
+  const pushStatus = runClasp(['-P', configPath, 'push', '--force']);
+  if (pushStatus !== 0) return pushStatus;
+
+  const stamp = new Date().toISOString().slice(0, 16);
+  const deployArgs = ['-P', configPath, 'deploy', '-d', `PokeBinder-${stamp}`];
+  if (cfg.deploymentId) {
+    deployArgs.push('-i', cfg.deploymentId);
+    console.log(`Bestaande Web App deployment bijwerken (${cfg.deploymentId}) zodat /exec-URL gelijk blijft…`);
+  } else {
+    console.log('Geen deploymentId ingesteld — nieuwe Web App deployment aanmaken…');
+    console.log(`Tip: zet het resulterende Deployment-ID als "deploymentId" in ${path.basename(configPath)}.`);
+  }
+  return runClasp(deployArgs);
 }
 
 function main() {
@@ -85,7 +107,7 @@ function main() {
       const scriptId = (args[0] || '').trim();
       const deploymentId = (args[1] || '').trim();
       if (!scriptId) {
-        console.error('Gebruik: npm run gas:init -- <SCRIPT_ID> [DEPLOYMENT_ID] [--target test|mel]');
+        console.error('Gebruik: npm run gas:init -- <SCRIPT_ID> [DEPLOYMENT_ID] [--target test|live]');
         process.exit(1);
       }
       const cfg = {
@@ -108,20 +130,26 @@ function main() {
     }
 
     case 'deploy': {
-      const cfg = readClaspConfig(configPath);
-      const pushStatus = runClasp(['-P', configPath, 'push', '--force']);
-      if (pushStatus !== 0) process.exit(pushStatus);
+      process.exit(deployTarget(target));
+      break;
+    }
 
-      const stamp = new Date().toISOString().slice(0, 16);
-      const deployArgs = ['-P', configPath, 'deploy', '-d', `PokeBinder-${stamp}`];
-      if (cfg.deploymentId) {
-        deployArgs.push('-i', cfg.deploymentId);
-        console.log(`\nBestaande Web App deployment bijwerken (${cfg.deploymentId}) zodat /exec-URL gelijk blijft…`);
-      } else {
-        console.log('\nGeen deploymentId ingesteld — nieuwe Web App deployment aanmaken…');
-        console.log(`Tip: zet het resulterende Deployment-ID als "deploymentId" in ${path.basename(configPath)}.`);
+    case 'deploy-all': {
+      const targets = ['test', 'live'].filter((t) => fs.existsSync(getConfigPath(t)));
+      if (targets.length === 0) {
+        console.error('Geen .clasp.test.json of .clasp.live.json gevonden.');
+        console.error('Koppel eerst met: npm run gas:init -- <SCRIPT_ID> [DEPLOYMENT_ID] --target test|live');
+        process.exit(1);
       }
-      process.exit(runClasp(deployArgs));
+      for (const t of targets) {
+        const status = deployTarget(t);
+        if (status !== 0) {
+          console.error(`Deploy voor "${t}" mislukt (exit ${status}); overige targets overgeslagen.`);
+          process.exit(status);
+        }
+      }
+      console.log('\nAlle geconfigureerde Google Apps Script targets succesvol gedeployed!');
+      process.exit(0);
       break;
     }
 

@@ -20,6 +20,7 @@
     "gas:init": "node scripts/deploy-gas.mjs init",
     "gas:push": "node scripts/deploy-gas.mjs push",
     "gas:deploy": "node scripts/deploy-gas.mjs deploy",
+    "gas:deploy:all": "node scripts/deploy-gas.mjs deploy-all",
     "gas:deployments": "node scripts/deploy-gas.mjs deployments"
   },
   "private": true,
