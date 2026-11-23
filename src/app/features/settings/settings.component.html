@@ -201,6 +201,93 @@
     }
   </section>
 
+  <!-- App-versie, Automatische Updates & Android APK -->
+  <section class="pb-card updates-card">
+    <div class="card-head">
+      <span class="material-symbols-outlined card-head__icon card-head__icon--amber">system_update</span>
+      <div>
+        <h2>App-versie &amp; Android APK</h2>
+        <p class="mono">
+          {{ platform.runtimeLabel() }} · Web v{{ updates.currentWebVersion() }}
+          @if (platform.isNative()) {
+            · APK v{{ updates.currentNativeVersion() }}
+          }
+        </p>
+      </div>
+    </div>
+
+    <div class="updates-meta">
+      @if (updates.webUpdateAvailable()) {
+        <div class="update-notice update-notice--emerald">
+          <span class="material-symbols-outlined">new_releases</span>
+          <div>
+            <strong>Nieuwe versie beschikbaar (v{{ updates.latestWebVersion() }})</strong>
+            <p>
+              Non-APK update: pas direct in de app toe zonder opnieuw te installeren.
+            </p>
+          </div>
+        </div>
+      }
+
+      @if (updates.apkUpdateAvailable()) {
+        <div class="update-notice update-notice--amber">
+          <span class="material-symbols-outlined">android</span>
+          <div>
+            <strong>Nieuwe Android APK beschikbaar (v{{ updates.latestNativeVersion() }})</strong>
+            <p>
+              {{ updates.releaseNotes() || 'Download de nieuwste APK rechtstreeks via onderstaande link.' }}
+            </p>
+          </div>
+        </div>
+      }
+    </div>
+
+    <div class="updates-actions">
+      <button
+        type="button"
+        class="pb-btn pb-btn--secondary"
+        [disabled]="updates.isChecking()"
+        (click)="updates.checkForUpdates(false)"
+      >
+        <span class="material-symbols-outlined" [class.pb-spin]="updates.isChecking()">
+          {{ updates.isChecking() ? 'progress_activity' : 'refresh' }}
+        </span>
+        <span>Controleer op updates</span>
+      </button>
+
+      @if (updates.webUpdateAvailable()) {
+        <button
+          type="button"
+          class="pb-btn pb-btn--emerald"
+          [disabled]="updates.otaState() === 'downloading' || updates.otaState() === 'applying'"
+          (click)="updates.applyWebUpdate()"
+        >
+          <span class="material-symbols-outlined">upgrade</span>
+          <span>Nieuwe versie toepassen</span>
+        </button>
+      }
+
+      <button
+        type="button"
+        class="pb-btn pb-btn--primary"
+        (click)="updates.downloadLatestApk()"
+      >
+        <span class="material-symbols-outlined">download</span>
+        <span>Android APK direct downloaden</span>
+      </button>
+
+      <a
+        class="pb-btn pb-btn--surface"
+        [href]="updates.releasePageUrl()"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        <span>Alle APK releases</span>
+        <span class="material-symbols-outlined">open_in_new</span>
+      </a>
+    </div>
+  </section>
+
   <!-- Gesynchroniseerde Dropdown-opties uit tabblad Instellingen -->
   <section class="pb-card lists-card">
     <h2>Actieve keuzelijsten (tabblad Instellingen)</h2>

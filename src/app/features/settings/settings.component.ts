@@ -1,5 +1,7 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { AppUpdateService } from '../../core/platform/app-update.service';
+import { PlatformService } from '../../core/platform/platform.service';
 import { ConnectionTestResult } from '../../core/ports/collection-repository.port';
 import { CollectionStore } from '../../core/state/collection.store';
 
@@ -12,6 +14,8 @@ import { CollectionStore } from '../../core/state/collection.store';
 })
 export class SettingsComponent {
   readonly store = inject(CollectionStore);
+  readonly platform = inject(PlatformService);
+  readonly updates = inject(AppUpdateService);
 
   readonly webAppUrl = signal(this.store.config().webAppUrl);
   readonly apiToken = signal(this.store.config().apiToken);

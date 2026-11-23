@@ -1,0 +1,118 @@
+name: Build & Release Android APK
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: 'APK-versie (bijv. 1.0.0; laat leeg om package.json versie te gebruiken)'
+        required: false
+        default: ''
+      release_notes:
+        description: 'Korte release notes voor gebruikers'
+        required: false
+        default: 'Nieuwe Android APK-release van PokéBinder.'
+
+permissions:
+  contents: write
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Setup Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Setup Gradle cache
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Run full test suite
+        run: npm run test:all
+
+      - name: Determine release version
+        id: ver
+        run: |
+          PKG_VER=$(node -p "require('./package.json').version")
+          if [ -n "${{ github.event.inputs.release_version }}" ]; then
+            VERSION="${{ github.event.inputs.release_version }}"
+          elif [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          else
+            VERSION="${PKG_VER}"
+          fi
+          VERSION="${VERSION#v}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "code=$((100 + ${GITHUB_RUN_NUMBER}))" >> "$GITHUB_OUTPUT"
+
+      - name: Stamp version, build Capacitor bundle & sync Android
+        run: |
+          node scripts/write-version.mjs \
+            --repo "${GITHUB_REPOSITORY}" \
+            --native-version "${{ steps.ver.outputs.version }}" \
+            --web-version "${{ steps.ver.outputs.version }}+${GITHUB_RUN_NUMBER}"
+          npm run build:capacitor
+          npx cap sync android
+
+      - name: Decode optional Android release keystore
+        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > "${RUNNER_TEMP}/release.keystore"
+          echo "ANDROID_KEYSTORE_PATH=${RUNNER_TEMP}/release.keystore" >> "$GITHUB_ENV"
+
+      - name: Build Android Release APK
+        working-directory: android
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease \
+            -PversionCode="${{ steps.ver.outputs.code }}" \
+            -PversionName="${{ steps.ver.outputs.version }}"
+
+      - name: Prepare fixed-name APK for direct download link
+        run: |
+          APK_SRC=$(find android/app/build/outputs/apk/release -name "*.apk" | head -n 1)
+          echo "Found APK: ${APK_SRC}"
+          cp "${APK_SRC}" pokebinder-release.apk
+          ls -lh pokebinder-release.apk
+
+      - name: Upload APK workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pokebinder-apk-v${{ steps.ver.outputs.version }}
+          path: pokebinder-release.apk
+
+      - name: Publish GitHub Release with direct APK download
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: PokéBinder v${{ steps.ver.outputs.version }}
+          body: |
+            ${{ github.event.inputs.release_notes || 'Nieuwe Android APK-release van PokéBinder.' }}
+
+            ### Directe Android APK download
+            Klik op **`pokebinder-release.apk`** hieronder (of gebruik altijd de vaste directe link:
+            https://github.com/${{ github.repository }}/releases/latest/download/pokebinder-release.apk)
+          files: |
+            pokebinder-release.apk
+          make_latest: true

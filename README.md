@@ -97,6 +97,37 @@ Deze repository bevat al een kant-en-klare GitHub Actions workflow in [`.github/
 
 ---
 
+### Stap D — Android App (Capacitor APK), Automatische In-App Updates & Native Uitbreidingen
+
+PokéBinder is ingepakt met **Capacitor 8** ([`capacitor.config.ts`](capacitor.config.ts) + `android/`), zonder dat de bestaande web/PWA-logica verandert. De PWA op GitHub Pages blijft 100% zelfstandig werken én installeerbaar.
+
+#### 1. Automatische updates zonder nieuwe APK (*"Nieuwe versie beschikbaar"*)
+Elke push naar `main` bouwt via [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) zowel de GitHub Pages PWA als een Capacitor OTA web-bundle (`ota/web-bundle.zip`) + `version.json`:
+- **Op de PWA (Web):** Angular `SwUpdate` detecteert direct de nieuwe versie en toont bovenin de banner **"Nieuwe versie beschikbaar → Nu bijwerken"**.
+- **In de Android APK:** `@capgo/capacitor-updater` (100% self-hosted op GitHub Pages, geen betaald account nodig) downloadt `ota/web-bundle.zip` op de achtergrond en past de update met 1 tik toe zonder nieuwe APK te installeren — terwijl de app volledig **offline-first** blijft werken.
+
+#### 2. Nieuwe Android APK bouwen & direct downloaden
+Wanneer je een nieuwe APK wilt uitbrengen (bijvoorbeeld zodra je later Android-only plugins toevoegt zoals `@capacitor/local-notifications` of een Android home-screen widget):
+1. Verhoog `"version"` (en bij verplicht nieuwe native plugins ook `"pokebinder.minNativeVersion"`) in `package.json`.
+2. Push een tag (bijv. `git tag v1.1.0 && git push origin v1.1.0`) **óf** klik op GitHub bij **Actions → Build & Release Android APK → Run workflow**.
+3. GitHub Actions bouwt de APK volledig in de cloud (zonder dat je lokaal Android Studio nodig hebt) en publiceert deze automatisch onder **GitHub Releases** met de vaste directe downloadlink:
+   **`https://github.com/remcovolkers/jbm-pokemoncard-collection/releases/latest/download/pokebinder-release.apk`**
+4. Gebruikers met een oudere APK zien automatisch een melding **"Nieuwe Android-app (APK) beschikbaar"** met een 1-klik **APK downloaden**-knop (ook altijd bereikbaar onder **Meer → Instellingen → App-versie & Android APK**).
+
+*(Optioneel voor permanente Play Store / upgrade-signing: voeg in GitHub Settings → Secrets de variabelen `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` en `ANDROID_KEY_PASSWORD` toe. Zonder secrets tekent de workflow de APK automatisch met de debug keystore zodat je hem direct kunt delen en installeren.)*
+
+#### 3. Lokaal werken met Android Studio & uitbreiden met Android-only functies
+```bash
+# Angular bouwen voor Capacitor en synchroniseren naar android/
+npm run cap:sync
+
+# Native Android-project openen in Android Studio
+npm run cap:open
+```
+Alle platformdetectie en native hooks staan geïsoleerd in `src/app/core/platform/` ([`platform.service.ts`](src/app/core/platform/platform.service.ts) & [`app-update.service.ts`](src/app/core/platform/app-update.service.ts)), zodat je daar later schoon native notificaties of widgets aan kunt toevoegen zonder de PWA aan te tasten.
+
+---
+
 ## Architectuur (Hexagonaal)
 
 ```text

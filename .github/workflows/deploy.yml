@@ -1,4 +1,4 @@
-name: Deploy PokéBinder PWA to GitHub Pages
+name: Deploy PokéBinder PWA & OTA Updates to GitHub Pages
 
 on:
   push:
@@ -34,12 +34,34 @@ jobs:
       - name: Run unit, integration & Apps Script tests
         run: npm run test:all
 
+      - name: Stamp release version for PWA & OTA bundle
+        env:
+          RELEASE_NOTES: ${{ github.event.head_commit.message }}
+        run: node scripts/write-version.mjs --repo "${GITHUB_REPOSITORY}"
+
+      - name: Build Capacitor OTA web bundle (for Android APK live updates)
+        run: |
+          npm run build:capacitor
+          mkdir -p ota-artifact
+          (cd dist/pokebinder/browser && zip -qr ../../../ota-artifact/web-bundle.zip .)
+
       - name: Build production PWA for GitHub Pages
         run: |
           REPO_NAME="${GITHUB_REPOSITORY#*/}"
           npx ng build --configuration production --base-href "/${REPO_NAME}/"
           cp dist/pokebinder/browser/index.html dist/pokebinder/browser/404.html
           touch dist/pokebinder/browser/.nojekyll
+          mkdir -p dist/pokebinder/browser/ota
+          cp ota-artifact/web-bundle.zip dist/pokebinder/browser/ota/web-bundle.zip
+
+      - name: Generate public version.json manifest
+        env:
+          RELEASE_NOTES: ${{ github.event.head_commit.message }}
+        run: |
+          node scripts/write-version.mjs \
+            --manifest-only \
+            --repo "${GITHUB_REPOSITORY}" \
+            --out-manifest dist/pokebinder/browser/version.json
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

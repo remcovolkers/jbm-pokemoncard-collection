@@ -1,7 +1,9 @@
-import { Component, computed, inject } from '@angular/core';
+import { Component, OnInit, computed, inject } from '@angular/core';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { filter, map, startWith } from 'rxjs';
+import { AppUpdateService } from './core/platform/app-update.service';
+import { PlatformService } from './core/platform/platform.service';
 import { CollectionStore } from './core/state/collection.store';
 
 @Component({
@@ -11,9 +13,16 @@ import { CollectionStore } from './core/state/collection.store';
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
-export class App {
+export class App implements OnInit {
   readonly store = inject(CollectionStore);
+  readonly platform = inject(PlatformService);
+  readonly updates = inject(AppUpdateService);
   private readonly router = inject(Router);
+
+  ngOnInit(): void {
+    void this.platform.initializeNativeShell();
+    void this.updates.initialize();
+  }
 
   readonly currentUrl = toSignal(
     this.router.events.pipe(

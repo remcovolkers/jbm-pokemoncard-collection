@@ -1,6 +1,7 @@
 import { ApplicationConfig, isDevMode, provideBrowserGlobalErrorListeners } from '@angular/core';
 import { provideRouter, withInMemoryScrolling } from '@angular/router';
 import { provideServiceWorker } from '@angular/service-worker';
+import { Capacitor } from '@capacitor/core';
 import { AppsScriptSheetsAdapter } from './core/adapters/apps-script-sheets.adapter';
 import { TcgdexAdapter } from './core/adapters/tcgdex.adapter';
 import { CARD_CATALOG_PORT } from './core/ports/card-catalog.port';
@@ -16,8 +17,9 @@ export const appConfig: ApplicationConfig = {
     ),
     { provide: COLLECTION_REPOSITORY, useExisting: AppsScriptSheetsAdapter },
     { provide: CARD_CATALOG_PORT, useExisting: TcgdexAdapter },
+    // Service Worker blijft actief voor de PWA op het web, maar uitgeschakeld in de native Capacitor-shell
     provideServiceWorker('ngsw-worker.js', {
-      enabled: !isDevMode(),
+      enabled: !isDevMode() && !Capacitor.isNativePlatform(),
       registrationStrategy: 'registerWhenStable:30000',
     }),
   ],

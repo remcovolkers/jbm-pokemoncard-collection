@@ -128,6 +128,75 @@
   <!-- Hoofdinhoud -->
   <main class="shell__main" [class.is-quick-add]="isQuickAddRoute()">
     <div class="shell__content">
+      <!-- Automatische In-App Update Banner (PWA & Android APK OTA / Nieuwe APK) -->
+      @if (updates.showUpdateBanner()) {
+        <div
+          class="update-banner"
+          [class.update-banner--apk]="updates.apkMandatory() || (platform.isNative() && updates.apkUpdateAvailable())"
+          role="status"
+          aria-live="polite"
+        >
+          <div class="update-banner__left">
+            <span class="material-symbols-outlined update-banner__icon">
+              {{ updates.apkMandatory() || (platform.isNative() && updates.apkUpdateAvailable()) ? 'android' : 'system_update' }}
+            </span>
+            <div class="update-banner__copy">
+              @if (updates.apkMandatory() || (platform.isNative() && updates.apkUpdateAvailable())) {
+                <strong>Nieuwe Android-app (APK) beschikbaar (v{{ updates.latestNativeVersion() }})</strong>
+                <span>
+                  {{ updates.releaseNotes() || 'Download en installeer de nieuwste APK voor nieuwe native functies.' }}
+                </span>
+              } @else {
+                <strong>Nieuwe versie beschikbaar (v{{ updates.latestWebVersion() }})</strong>
+                <span>
+                  @if (updates.otaState() === 'downloading') {
+                    Update wordt op de achtergrond binnengehaald…
+                  } @else {
+                    {{ updates.releaseNotes() || 'Tik op bijwerken om direct de nieuwste versie te laden.' }}
+                  }
+                </span>
+              }
+            </div>
+          </div>
+
+          <div class="update-banner__actions">
+            @if (updates.apkMandatory() || (platform.isNative() && updates.apkUpdateAvailable())) {
+              <button
+                type="button"
+                class="pb-btn pb-btn--primary update-banner__btn"
+                (click)="updates.downloadLatestApk()"
+              >
+                <span class="material-symbols-outlined">download</span>
+                <span>APK downloaden</span>
+              </button>
+            } @else {
+              <button
+                type="button"
+                class="pb-btn pb-btn--emerald update-banner__btn"
+                [disabled]="updates.otaState() === 'downloading' || updates.otaState() === 'applying'"
+                (click)="updates.applyWebUpdate()"
+              >
+                <span class="material-symbols-outlined" [class.pb-spin]="updates.otaState() === 'downloading' || updates.otaState() === 'applying'">
+                  {{ updates.otaState() === 'downloading' || updates.otaState() === 'applying' ? 'progress_activity' : 'refresh' }}
+                </span>
+                <span>{{ updates.otaState() === 'downloading' ? 'Laden…' : 'Nu bijwerken' }}</span>
+              </button>
+            }
+
+            @if (!updates.apkMandatory()) {
+              <button
+                type="button"
+                class="update-banner__close"
+                aria-label="Melding verbergen"
+                (click)="updates.dismissBanner()"
+              >
+                <span class="material-symbols-outlined">close</span>
+              </button>
+            }
+          </div>
+        </div>
+      }
+
       <router-outlet />
     </div>
   </main>
