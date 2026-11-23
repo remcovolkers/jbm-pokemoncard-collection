@@ -40,6 +40,7 @@ export class FeedbackStore {
   // Composer Modal state (gedeeld over elke pagina)
   readonly isComposerOpen = signal<boolean>(false);
   readonly composerDefaultPage = signal<FeedbackPage>('Algemeen / Hele app');
+  readonly editingItem = signal<FeedbackItem | null>(null);
 
   // Data signals
   readonly localItems = signal<FeedbackItem[]>(this.loadLocalItems());
@@ -108,12 +109,22 @@ export class FeedbackStore {
   }
 
   openComposer(page?: FeedbackPage): void {
+    this.editingItem.set(null);
     this.composerDefaultPage.set(page ?? 'Algemeen / Hele app');
+    this.isComposerOpen.set(true);
+  }
+
+  openEditor(item: FeedbackItem): void {
+    this.editingItem.set(item);
+    if ((FEEDBACK_PAGES as readonly string[]).includes(item.page)) {
+      this.composerDefaultPage.set(item.page as FeedbackPage);
+    }
     this.isComposerOpen.set(true);
   }
 
   closeComposer(): void {
     this.isComposerOpen.set(false);
+    this.editingItem.set(null);
   }
 
   mapUrlToFeedbackPage(url: string): FeedbackPage {
@@ -219,6 +230,65 @@ export class FeedbackStore {
 
     this.collectionStore.showToast('Bedankt! Je feedback staat op de Feedback Hub to-do lijst.', 'success');
     return item;
+  }
+
+  async editFeedback(
+    item: FeedbackItem,
+    input: {
+      page: FeedbackPage | string;
+      category: FeedbackCategory | string;
+      title: string;
+      description: string;
+      author?: string;
+    }
+  ): Promise<FeedbackItem> {
+    const nextAuthor = (input.author || '').trim() || item.author || 'Verzamelaar';
+    if (input.author?.trim()) {
+      this.savedAuthor.set(input.author.trim());
+    }
+
+    const updated: FeedbackItem = {
+      ...item,
+      page: input.page,
+      category: input.category,
+      title: input.title.trim(),
+      description: input.description.trim(),
+      author: nextAuthor,
+    };
+
+    if (item.source === 'sheets') {
+      this.collectionStore.snapshot.update((snap) => ({
+        ...snap,
+        feedback: (snap.feedback ?? []).map((i) => (i.id === item.id ? updated : i)),
+      }));
+    }
+
+    this.localItems.update((list) => {
+      const exists = list.some((i) => i.id === item.id);
+      if (exists) {
+        return list.map((i) => (i.id === item.id ? updated : i));
+      }
+      return item.source === 'local' ? [updated, ...list] : list;
+    });
+
+    if (item.source === 'sheets' && this.isSheetsLive() && this.repo.updateFeedback) {
+      try {
+        const snap = await this.repo.updateFeedback(this.collectionStore.config(), {
+          id: item.id,
+          page: updated.page,
+          category: updated.category,
+          title: updated.title,
+          description: updated.description,
+          author: updated.author,
+        });
+        this.collectionStore.snapshot.set(snap);
+      } catch {
+        // Blijft lokaal/optimistisch bijgewerkt
+      }
+    }
+
+    this.collectionStore.showToast('Feedback-item bijgewerkt!', 'success');
+    return updated;
   }
 
   async setStatus(item: FeedbackItem, nextStatus: FeedbackStatus): Promise<void> {

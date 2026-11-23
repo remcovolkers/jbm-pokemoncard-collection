@@ -479,7 +479,27 @@
         />
       </div>
 
-      <!-- 5. Aantal, Aankoopprijs & Taal -->
+      <!-- 5. Herkomst / Pull Method (optioneel) -->
+      <div class="pb-field">
+        <div class="input-label-row">
+          <span class="pb-label">5. Herkomst / Pull Method (optioneel)</span>
+          <span class="field-hint">Optioneel — klik nogmaals om te wissen</span>
+        </div>
+        <div class="pills-wrap">
+          @for (method of acquisitionMethods(); track method) {
+            <button
+              type="button"
+              class="pb-pill pb-pill--interactive"
+              [class.is-active]="acquisitionMethod() === method"
+              (click)="toggleAcquisitionMethod(method)"
+            >
+              {{ method }}
+            </button>
+          }
+        </div>
+      </div>
+
+      <!-- 6. Aantal, Aankoopprijs & Taal -->
       <div class="triple-grid">
         <div class="pb-field">
           <span class="pb-label">Aantal</span>
@@ -491,16 +511,31 @@
         </div>
 
         <div class="pb-field">
-          <label class="pb-label" for="qa-price">Aankoopprijs (€)</label>
+          <label class="pb-label" for="qa-price">Aankoopprijs (€ · optioneel)</label>
           <input
             id="qa-price"
             type="number"
             step="0.01"
             min="0"
             class="pb-input mono"
+            [placeholder]="
+              acquisitionMethod() === 'Pack Pull' ||
+              acquisitionMethod() === 'Geruild (Trade)' ||
+              acquisitionMethod() === 'Cadeau' ||
+              acquisitionMethod() === 'Oude collectie'
+                ? 'Niet v.t. (leeg = € 0)'
+                : 'Optioneel (bijv. 9.50)'
+            "
             [ngModel]="purchasePrice()"
-            (ngModelChange)="purchasePrice.set(+$event)"
+            (ngModelChange)="onPurchasePriceChange($event)"
           />
+          @if (previewCard(); as card) {
+            @if (card.marketPriceEur > 0) {
+              <button type="button" class="price-optin-btn mono" (click)="applyMarketPriceAsPurchase()">
+                Marktprijs ({{ formatEur(card.marketPriceEur) }}) invullen als aankoopprijs
+              </button>
+            }
+          }
         </div>
 
         <div class="pb-field">

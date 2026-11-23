@@ -8,6 +8,7 @@ import {
   CatalogCardSummary,
   CatalogSetDetail,
   CatalogSetSummary,
+  DEFAULT_DROPDOWN_SETTINGS,
 } from '../../core/domain/models';
 import { NATIONAL_DEX_NAMES } from '../../core/domain/national-dex.data';
 import { doesCardMatchPokemon } from '../../core/domain/pokedex-matching.utils';
@@ -101,7 +102,13 @@ export class QuickAddComponent implements OnDestroy {
   readonly binderDetail = signal('');
   readonly language = signal(this.store.packDefaults().language || 'EN');
   readonly quantity = signal(1);
-  readonly purchasePrice = signal<number>(0);
+  readonly purchasePrice = signal<number | null>(null);
+  readonly acquisitionMethod = signal<string>(
+    this.store.packDefaults().enabled ? (this.store.packDefaults().acquisitionMethod || '') : ''
+  );
+  readonly acquisitionMethods = computed(
+    () => this.store.settings().acquisitionMethods ?? DEFAULT_DROPDOWN_SETTINGS.acquisitionMethods ?? []
+  );
   readonly forTrade = signal(false);
   readonly notes = signal('');
   readonly isSaving = signal(false);
@@ -154,13 +161,38 @@ export class QuickAddComponent implements OnDestroy {
   togglePackMode(): void {
     const next = !this.packMode();
     const parsed = parseCardIdInput(this.codeQuery());
+    const nextMethod = next ? (this.acquisitionMethod() || 'Pack Pull') : this.acquisitionMethod();
+    if (next && !this.acquisitionMethod()) {
+      this.acquisitionMethod.set('Pack Pull');
+    }
     this.store.updatePackDefaults({
       enabled: next,
       setCode: parsed?.inputSetCode || this.store.packDefaults().setCode,
       condition: this.condition(),
       storageLocation: this.storageLocation(),
       language: this.language(),
+      acquisitionMethod: nextMethod,
     });
+  }
+
+  toggleAcquisitionMethod(method: string): void {
+    this.acquisitionMethod.update((prev) => (prev === method ? '' : method));
+  }
+
+  onPurchasePriceChange(value: unknown): void {
+    if (value === '' || value === null || value === undefined) {
+      this.purchasePrice.set(null);
+      return;
+    }
+    const num = Number(value);
+    this.purchasePrice.set(Number.isFinite(num) ? Math.max(0, num) : null);
+  }
+
+  applyMarketPriceAsPurchase(): void {
+    const market = this.previewCard()?.marketPriceEur;
+    if (market && market > 0) {
+      this.purchasePrice.set(market);
+    }
   }
 
   onCodeInputChange(value: string): void {
@@ -305,7 +337,6 @@ export class QuickAddComponent implements OnDestroy {
   private applyCatalogCard(card: CatalogCard): void {
     this.previewCard.set(card);
     this.lookupError.set(null);
-    this.purchasePrice.set(card.marketPriceEur || 0);
 
     // Kies slimme standaard-variant op basis van rarity
     const r = card.rarity.toLowerCase();
@@ -356,6 +387,7 @@ export class QuickAddComponent implements OnDestroy {
         condition: this.condition(),
         storageLocation: this.storageLocation(),
         language: this.language(),
+        acquisitionMethod: this.acquisitionMethod(),
       });
 
       await this.store.addCard({
@@ -374,7 +406,8 @@ export class QuickAddComponent implements OnDestroy {
         storageLocation: this.storageLocation(),
         binderDetail: this.binderDetail().trim(),
         purchasePrice: Number(this.purchasePrice()) || 0,
-        marketPrice: card?.marketPriceEur ?? (Number(this.purchasePrice()) || 0),
+        marketPrice: card?.marketPriceEur ?? 0,
+        acquisitionMethod: this.acquisitionMethod(),
         imageUrl: card?.imageUrl,
         trendPercent: card?.trendPercent,
         forTrade: this.forTrade(),
@@ -402,7 +435,8 @@ export class QuickAddComponent implements OnDestroy {
     this.manualSet.set('');
     this.manualNumber.set('');
     this.quantity.set(1);
-    this.purchasePrice.set(0);
+    this.purchasePrice.set(null);
+    this.acquisitionMethod.set(rememberSet ? (this.store.packDefaults().acquisitionMethod || '') : '');
     this.forTrade.set(false);
     this.grade.set('');
     this.notes.set('');

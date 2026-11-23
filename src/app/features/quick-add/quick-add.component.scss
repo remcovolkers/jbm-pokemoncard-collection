@@ -737,3 +737,27 @@
 .pack-bolt {
   color: $color-tertiary;
 }
+
+.field-hint {
+  @include type-body-sm;
+  font-size: 0.72rem;
+  color: $color-on-surface-muted;
+}
+
+.price-optin-btn {
+  @include pressable;
+  margin-top: 0.35rem;
+  padding: 0.3rem 0.55rem;
+  border-radius: $radius-sm;
+  background-color: rgba($color-secondary, 0.12);
+  border: 1px solid rgba($color-secondary, 0.32);
+  color: $color-secondary;
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-align: left;
+  line-height: 1.3;
+
+  &:hover {
+    background-color: rgba($color-secondary, 0.22);
+  }
+}

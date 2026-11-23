@@ -23,6 +23,7 @@ export interface PackOpeningDefaults {
   condition: string;
   storageLocation: string;
   language: string;
+  acquisitionMethod?: string;
 }
 
 const DEFAULT_CONFIG: AppConnectionConfig = {
@@ -38,6 +39,7 @@ const DEFAULT_PACK: PackOpeningDefaults = {
   condition: 'Near Mint (NM)',
   storageLocation: 'Hoofdbinder',
   language: 'EN',
+  acquisitionMethod: '',
 };
 
 @Injectable({ providedIn: 'root' })

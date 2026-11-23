@@ -13,7 +13,7 @@ import {
   formatEur,
   formatPercent,
 } from '../../core/domain/card-math.utils';
-import { CollectionCard } from '../../core/domain/models';
+import { CollectionCard, DEFAULT_DROPDOWN_SETTINGS } from '../../core/domain/models';
 import { CARD_CATALOG_PORT } from '../../core/ports/card-catalog.port';
 import { CollectionStore } from '../../core/state/collection.store';
 import { CardArtworkComponent } from '../../shared/card-artwork/card-artwork.component';
@@ -95,7 +95,7 @@ export class CollectionComponent implements OnInit {
       if (rarityFilter !== 'ALL' && card.rarity !== rarityFilter) return false;
       if (tradeOnly && !card.forTrade) return false;
       if (query) {
-        const hay = `${card.name} ${card.cardId} ${card.setName} ${card.cardNumber} ${card.storageLocation} ${card.rarity}`.toLowerCase();
+        const hay = `${card.name} ${card.cardId} ${card.setName} ${card.cardNumber} ${card.storageLocation} ${card.rarity} ${card.acquisitionMethod ?? ''}`.toLowerCase();
         const matchesParsedCode =
           parsedCodeQuery !== null &&
           parsedCodeQuery.candidateIds.some((cid) => cid.toLowerCase() === card.cardId.toLowerCase());
@@ -136,6 +136,10 @@ export class CollectionComponent implements OnInit {
     const draft = this.editDraft();
     return draft ? calculateCardMetrics(draft) : null;
   });
+
+  readonly acquisitionMethods = computed(
+    () => this.store.settings().acquisitionMethods ?? DEFAULT_DROPDOWN_SETTINGS.acquisitionMethods ?? []
+  );
 
   ngOnInit(): void {
     const requestedSet = this.store.requestedSetFilter();
@@ -196,6 +200,25 @@ export class CollectionComponent implements OnInit {
     this.editDraft.update((prev) => (prev ? { ...prev, ...patch } : null));
   }
 
+  toggleDraftAcquisitionMethod(method: string): void {
+    this.editDraft.update((prev) => {
+      if (!prev) return null;
+      return {
+        ...prev,
+        acquisitionMethod: prev.acquisitionMethod === method ? '' : method,
+      };
+    });
+  }
+
+  onDraftPurchasePriceChange(value: unknown): void {
+    const num = Number(value);
+    const nextPrice =
+      value === '' || value === null || value === undefined || !Number.isFinite(num)
+        ? 0
+        : Math.max(0, num);
+    this.patchDraft({ purchasePrice: nextPrice });
+  }
+
   adjustDraftQty(delta: number): void {
     this.editDraft.update((prev) =>
       prev ? { ...prev, quantity: Math.max(1, (prev.quantity || 1) + delta) } : null
@@ -217,6 +240,7 @@ export class CollectionComponent implements OnInit {
       binderDetail: draft.binderDetail,
       purchasePrice: Number(draft.purchasePrice) || 0,
       marketPrice: Number(draft.marketPrice) || 0,
+      acquisitionMethod: (draft.acquisitionMethod ?? '').trim(),
       forTrade: draft.forTrade,
       notes: draft.notes,
     });

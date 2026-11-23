@@ -292,4 +292,117 @@ describe('FeedbackStore', () => {
       { id: created.id }
     );
   });
+
+  it('opent de editor voor een feedback-item en werkt titel, pagina, categorie, beschrijving en auteur bij (lokaal & Sheets)', async () => {
+    const localItem = await store.submitFeedback({
+      page: 'Collectie',
+      category: 'Bug',
+      title: 'Oude titel',
+      description: 'Oude omschrijving',
+      author: 'Melli',
+    });
+
+    store.openEditor(localItem);
+    expect(store.isComposerOpen()).toBe(true);
+    expect(store.editingItem()?.id).toBe(localItem.id);
+    expect(store.composerDefaultPage()).toBe('Collectie');
+
+    const editedLocal = await store.editFeedback(localItem, {
+      page: 'Snel Toevoegen',
+      category: 'Verbetering',
+      title: 'Nieuwe titel',
+      description: 'Duidelijkere omschrijving',
+      author: 'Mel',
+    });
+    expect(editedLocal.title).toBe('Nieuwe titel');
+    expect(editedLocal.page).toBe('Snel Toevoegen');
+    expect(editedLocal.category).toBe('Verbetering');
+    expect(editedLocal.description).toBe('Duidelijkere omschrijving');
+    expect(editedLocal.author).toBe('Mel');
+    expect(store.items().find((i) => i.id === localItem.id)?.title).toBe('Nieuwe titel');
+
+    store.closeComposer();
+    expect(store.isComposerOpen()).toBe(false);
+    expect(store.editingItem()).toBeNull();
+
+    // Live Sheets sync bij editFeedback
+    const updateFeedbackSpy = vi.fn(async (_cfg, payload) => ({
+      ...createDemoSnapshot(),
+      feedback: [
+        {
+          id: payload.id,
+          createdAt: '2026-11-23T12:00:00Z',
+          page: String(payload.page ?? 'Collectie'),
+          category: String(payload.category ?? 'Verbetering'),
+          title: String(payload.title ?? ''),
+          description: String(payload.description ?? ''),
+          status: 'open' as const,
+          votes: 1,
+          author: String(payload.author ?? 'Melli'),
+          platform: 'Web App',
+          source: 'sheets' as const,
+        },
+      ],
+    }));
+
+    const repoMock: Partial<CollectionRepository> = {
+      bootstrap: vi.fn(async () => createDemoSnapshot()),
+      updateFeedback: updateFeedbackSpy,
+    };
+
+    TestBed.resetTestingModule();
+    window.localStorage.clear();
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: COLLECTION_REPOSITORY, useValue: repoMock },
+        { provide: CARD_CATALOG_PORT, useExisting: TcgdexAdapter },
+      ],
+    });
+    const liveCollection = TestBed.inject(CollectionStore);
+    const liveFeedback = TestBed.inject(FeedbackStore);
+    liveCollection.updateConfig({
+      demoMode: false,
+      webAppUrl: 'https://script.google.com/macros/s/test/exec',
+      apiToken: 'secret-token',
+    });
+    await liveCollection.syncFromRemote(true);
+
+    const sheetItem = {
+      id: 'fb-sheet-1',
+      createdAt: '2026-11-23T12:00:00Z',
+      page: 'Collectie',
+      category: 'Verbetering',
+      title: 'Aankoopwaarde ingevuld',
+      description: 'Bij 4 van 9 kaarten',
+      status: 'open' as const,
+      votes: 1,
+      author: 'Melli',
+      platform: 'Google Sheets',
+      source: 'sheets' as const,
+    };
+    liveCollection.snapshot.update((snap) => ({ ...snap, feedback: [sheetItem] }));
+
+    await liveFeedback.editFeedback(sheetItem, {
+      page: 'Snel Toevoegen',
+      category: 'Bug',
+      title: 'Aankoopwaarde niet automatisch vullen',
+      description: 'Alleen bij Single gekocht invullen',
+      author: 'Melli',
+    });
+
+    expect(updateFeedbackSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ apiToken: 'secret-token' }),
+      expect.objectContaining({
+        id: 'fb-sheet-1',
+        page: 'Snel Toevoegen',
+        category: 'Bug',
+        title: 'Aankoopwaarde niet automatisch vullen',
+        description: 'Alleen bij Single gekocht invullen',
+        author: 'Melli',
+      })
+    );
+    expect(liveFeedback.items().find((i) => i.id === 'fb-sheet-1')?.title).toBe(
+      'Aankoopwaarde niet automatisch vullen'
+    );
+  });
 });

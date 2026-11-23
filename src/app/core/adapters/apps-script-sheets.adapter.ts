@@ -4,7 +4,6 @@ import {
   AppSnapshot,
   CollectionCard,
   FeedbackItem,
-  FeedbackStatus,
   TradeEntry,
   WishlistItem,
 } from '../domain/models';
@@ -14,6 +13,7 @@ import {
   ConnectionTestResult,
   MarkWishlistFoundPayload,
   RefreshPricesResult,
+  UpdateFeedbackPayload,
   UpdatePokedexSlotPayload,
 } from '../ports/collection-repository.port';
 
@@ -121,9 +121,9 @@ export class AppsScriptSheetsAdapter implements CollectionRepository {
 
   async updateFeedback(
     config: AppConnectionConfig,
-    payload: { id: string; status?: FeedbackStatus; votes?: number }
+    payload: UpdateFeedbackPayload
   ): Promise<AppSnapshot> {
-    const res = await this.postAction(config, 'updateFeedback', payload as Record<string, unknown>);
+    const res = await this.postAction(config, 'updateFeedback', payload as unknown as Record<string, unknown>);
     return res.data!;
   }
 

@@ -276,6 +276,15 @@
                     <span class="material-symbols-outlined">open_in_new</span>
                   </a>
                 } @else {
+                  <button
+                    type="button"
+                    class="todo-link"
+                    aria-label="Feedback bewerken"
+                    title="Bewerken"
+                    (click)="feedback.openEditor(item)"
+                  >
+                    <span class="material-symbols-outlined">edit</span>
+                  </button>
                   <a
                     class="todo-link"
                     [href]="feedback.buildGitHubIssueUrl(item)"

@@ -252,6 +252,9 @@
               </div>
               <p class="mono list-row__sub">
                 {{ card.setName }} · #{{ card.cardNumber }} · {{ card.variant }} · {{ card.storageLocation }}
+                @if (card.acquisitionMethod) {
+                  · {{ card.acquisitionMethod }}
+                }
               </p>
             </div>
 
@@ -287,6 +290,9 @@
                 {{ getDisplaySetCode(draft.cardId, draft.setName) }} #{{ draft.cardNumber }}
               </span>
               <span class="mono sheet-rarity">• {{ draft.rarity }}</span>
+              @if (draft.acquisitionMethod) {
+                <span class="pb-pill pb-pill--neutral">{{ draft.acquisitionMethod }}</span>
+              }
             </div>
             <h2 id="detail-sheet-title" class="sheet-title">{{ draft.name }}</h2>
             <span class="sheet-set">{{ draft.setName }} · ID: {{ draft.cardId }}</span>
@@ -313,10 +319,12 @@
               <span class="sheet-stat-eyebrow">Cardmarket Marktwaarde p/s</span>
               <div class="sheet-hero__price-line">
                 <span class="mono sheet-hero__price">{{ formatEur(draft.marketPrice) }}</span>
-                @if (activeDraftMetrics(); as m) {
-                  <span class="mono sheet-hero__roi" [class.is-negative]="m.roiPercent < 0">
-                    {{ formatPercent(m.roiPercent) }}
-                  </span>
+                @if (draft.purchasePrice > 0) {
+                  @if (activeDraftMetrics(); as m) {
+                    <span class="mono sheet-hero__roi" [class.is-negative]="m.roiPercent < 0">
+                      {{ formatPercent(m.roiPercent) }}
+                    </span>
+                  }
                 }
               </div>
             </div>
@@ -327,10 +335,17 @@
                   <span class="mini-stat__label">Totale waarde</span>
                   <span class="mono mini-stat__val">{{ formatEur(m.totalValue) }}</span>
                 </div>
-                <div class="mini-stat mini-stat--profit" [class.is-negative]="m.profitLoss < 0">
-                  <span class="mini-stat__label">Winst / Verlies</span>
-                  <span class="mono mini-stat__val">{{ formatEur(m.profitLoss, true) }}</span>
-                </div>
+                @if (draft.purchasePrice > 0) {
+                  <div class="mini-stat mini-stat--profit" [class.is-negative]="m.profitLoss < 0">
+                    <span class="mini-stat__label">Winst / Verlies</span>
+                    <span class="mono mini-stat__val">{{ formatEur(m.profitLoss, true) }}</span>
+                  </div>
+                } @else {
+                  <div class="mini-stat">
+                    <span class="mini-stat__label">Aankoopprijs</span>
+                    <span class="mono mini-stat__val">Niet ingevuld</span>
+                  </div>
+                }
               </div>
             }
           </div>
@@ -448,6 +463,23 @@
             </div>
           </div>
 
+          <!-- Herkomst (optioneel) -->
+          <div class="pb-field">
+            <span class="pb-label">Herkomst (optioneel)</span>
+            <div class="pills-wrap">
+              @for (method of acquisitionMethods(); track method) {
+                <button
+                  type="button"
+                  class="pb-pill pb-pill--interactive"
+                  [class.is-active]="draft.acquisitionMethod === method"
+                  (click)="toggleDraftAcquisitionMethod(method)"
+                >
+                  {{ method }}
+                </button>
+              }
+            </div>
+          </div>
+
           <!-- Map / Deck detail + Aankoopprijs -->
           <div class="two-col">
             <div class="pb-field">
@@ -463,16 +495,26 @@
             </div>
 
             <div class="pb-field">
-              <label class="pb-label" for="edit-buy">Aankoopprijs p/s (€)</label>
+              <label class="pb-label" for="edit-buy">Aankoopprijs p/s (€ · optioneel)</label>
               <input
                 id="edit-buy"
                 type="number"
                 step="0.01"
                 min="0"
                 class="pb-input mono"
-                [ngModel]="draft.purchasePrice"
-                (ngModelChange)="patchDraft({ purchasePrice: +$event })"
+                placeholder="Optioneel (leeg = niet ingevuld)"
+                [ngModel]="draft.purchasePrice > 0 ? draft.purchasePrice : null"
+                (ngModelChange)="onDraftPurchasePriceChange($event)"
               />
+              @if (draft.marketPrice > 0 && draft.purchasePrice !== draft.marketPrice) {
+                <button
+                  type="button"
+                  class="price-optin-btn mono"
+                  (click)="patchDraft({ purchasePrice: draft.marketPrice })"
+                >
+                  Marktprijs overnemen ({{ formatEur(draft.marketPrice) }})
+                </button>
+              }
             </div>
           </div>
 

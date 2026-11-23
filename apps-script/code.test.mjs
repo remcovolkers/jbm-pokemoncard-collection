@@ -11,13 +11,15 @@ const CODE_GS_SOURCE = fs.readFileSync(CODE_GS_PATH, 'utf8');
  * Lichtgewicht in-memory Google Sheets mock om apps-script/Code.gs direct te testen
  * (inclusief harde verificatie dat bestaande formule-kolommen nooit overschreven worden).
  */
-function createFakeSheet(name, initialRows = []) {
+function createFakeSheet(name, initialRows = [], options = {}) {
   const grid = initialRows.map((r) => [...r]);
   const validations = new Map();
+  let maxCols = options.maxCols ?? Math.max(0, ...grid.map((r) => r.length));
 
   const ensureCell = (r, c) => {
     while (grid.length < r) grid.push([]);
     while (grid[r - 1].length < c) grid[r - 1].push('');
+    if (c > maxCols) maxCols = c;
   };
 
   const rangeObj = (startRow, startCol, numRows, numCols) => ({
@@ -89,6 +91,11 @@ function createFakeSheet(name, initialRows = []) {
     _validations: validations,
     getName: () => name,
     getLastRow: () => grid.length,
+    getLastColumn: () => Math.max(0, ...grid.map((r) => r.length)),
+    getMaxColumns: () => Math.max(maxCols, ...grid.map((r) => r.length)),
+    insertColumnAfter(colPos) {
+      maxCols = Math.max(maxCols, colPos + 1);
+    },
     clearContents() {
       grid.length = 0;
     },
@@ -118,10 +125,14 @@ function createGasEnvironment(options = {}) {
   colRow2[18] = '=FORMULA_PROFIT';
   colRow2[19] = '=FORMULA_ROI';
 
-  const collectionSheet = createFakeSheet('Collectie', [
-    ['Kaart-ID', 'Kaartnaam', 'Set', 'Kaartnr.'],
-    colRow2,
-  ]);
+  const collectionSheet = createFakeSheet(
+    'Collectie',
+    [
+      ['Kaart-ID', 'Kaartnaam', 'Set', 'Kaartnr.'],
+      colRow2,
+    ],
+    { maxCols: 22 }
+  );
 
   // Set Voortgang: koprij 1, rij 2 met formules in D..H
   const setRow2 = ['', '', '', '=FORMULA_OWNED', '=FORMULA_REM', '=FORMULA_PCT', '', '=FORMULA_SETVAL'];
@@ -538,12 +549,26 @@ describe('apps-script/Code.gs Backend API & Formule-integriteit', () => {
           contents: JSON.stringify({
             token: 'test-secret-token',
             action: 'updateFeedback',
-            payload: { id: 'fb-test-1', status: 'done', votes: 5 },
+            payload: {
+              id: 'fb-test-1',
+              page: 'Instellingen',
+              category: 'Verbetering',
+              title: 'Export naar CSV/JSON',
+              description: 'Ook voor losse sets',
+              author: 'Melli',
+              status: 'done',
+              votes: 5,
+            },
           }),
         },
       }).getContent()
     );
     assert.equal(updRes.ok, true);
+    assert.equal(updRes.data.feedback[0].page, 'Instellingen');
+    assert.equal(updRes.data.feedback[0].category, 'Verbetering');
+    assert.equal(updRes.data.feedback[0].title, 'Export naar CSV/JSON');
+    assert.equal(updRes.data.feedback[0].description, 'Ook voor losse sets');
+    assert.equal(updRes.data.feedback[0].author, 'Melli');
     assert.equal(updRes.data.feedback[0].status, 'done');
     assert.equal(updRes.data.feedback[0].votes, 5);
 
@@ -748,5 +773,70 @@ describe('apps-script/Code.gs Backend API & Formule-integriteit', () => {
     assert.equal(resFms.ok, true);
     assert.equal(resFms.result.cardId, 'me07-007');
     assert.ok(fetchedUrls.some((u) => u.endsWith('/cards/me07-007')));
+  });
+
+  it('ondersteunt optionele Herkomst / acquisitionMethod (kolom W) bij addCard, updateCard en deleteCard zonder R:T formules te raken', () => {
+    const { sandbox, sheets } = createGasEnvironment();
+
+    const addRes = JSON.parse(
+      sandbox.doPost({
+        postData: {
+          contents: JSON.stringify({
+            token: 'test-secret-token',
+            action: 'addCard',
+            payload: {
+              cardId: 'sv03.5-151',
+              name: 'Mew ex',
+              setName: '151',
+              cardNumber: '151/165',
+              purchasePrice: 0,
+              marketPrice: 11.4,
+              acquisitionMethod: 'Pack Pull',
+            },
+          }),
+        },
+      }).getContent()
+    );
+
+    assert.equal(addRes.ok, true);
+    assert.equal(sheets.Collectie._grid[0][22], 'Herkomst');
+    assert.equal(sheets.Collectie._grid[1][22], 'Pack Pull');
+    assert.equal(sheets.Collectie._grid[1][17], '=FORMULA_TOTAL_VAL');
+    assert.equal(sheets.Collectie._grid[1][18], '=FORMULA_PROFIT');
+    assert.equal(sheets.Collectie._grid[1][19], '=FORMULA_ROI');
+    assert.equal(addRes.data.collection[0].acquisitionMethod, 'Pack Pull');
+    assert.equal(addRes.data.collection[0].purchasePrice, 0);
+
+    const updRes = JSON.parse(
+      sandbox.doPost({
+        postData: {
+          contents: JSON.stringify({
+            token: 'test-secret-token',
+            action: 'updateCard',
+            payload: { rowIndex: 2, acquisitionMethod: 'Single gekocht', purchasePrice: 9.5 },
+          }),
+        },
+      }).getContent()
+    );
+    assert.equal(updRes.ok, true);
+    assert.equal(sheets.Collectie._grid[1][22], 'Single gekocht');
+    assert.equal(updRes.data.collection[0].acquisitionMethod, 'Single gekocht');
+    assert.equal(updRes.data.collection[0].purchasePrice, 9.5);
+    assert.equal(sheets.Collectie._grid[1][17], '=FORMULA_TOTAL_VAL');
+
+    const delRes = JSON.parse(
+      sandbox.doPost({
+        postData: {
+          contents: JSON.stringify({
+            token: 'test-secret-token',
+            action: 'deleteCard',
+            payload: { rowIndex: 2 },
+          }),
+        },
+      }).getContent()
+    );
+    assert.equal(delRes.ok, true);
+    assert.equal(sheets.Collectie._grid[1][22], '');
+    assert.equal(sheets.Collectie._grid[1][17], '=FORMULA_TOTAL_VAL');
   });
 });

@@ -11,9 +11,13 @@
 
       <div class="pb-sheet__header">
         <div>
-          <h2 id="fb-modal-title">Feedback geven</h2>
+          <h2 id="fb-modal-title">{{ isEditMode() ? 'Feedback bewerken' : 'Feedback geven' }}</h2>
           <p class="fb-sheet__sub">
-            Meld een bug, deel een idee of stel een verbetering voor op de Feedback Hub to-do lijst.
+            {{
+              isEditMode()
+                ? 'Pas de titel, pagina, categorie of toelichting aan in de Feedback Hub.'
+                : 'Meld een bug, deel een idee of stel een verbetering voor op de Feedback Hub to-do lijst.'
+            }}
           </p>
         </div>
         <button type="button" class="pb-btn pb-btn--icon" aria-label="Sluiten" (click)="close()">
@@ -32,7 +36,7 @@
             [ngModel]="selectedPage()"
             (ngModelChange)="selectedPage.set($event)"
           >
-            @for (page of pages; track page) {
+            @for (page of availablePages(); track page) {
               <option [value]="page">{{ page }}</option>
             }
           </select>
@@ -42,7 +46,7 @@
         <div class="pb-field">
           <span class="pb-label">Categorie</span>
           <div class="fb-cats">
-            @for (cat of categories; track cat) {
+            @for (cat of availableCategories(); track cat) {
               <button
                 type="button"
                 class="pb-pill pb-pill--interactive"
@@ -103,25 +107,33 @@
             class="pb-btn pb-btn--primary pb-btn--full"
             [disabled]="!title().trim() || isSubmitting()"
           >
-            <span class="material-symbols-outlined">send</span>
-            <span>Opslaan in Feedback Hub</span>
+            <span class="material-symbols-outlined">{{ isEditMode() ? 'save' : 'send' }}</span>
+            <span>{{ isEditMode() ? 'Wijzigingen opslaan' : 'Opslaan in Feedback Hub' }}</span>
           </button>
 
-          <button
-            type="button"
-            class="pb-btn pb-btn--secondary pb-btn--full"
-            [disabled]="!title().trim() || isSubmitting()"
-            (click)="submit(true)"
-          >
-            <span class="material-symbols-outlined">public</span>
-            <span>Opslaan &amp; deel publiek (GitHub Issue)</span>
-          </button>
+          @if (isEditMode()) {
+            <button type="button" class="pb-btn pb-btn--secondary pb-btn--full" (click)="close()">
+              <span>Annuleren</span>
+            </button>
+          } @else {
+            <button
+              type="button"
+              class="pb-btn pb-btn--secondary pb-btn--full"
+              [disabled]="!title().trim() || isSubmitting()"
+              (click)="submit(true)"
+            >
+              <span class="material-symbols-outlined">public</span>
+              <span>Opslaan &amp; deel publiek (GitHub Issue)</span>
+            </button>
+          }
         </div>
 
-        <button type="button" class="fb-hub-link" (click)="openHub()">
-          <span>Bekijk alle open punten in de Feedback Hub</span>
-          <span class="material-symbols-outlined">arrow_forward</span>
-        </button>
+        @if (!isEditMode()) {
+          <button type="button" class="fb-hub-link" (click)="openHub()">
+            <span>Bekijk alle open punten in de Feedback Hub</span>
+            <span class="material-symbols-outlined">arrow_forward</span>
+          </button>
+        }
       </form>
     </div>
   </div>

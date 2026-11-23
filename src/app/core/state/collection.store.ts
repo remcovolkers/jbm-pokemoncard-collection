@@ -67,7 +67,17 @@ export class CollectionStore {
   readonly binderSlotsPerPage = computed(() => this.snapshot().binderSlotsPerPage);
   readonly wishlist = computed(() => this.snapshot().wishlist);
   readonly trades = computed(() => this.snapshot().trades);
-  readonly settings = computed(() => this.snapshot().settings ?? DEFAULT_DROPDOWN_SETTINGS);
+  readonly settings = computed(() => {
+    const remote = this.snapshot().settings;
+    return {
+      ...DEFAULT_DROPDOWN_SETTINGS,
+      ...remote,
+      acquisitionMethods:
+        remote?.acquisitionMethods && remote.acquisitionMethods.length > 0
+          ? remote.acquisitionMethods
+          : DEFAULT_DROPDOWN_SETTINGS.acquisitionMethods,
+    };
+  });
   readonly syncedAt = computed(() => this.snapshot().syncedAt);
 
   readonly portfolio = computed(() =>
@@ -563,6 +573,7 @@ export class CollectionStore {
       imageUrl: payload.imageUrl || buildTcgdexAssetUrl(payload.cardId ?? '', 'high'),
       trendPercent: payload.trendPercent,
       forTrade: Boolean(payload.forTrade),
+      acquisitionMethod: (payload.acquisitionMethod ?? '').trim(),
       notes: payload.notes ?? '',
     };
 
@@ -742,7 +753,7 @@ export class CollectionStore {
           quantity: 1,
           storageLocation: 'Hoofdbinder',
           binderDetail: 'Vanuit Verlanglijst',
-          purchasePrice: purchasePrice ?? item.marketPrice,
+          purchasePrice: purchasePrice ?? 0,
           marketPrice: item.marketPrice,
           imageUrl: item.imageUrl,
           forTrade: false,

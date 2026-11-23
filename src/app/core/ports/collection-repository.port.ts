@@ -4,7 +4,9 @@ import {
   AppSnapshot,
   BinderSlotsPerPage,
   CollectionCard,
+  FeedbackCategory,
   FeedbackItem,
+  FeedbackPage,
   FeedbackStatus,
   TradeEntry,
   WishlistItem,
@@ -43,6 +45,17 @@ export interface RefreshPricesResult {
   snapshot: AppSnapshot;
 }
 
+export interface UpdateFeedbackPayload {
+  id: string;
+  page?: FeedbackPage | string;
+  category?: FeedbackCategory | string;
+  title?: string;
+  description?: string;
+  author?: string;
+  status?: FeedbackStatus;
+  votes?: number;
+}
+
 /**
  * Hexagonale port voor het lezen en schrijven van de volledige collectiestatus (Google Sheets / Demo / Cache).
  */
@@ -57,10 +70,7 @@ export interface CollectionRepository {
   markWishlistFound(config: AppConnectionConfig, payload: MarkWishlistFoundPayload): Promise<AppSnapshot>;
   logTrade(config: AppConnectionConfig, payload: Omit<TradeEntry, 'rowIndex' | 'netResult'>): Promise<AppSnapshot>;
   addFeedback?(config: AppConnectionConfig, payload: Omit<FeedbackItem, 'source' | 'rowIndex'>): Promise<AppSnapshot>;
-  updateFeedback?(
-    config: AppConnectionConfig,
-    payload: { id: string; status?: FeedbackStatus; votes?: number }
-  ): Promise<AppSnapshot>;
+  updateFeedback?(config: AppConnectionConfig, payload: UpdateFeedbackPayload): Promise<AppSnapshot>;
   deleteFeedback?(config: AppConnectionConfig, payload: { id: string }): Promise<AppSnapshot>;
   refreshPrices(config: AppConnectionConfig): Promise<RefreshPricesResult>;
 }

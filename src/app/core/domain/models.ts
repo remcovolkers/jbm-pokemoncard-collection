@@ -59,6 +59,7 @@ export interface CollectionCard {
   /** Optionele trend % voor weergave */
   trendPercent?: number;
   forTrade: boolean;
+  acquisitionMethod?: string;
   notes: string;
 }
 
@@ -135,6 +136,7 @@ export interface DropdownSettings {
   storageLocations: string[];
   priorities: string[];
   tradeTypes: string[];
+  acquisitionMethods?: string[];
 }
 
 export interface AppSnapshot {
@@ -326,4 +328,12 @@ export const DEFAULT_DROPDOWN_SETTINGS: DropdownSettings = {
   ],
   priorities: ['Hoog', 'Gemiddeld', 'Laag', 'Grail'],
   tradeTypes: ['Verkoop', 'Ruil', 'Inruil'],
+  acquisitionMethods: [
+    'Pack Pull',
+    'Single gekocht',
+    'Geruild (Trade)',
+    'Promo / Sealed Box',
+    'Cadeau',
+    'Oude collectie',
+  ],
 };

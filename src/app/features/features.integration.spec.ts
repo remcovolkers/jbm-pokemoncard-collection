@@ -237,6 +237,32 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
       await comp.deleteActiveCard();
       expect(store.collection().some((c) => c.cardId === 'base1-44')).toBe(false);
     });
+
+    it('laat optionele herkomst (pull method) en aankoopprijs instellen en wissen in Detail Sheet', async () => {
+      const fixture = TestBed.createComponent(CollectionComponent);
+      const comp = fixture.componentInstance;
+      const store = TestBed.inject(CollectionStore);
+      fixture.detectChanges();
+
+      const target = comp.filteredCards()[0];
+      comp.openDetail(target);
+      comp.toggleDraftAcquisitionMethod('Pack Pull');
+      comp.onDraftPurchasePriceChange('');
+      await comp.saveDraft();
+
+      const updated = store.collection().find((c) => c.cardId === target.cardId && c.rowIndex === target.rowIndex)!;
+      expect(updated.acquisitionMethod).toBe('Pack Pull');
+      expect(updated.purchasePrice).toBe(0);
+
+      // Nogmaals kiezen wist optionele herkomst netjes
+      comp.openDetail(updated);
+      comp.toggleDraftAcquisitionMethod('Pack Pull');
+      comp.onDraftPurchasePriceChange('14.5');
+      await comp.saveDraft();
+      const cleared = store.collection().find((c) => c.cardId === target.cardId && c.rowIndex === target.rowIndex)!;
+      expect(cleared.acquisitionMethod).toBe('');
+      expect(cleared.purchasePrice).toBe(14.5);
+    });
   });
 
   describe('QuickAddComponent', () => {
@@ -268,27 +294,45 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
       const store = TestBed.inject(CollectionStore);
       fixture.detectChanges();
 
-      // Zoek op naam en selecteer resultaat
+      // Zoek op naam en selecteer resultaat -> aankoopprijs blijft LEEG (nooit automatisch Cardmarket-prijs invullen!)
       comp.inputMode.set('name');
       await comp.searchByName('Charizard');
       expect(comp.nameResults().length).toBe(1);
       await comp.selectNameResult(comp.nameResults()[0]);
       expect(comp.previewCard()?.id).toBe('sv03-125');
       expect(comp.matchedPokedexEntry()?.dexNumber).toBe(6);
+      expect(comp.purchasePrice()).toBeNull();
 
-      // Opslaan & op scherm blijven ZONDER Pack Mode -> reset zoekveld, prijs en te-ruil vlag!
+      // Opt-in knop kan marktprijs expliciet overnemen als gebruiker dat zelf kiest
+      comp.applyMarketPriceAsPurchase();
+      expect(comp.purchasePrice()).toBe(MOCK_CATALOG_CARD.marketPriceEur);
+
+      // Opslaan & op scherm blijven ZONDER Pack Mode -> reset zoekveld, prijs, herkomst en te-ruil vlag!
+      comp.toggleAcquisitionMethod('Single gekocht');
+      expect(comp.acquisitionMethod()).toBe('Single gekocht');
       comp.purchasePrice.set(12.5);
       comp.forTrade.set(true);
       const before = store.collection().length;
       await comp.saveCard(true);
       expect(store.collection().length).toBe(before + 1);
+      expect(store.collection()[0].acquisitionMethod).toBe('Single gekocht');
+      expect(store.collection()[0].purchasePrice).toBe(12.5);
       expect(comp.packMode()).toBe(false);
       expect(comp.codeQuery()).toBe('');
-      expect(comp.purchasePrice()).toBe(0);
+      expect(comp.purchasePrice()).toBeNull();
+      expect(comp.acquisitionMethod()).toBe('');
       expect(comp.forTrade()).toBe(false);
       expect(comp.previewCard()).toBeNull();
 
-      // Handmatige invoer met Pack Opening Mode AAN -> houdt scherm open en onthoudt setcode
+      // Nieuwe lookup -> aankoopprijs blijft leeg en kaart wordt met € 0 opgeslagen als Pack Pull
+      await comp.lookupByCode('OBF 125');
+      expect(comp.purchasePrice()).toBeNull();
+      comp.toggleAcquisitionMethod('Pack Pull');
+      await comp.saveCard(true, true);
+      expect(comp.packMode()).toBe(true);
+      expect(comp.acquisitionMethod()).toBe('Pack Pull');
+
+      // Handmatige invoer met Pack Opening Mode AAN -> houdt scherm open en onthoudt setcode & pull method
       comp.inputMode.set('code');
       comp.codeQuery.set('OBF 999');
       comp.previewCard.set(null);
@@ -298,7 +342,7 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
       await comp.saveCard(true, true);
       expect(comp.packMode()).toBe(true);
       expect(comp.codeQuery()).toBe('OBF ');
-      expect(store.collection().some((c) => c.name === 'Custom Promo Pikachu')).toBe(true);
+      expect(store.collection().some((c) => c.name === 'Custom Promo Pikachu' && c.purchasePrice === 0)).toBe(true);
 
       // Expliciet "Opslaan & Naar Collectie" navigeert óók als Pack Opening Mode aan staat
       comp.manualName.set('Final Card');
@@ -590,6 +634,25 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
       feedback.openComposer('Dashboard');
       comp.onEscapeKey();
       expect(feedback.isComposerOpen()).toBe(false);
+
+      // Bewerken van bestaand feedback-item via FeedbackModal in edit-modus
+      feedback.openEditor(saved);
+      fixture.detectChanges();
+      expect(comp.isEditMode()).toBe(true);
+      expect(comp.title()).toBe('Filter op shiny kaarten');
+
+      comp.selectedPage.set('Collectie');
+      comp.category.set('Idee');
+      comp.title.set('Filter op shiny én alt art kaarten');
+      comp.description.set('Aangepaste toelichting voor master sets.');
+      await comp.submit(false);
+
+      expect(feedback.isComposerOpen()).toBe(false);
+      const updated = feedback.items().find((i) => i.id === saved.id)!;
+      expect(updated.title).toBe('Filter op shiny én alt art kaarten');
+      expect(updated.page).toBe('Collectie');
+      expect(updated.category).toBe('Idee');
+      expect(updated.description).toBe('Aangepaste toelichting voor master sets.');
     });
 
     it('rendert publieke Feedback Hub to-do lijst schoon zonder demodata en filtert op status/pagina/zoekterm', async () => {

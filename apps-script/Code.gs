@@ -727,7 +727,9 @@ function readCollection_(ss) {
   if (!sheet) return [];
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return [];
-  var values = sheet.getRange(2, 1, lastRow - 1, 22).getValues();
+  var hasCol23 = !sheet.getLastColumn || sheet.getLastColumn() >= 23;
+  var numCols = hasCol23 ? 23 : 22;
+  var values = sheet.getRange(2, 1, lastRow - 1, numCols).getValues();
   var items = [];
 
   for (var i = 0; i < values.length; i++) {
@@ -763,6 +765,7 @@ function readCollection_(ss) {
       profitLoss: toNumber_(row[18], (marketPrice - purchasePrice) * qty),
       roiPercent: toNumber_(row[19], purchasePrice > 0 ? ((marketPrice - purchasePrice) / purchasePrice) * 100 : 0),
       forTrade: Boolean(row[20]),
+      acquisitionMethod: hasCol23 ? String(row[22] || '').trim() : '',
       notes: String(row[21] || '').trim()
     });
   }
@@ -927,14 +930,18 @@ function readSettings_(ss) {
       'Hoofdbinder', 'Toploader Binder', 'Trade Binder', 'Speeldeck', 'Display / Kast', 'Bulk Box'
     ],
     priorities: ['Hoog', 'Gemiddeld', 'Laag', 'Grail'],
-    tradeTypes: ['Verkoop', 'Ruil', 'Inruil']
+    tradeTypes: ['Verkoop', 'Ruil', 'Inruil'],
+    acquisitionMethods: [
+      'Pack Pull', 'Single gekocht', 'Geruild (Trade)', 'Promo / Sealed Box', 'Cadeau', 'Oude collectie'
+    ]
   };
 
   var sheet = ss.getSheetByName(SHEET_NAMES.SETTINGS);
   if (!sheet) return defaults;
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return defaults;
-  var matrix = sheet.getRange(1, 1, lastRow, 9).getValues();
+  var colCount = sheet.getLastColumn ? Math.min(Math.max(sheet.getLastColumn(), 1), 10) : 9;
+  var matrix = sheet.getRange(1, 1, lastRow, colCount).getValues();
   var headers = matrix[0].map(function (h) {
     return String(h || '').toLowerCase();
   });
@@ -948,10 +955,11 @@ function readSettings_(ss) {
     { key: 'gradings', match: ['grad'] },
     { key: 'storageLocations', match: ['opslag', 'locatie'] },
     { key: 'priorities', match: ['priorit'] },
-    { key: 'tradeTypes', match: ['transactie', 'ruil'] }
+    { key: 'tradeTypes', match: ['transactie', 'ruil'] },
+    { key: 'acquisitionMethods', match: ['herkomst', 'pull', 'acquisit'] }
   ];
 
-  for (var col = 0; col < 9; col++) {
+  for (var col = 0; col < colCount; col++) {
     var colVals = [];
     for (var r = 1; r < matrix.length; r++) {
       var v = String(matrix[r][col] || '').trim();
@@ -1032,6 +1040,15 @@ function handleAddCard_(ss, payload) {
   return { rowIndex: targetRow, cardId: cardData.cardId };
 }
 
+function ensureCollectionAcquisitionColumn_(sheet) {
+  if (sheet.getMaxColumns && sheet.getMaxColumns() < 23 && sheet.insertColumnAfter) {
+    sheet.insertColumnAfter(sheet.getMaxColumns());
+  }
+  if (!String(sheet.getRange(1, 23).getValue() || '').trim()) {
+    sheet.getRange(1, 23).setValue('Herkomst');
+  }
+}
+
 function handleUpdateCard_(ss, payload) {
   var sheet = ss.getSheetByName(SHEET_NAMES.COLLECTION);
   if (!sheet) throw new Error('Tabblad "' + SHEET_NAMES.COLLECTION + '" niet gevonden.');
@@ -1041,6 +1058,8 @@ function handleUpdateCard_(ss, payload) {
 
   var existingAQ = sheet.getRange(rowIndex, 1, 1, 17).getValues()[0];
   var existingUV = sheet.getRange(rowIndex, 21, 1, 2).getValues()[0];
+  var hasCol23 = !sheet.getLastColumn || sheet.getLastColumn() >= 23;
+  var existingW = hasCol23 ? String(sheet.getRange(rowIndex, 23).getValue() || '').trim() : '';
 
   var merged = {
     cardId: payload.cardId !== undefined ? payload.cardId : existingAQ[0],
@@ -1061,6 +1080,8 @@ function handleUpdateCard_(ss, payload) {
     purchasePrice: payload.purchasePrice !== undefined ? toNumber_(payload.purchasePrice, 0) : existingAQ[15],
     marketPrice: payload.marketPrice !== undefined ? toNumber_(payload.marketPrice, 0) : existingAQ[16],
     forTrade: payload.forTrade !== undefined ? Boolean(payload.forTrade) : Boolean(existingUV[0]),
+    acquisitionMethod:
+      payload.acquisitionMethod !== undefined ? String(payload.acquisitionMethod || '').trim() : existingW,
     notes: payload.notes !== undefined ? payload.notes : existingUV[1]
   };
 
@@ -1076,9 +1097,12 @@ function handleDeleteCard_(ss, payload) {
   var rowIndex = resolveCollectionRowIndex_(sheet, payload.rowIndex, payload.cardId);
   if (rowIndex < 2) throw new Error('Kaartrij niet gevonden om te verwijderen.');
 
-  // Wis alleen A:Q en U:V; laat formules in R:T intact!
+  // Wis alleen A:Q, U:V en optioneel W; laat formules in R:T intact!
   sheet.getRange(rowIndex, 1, 1, 17).clearContent();
   sheet.getRange(rowIndex, 21, 1, 2).setValues([[false, '']]);
+  if (!sheet.getLastColumn || sheet.getLastColumn() >= 23) {
+    sheet.getRange(rowIndex, 23).clearContent();
+  }
   syncPokedexBinder_(ss);
   return { deletedRowIndex: rowIndex };
 }
@@ -1107,6 +1131,15 @@ function writeCollectionRow_(sheet, rowIndex, data) {
   // Kolommen A:Q (1..17) en U:V (21..22) — sla R:T (18..20) bewust over!
   sheet.getRange(rowIndex, 1, 1, 17).setValues([rowAQ]);
   sheet.getRange(rowIndex, 21, 1, 2).setValues([[Boolean(data.forTrade), String(data.notes || '').trim()]]);
+
+  if (data.acquisitionMethod !== undefined) {
+    var acq = String(data.acquisitionMethod || '').trim();
+    var alreadyHasCol23 = sheet.getLastColumn ? sheet.getLastColumn() >= 23 : true;
+    if (acq || alreadyHasCol23) {
+      ensureCollectionAcquisitionColumn_(sheet);
+      sheet.getRange(rowIndex, 23).setValue(acq);
+    }
+  }
 }
 
 function handleUpdatePokedexSlot_(ss, payload) {
@@ -1316,11 +1349,26 @@ function handleUpdateFeedback_(ss, payload) {
   var rowIdx = findFeedbackRowById_(sheet, payload.id);
   if (rowIdx < 2) return { updated: false };
 
+  if (payload.page !== undefined) {
+    sheet.getRange(rowIdx, 3).setValue(String(payload.page).trim());
+  }
+  if (payload.category !== undefined) {
+    sheet.getRange(rowIdx, 4).setValue(String(payload.category).trim());
+  }
+  if (payload.title !== undefined) {
+    sheet.getRange(rowIdx, 5).setValue(String(payload.title).trim());
+  }
+  if (payload.description !== undefined) {
+    sheet.getRange(rowIdx, 6).setValue(String(payload.description).trim());
+  }
   if (payload.status !== undefined) {
     sheet.getRange(rowIdx, 7).setValue(String(payload.status).trim());
   }
   if (payload.votes !== undefined) {
     sheet.getRange(rowIdx, 8).setValue(Math.max(0, toNumber_(payload.votes, 1)));
+  }
+  if (payload.author !== undefined) {
+    sheet.getRange(rowIdx, 9).setValue(String(payload.author).trim() || 'Verzamelaar');
   }
   return { updated: true, rowIndex: rowIdx };
 }
