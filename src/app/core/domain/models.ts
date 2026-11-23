@@ -1,4 +1,4 @@
-export type BinderSlotsPerPage = 4 | 9 | 12 | 16;
+export type BinderSlotsPerPage = 4 | 9 | 12 | 16 | 20;
 
 export type FeedbackStatus = 'open' | 'in_progress' | 'done';
 export type FeedbackCategory = 'Bug' | 'Idee' | 'Verbetering' | 'UI / Design';

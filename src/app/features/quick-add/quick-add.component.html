@@ -555,20 +555,20 @@
         type="button"
         class="pb-btn pb-btn--primary pb-btn--full"
         [disabled]="isSaving() || (!previewCard() && !manualName().trim())"
-        (click)="saveCard(false)"
+        (click)="saveCard(true)"
       >
         <span class="material-symbols-outlined is-filled">bookmark_add</span>
-        <span>Opslaan in Collectie &amp; Sync Pokédex</span>
+        <span>Opslaan &amp; Nog een kaart</span>
       </button>
 
       <button
         type="button"
         class="pb-btn pb-btn--secondary pb-btn--full"
         [disabled]="isSaving() || (!previewCard() && !manualName().trim())"
-        (click)="saveCard(true)"
+        (click)="saveCard(false)"
       >
-        <span class="material-symbols-outlined pack-bolt">bolt</span>
-        <span>Opslaan &amp; Volgende Kaart (Pack Mode)</span>
+        <span class="material-symbols-outlined">inventory_2</span>
+        <span>Opslaan &amp; Naar Collectie</span>
       </button>
     </div>
   </div>

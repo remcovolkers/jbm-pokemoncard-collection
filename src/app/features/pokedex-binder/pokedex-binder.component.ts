@@ -51,6 +51,7 @@ export class PokedexBinderComponent implements OnInit {
     const spp = this.slotsPerPage();
     if (spp === 4) return 2;
     if (spp === 9) return 3;
+    if (spp === 20) return 5;
     return 4; // 12 (4x3) en 16 (4x4)
   });
 
@@ -202,7 +203,7 @@ export class PokedexBinderComponent implements OnInit {
 
   async changeSlotsPerPage(rawValue: string | number): Promise<void> {
     const val = Number(rawValue) as BinderSlotsPerPage;
-    if (val === 4 || val === 9 || val === 12 || val === 16) {
+    if (val === 4 || val === 9 || val === 12 || val === 16 || val === 20) {
       await this.store.updatePokedexSlot({ slotsPerPage: val });
       this.currentPage.set(1);
     }
@@ -286,9 +287,10 @@ export class PokedexBinderComponent implements OnInit {
     }
   }
 
-  chooseVariant(card: CollectionCard): void {
+  async chooseVariant(card: CollectionCard): Promise<void> {
     this.draftSelectedCard.set(formatBinderChoice(card));
     this.draftInBinder.set(true);
+    await this.confirmSlotSelection();
   }
 
   isChoiceSelected(card: CollectionCard): boolean {

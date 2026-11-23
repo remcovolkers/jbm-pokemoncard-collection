@@ -21,6 +21,16 @@
         <button
           type="button"
           class="pb-btn pb-btn--secondary"
+          [disabled]="filteredItems().length === 0"
+          (click)="copyFilteredPrompt()"
+          title="Kopieer alle zichtbare feedback-items als één prompt voor in de chat"
+        >
+          <span class="material-symbols-outlined">content_copy</span>
+          <span>Copy to prompt</span>
+        </button>
+        <button
+          type="button"
+          class="pb-btn pb-btn--secondary"
           [disabled]="feedback.isLoadingPublic()"
           (click)="feedback.refreshPublicIssues(false)"
           aria-label="Publieke feedback verversen"
@@ -226,6 +236,17 @@
               </span>
 
               <div class="todo-item__foot-actions">
+                <button
+                  type="button"
+                  class="todo-copy-btn mono"
+                  title="Kopieer dit item als prompt voor in de chat"
+                  [attr.aria-label]="'Copy to prompt voor ' + item.title"
+                  (click)="copyItemPrompt(item)"
+                >
+                  <span class="material-symbols-outlined">content_copy</span>
+                  <span>Prompt</span>
+                </button>
+
                 <select
                   class="status-mini-select mono"
                   [ngModel]="item.status"

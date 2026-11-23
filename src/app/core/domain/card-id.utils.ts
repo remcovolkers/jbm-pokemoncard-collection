@@ -446,8 +446,11 @@ export function buildTcgdexAssetUrl(
   return `https://assets.tcgdex.net/en/${series}/${setId}/${localId}/${quality}.webp`;
 }
 
-export function buildCardmarketSearchUrl(cardName: string, setName?: string, cardNumber?: string): string {
-  const numPart = cardNumber ? cardNumber.split('/')[0] : '';
-  const query = [cardName, setName, numPart].filter(Boolean).join(' ').trim();
+export function buildCardmarketSearchUrl(cardName: string, _setName?: string, cardNumber?: string): string {
+  const cleanName = (cardName || '').trim();
+  const rawNum = (cardNumber || '').split('/')[0].trim();
+  // Cardmarket gebruikt vaak geen volledige setnaam in de titel (wel Kaartnaam + nummer zonder voorloopnullen)
+  const cleanNum = /^\d+$/.test(rawNum) ? String(parseInt(rawNum, 10)) : rawNum;
+  const query = [cleanName, cleanNum].filter(Boolean).join(' ').trim();
   return `https://www.cardmarket.com/en/Pokemon/Products/Search?searchString=${encodeURIComponent(query)}`;
 }

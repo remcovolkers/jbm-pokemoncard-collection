@@ -93,7 +93,7 @@ export function calculatePortfolioSummary(
 
 /**
  * Berekent exacte binderpagina, vakje, rij en kolom voor een National Pokédex-nummer (1..1025).
- * Ondersteunt 4 (2×2), 9 (3×3), 12 (4×3) en 16 (4×4) vakjes per pagina.
+ * Ondersteunt 4 (2×2), 9 (3×3), 12 (4×3), 16 (4×4) en 20 (5×4) vakjes per pagina.
  */
 export function calculateBinderPosition(
   dexNumber: number,
@@ -108,6 +108,7 @@ export function calculateBinderPosition(
     9: { cols: 3, rows: 3 },
     12: { cols: 4, rows: 3 },
     16: { cols: 4, rows: 4 },
+    20: { cols: 5, rows: 4 },
   };
   const { cols, rows } = layoutMap[slotsPerPage];
   const row = Math.floor((slotInPage - 1) / cols) + 1;

@@ -30,6 +30,7 @@
           <option [value]="9">3×3 (9)</option>
           <option [value]="12">4×3 (12)</option>
           <option [value]="16">4×4 (16)</option>
+          <option [value]="20">5×4 (20)</option>
         </select>
 
         <div class="view-switch" role="group" aria-label="Weergave">
@@ -159,6 +160,7 @@
           [class.cols-2]="gridCols() === 2"
           [class.cols-3]="gridCols() === 3"
           [class.cols-4]="gridCols() === 4"
+          [class.cols-5]="gridCols() === 5"
         >
           @for (slot of pageSlots(); track slot.dexNumber) {
             <button

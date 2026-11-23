@@ -170,9 +170,11 @@ describe('card-id.utils', () => {
       expect(getDisplaySetCode('custom')).toBe('TCG');
     });
 
-    it('bouwt geldige gecodeerde Cardmarket zoek-URLs', () => {
+    it('bouwt geldige gecodeerde Cardmarket zoek-URLs zonder breekbare setnaam of voorloopnullen', () => {
       const url = buildCardmarketSearchUrl('Charizard ex', '151', '199/165');
-      expect(url).toBe('https://www.cardmarket.com/en/Pokemon/Products/Search?searchString=Charizard%20ex%20151%20199');
+      expect(url).toBe('https://www.cardmarket.com/en/Pokemon/Products/Search?searchString=Charizard%20ex%20199');
+      const paddedUrl = buildCardmarketSearchUrl('Zorua', 'Delta Reign', '011/103');
+      expect(paddedUrl).toBe('https://www.cardmarket.com/en/Pokemon/Products/Search?searchString=Zorua%2011');
     });
   });
 });

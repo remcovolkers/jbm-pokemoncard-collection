@@ -266,18 +266,23 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
       expect(comp.previewCard()?.id).toBe('sv03-125');
       expect(comp.matchedPokedexEntry()?.dexNumber).toBe(6);
 
-      // Opslaan in Pack Opening Mode houdt scherm open en onthoudt instellingen
+      // Opslaan & op scherm blijven ZONDER Pack Mode -> reset zoekveld zonder set te onthouden!
       const before = store.collection().length;
       await comp.saveCard(true);
       expect(store.collection().length).toBe(before + 1);
-      expect(comp.packMode()).toBe(true);
+      expect(comp.packMode()).toBe(false);
+      expect(comp.codeQuery()).toBe('');
       expect(comp.previewCard()).toBeNull();
 
-      // Handmatige invoer wanneer TCGdex geen match geeft
+      // Handmatige invoer met Pack Opening Mode AAN -> houdt scherm open en onthoudt setcode
+      comp.codeQuery.set('OBF 999');
+      comp.previewCard.set(null);
       comp.manualName.set('Custom Promo Pikachu');
       comp.manualSet.set('Promo');
       comp.manualNumber.set('001/001');
-      await comp.saveCard(true);
+      await comp.saveCard(true, true);
+      expect(comp.packMode()).toBe(true);
+      expect(comp.codeQuery()).toBe('OBF ');
       expect(store.collection().some((c) => c.name === 'Custom Promo Pikachu')).toBe(true);
     });
   });
@@ -312,7 +317,7 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
       expect(comp.filteredSlots().length).toBe(2);
     });
 
-    it('wisselt kaartvarianten, upgrade-vlag, Escape-sluiting en binder-indeling (4/9/12/16)', async () => {
+    it('wisselt kaartvarianten (met directe sluiting), upgrade-vlag, Escape-sluiting en binder-indeling (4/9/12/16/20)', async () => {
       const fixture = TestBed.createComponent(PokedexBinderComponent);
       const comp = fixture.componentInstance;
       const store = TestBed.inject(CollectionStore);
@@ -323,37 +328,58 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
       expect(comp.activeSlotMatchingCards().length).toBe(3);
 
       const baseVenusaur = comp.activeSlotMatchingCards().find((c) => c.cardId === 'base1-15')!;
-      comp.chooseVariant(baseVenusaur);
-      comp.draftUpgradeWanted.set(false);
-      await comp.confirmSlotSelection();
+      await comp.chooseVariant(baseVenusaur);
+      expect(comp.activeSlot()).toBeNull(); // Modaal sluit direct na kiezen van andere kaart!
 
       const updatedSlot = store.pokedex().find((s) => s.dexNumber === 3)!;
       expect(updatedSlot.selectedCard).toContain('base1-15');
-      expect(updatedSlot.upgradeWanted).toBe(false);
+      expect(updatedSlot.inBinder).toBe(true);
 
       // Escape sluit sheet
       comp.openSlotSheet(venusaurSlot);
       comp.onEscapeKey();
       expect(comp.activeSlot()).toBeNull();
 
-      // Indeling schakelen naar 4, 12 en 16
+      // Indeling schakelen naar 4, 12, 16 en 20 (5x4)
       await comp.changeSlotsPerPage(4);
       expect(comp.gridCols()).toBe(2);
       await comp.changeSlotsPerPage(12);
       expect(comp.gridCols()).toBe(4);
       await comp.changeSlotsPerPage(16);
       expect(comp.pageSlots().length).toBe(16);
+      await comp.changeSlotsPerPage(20);
+      expect(comp.gridCols()).toBe(5);
+      expect(comp.pageSlots().length).toBe(20);
     });
   });
 
   describe('SetProgress, Wishlist, Trades & Settings', () => {
-    it('filtert en sorteert Set Voortgang en klikt door naar Collectie', () => {
+    it('filtert en sorteert Set Voortgang, telt alleen actieve sets (>0 kaarten) en klikt door naar Collectie', () => {
       const router = TestBed.inject(Router);
       const navSpy = vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
       const fixture = TestBed.createComponent(SetProgressComponent);
       const comp = fixture.componentInstance;
       const store = TestBed.inject(CollectionStore);
       fixture.detectChanges();
+
+      const activeBefore = comp.stats().count;
+      // Voeg een lege set zonder kaarten toe -> mag NIET als actieve set worden meegeteld!
+      store.snapshot.update((snap) => ({
+        ...snap,
+        setProgress: [
+          ...snap.setProgress,
+          {
+            setName: 'Lege Testset',
+            series: 'Test',
+            totalCards: 100,
+            ownedUnique: 0,
+            remaining: 100,
+            progressPercent: 0,
+            totalSetValue: 0,
+          },
+        ],
+      }));
+      expect(comp.stats().count).toBe(activeBefore);
 
       comp.query.set('151');
       expect(comp.filteredSets().length).toBe(1);
@@ -549,6 +575,19 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
       const beforeVotes = itemA.votes;
       await feedback.toggleUpvote(itemA);
       expect(feedback.items().find((i) => i.id === itemA.id)?.votes).toBe(beforeVotes - 1);
+
+      // Copy-to-prompt formatteert zowel enkel item als gefilterde lijst netjes voor de chat
+      comp.searchQuery.set('');
+      const bulkPrompt = comp.buildFilteredPrompt();
+      expect(bulkPrompt).toContain('[Idee] Dashboard — Home screen Widget');
+      expect(bulkPrompt).toContain('[Bug] Collectie — Zoekbalk ellipsis');
+      const writeTextSpy = vi.fn().mockResolvedValue(undefined);
+      Object.defineProperty(navigator, 'clipboard', {
+        value: { writeText: writeTextSpy },
+        configurable: true,
+      });
+      await comp.copyItemPrompt(itemA);
+      expect(writeTextSpy).toHaveBeenCalledWith(expect.stringContaining('Home screen Widget'));
     });
 
     it('toont desktop feedback-knop in App shell die huidige route meegeeft aan de modal', async () => {

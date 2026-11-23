@@ -6,6 +6,7 @@ import {
   FeedbackItem,
   FeedbackStatus,
 } from '../../core/domain/models';
+import { CollectionStore } from '../../core/state/collection.store';
 import { FeedbackStore } from '../../core/state/feedback.store';
 
 type StatusFilter = 'all' | FeedbackStatus;
@@ -19,6 +20,7 @@ type StatusFilter = 'all' | FeedbackStatus;
 })
 export class FeedbackHubComponent implements OnInit {
   readonly feedback = inject(FeedbackStore);
+  private readonly store = inject(CollectionStore);
 
   readonly pages = FEEDBACK_PAGES;
   readonly categories: FeedbackCategory[] = ['Bug', 'Idee', 'Verbetering', 'UI / Design'];
@@ -84,5 +86,74 @@ export class FeedbackHubComponent implements OnInit {
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return iso.slice(0, 10);
     return d.toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' });
+  }
+
+  formatItemAsPrompt(item: FeedbackItem): string {
+    const lines = [
+      `[${item.category}] ${item.page} — ${item.title} (status: ${this.statusLabel(item.status)}, stemmen: ${item.votes})`,
+    ];
+    if (item.description?.trim()) {
+      lines.push(item.description.trim());
+    }
+    lines.push(`Ingediend door: ${item.author} (${this.sourceLabel(item.source)})`);
+    return lines.join('\n');
+  }
+
+  buildFilteredPrompt(): string {
+    const items = this.filteredItems();
+    if (items.length === 0) return '';
+    const header = `Kun je de volgende ${items.length === 1 ? 'feedback' : `${items.length} feedback-items`} uit PokéBinder oppakken en oplossen?\n`;
+    return header + '\n' + items.map((item, idx) => `${idx + 1}. ${this.formatItemAsPrompt(item)}`).join('\n\n---\n\n');
+  }
+
+  async copyItemPrompt(item: FeedbackItem): Promise<void> {
+    const text = `Kun je dit feedback-item uit PokéBinder oppakken?\n\n${this.formatItemAsPrompt(item)}`;
+    const ok = await this.copyToClipboard(text);
+    this.store.showToast(
+      ok ? 'Feedback gekopieerd als prompt voor in de chat!' : 'Kopiëren mislukt — selecteer de tekst handmatig.',
+      ok ? 'success' : 'warning'
+    );
+  }
+
+  async copyFilteredPrompt(): Promise<void> {
+    const text = this.buildFilteredPrompt();
+    if (!text) {
+      this.store.showToast('Geen zichtbare feedback-items om te kopiëren.', 'info');
+      return;
+    }
+    const ok = await this.copyToClipboard(text);
+    this.store.showToast(
+      ok
+        ? `${this.filteredItems().length} feedback-item(s) gekopieerd als prompt!`
+        : 'Kopiëren mislukt — selecteer de tekst handmatig.',
+      ok ? 'success' : 'warning'
+    );
+  }
+
+  private async copyToClipboard(text: string): Promise<boolean> {
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+    } catch {
+      // Val terug op textarea-methode (bijv. in oudere WebViews)
+    }
+
+    try {
+      if (typeof document === 'undefined') return false;
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      const copied = document.execCommand('copy');
+      document.body.removeChild(ta);
+      return copied;
+    } catch {
+      return false;
+    }
   }
 }

@@ -40,13 +40,14 @@ export class SetProgressComponent {
 
   readonly stats = computed(() => {
     const sets = this.store.setProgress();
-    const totalValue = sets.reduce((acc, s) => acc + s.totalSetValue, 0);
-    const totalOwned = sets.reduce((acc, s) => acc + s.ownedUnique, 0);
+    const activeSets = sets.filter((s) => s.ownedUnique > 0);
+    const totalValue = activeSets.reduce((acc, s) => acc + s.totalSetValue, 0);
+    const totalOwned = activeSets.reduce((acc, s) => acc + s.ownedUnique, 0);
     const avgPct =
-      sets.length > 0
-        ? Math.round((sets.reduce((acc, s) => acc + s.progressPercent, 0) / sets.length) * 10) / 10
+      activeSets.length > 0
+        ? Math.round((activeSets.reduce((acc, s) => acc + s.progressPercent, 0) / activeSets.length) * 10) / 10
         : 0;
-    return { count: sets.length, totalValue, totalOwned, avgPct };
+    return { count: activeSets.length, totalValue, totalOwned, avgPct };
   });
 
   openSetInCollection(set: SetProgress): void {

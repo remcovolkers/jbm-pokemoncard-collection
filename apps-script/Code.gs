@@ -805,7 +805,7 @@ function readBinderSlotsPerPage_(ss) {
   var sheet = ss.getSheetByName(SHEET_NAMES.POKEDEX);
   if (!sheet) return 9;
   var val = toNumber_(sheet.getRange('H4').getValue(), 9);
-  if (val === 4 || val === 9 || val === 12 || val === 16) return val;
+  if (val === 4 || val === 9 || val === 12 || val === 16 || val === 20) return val;
   return 9;
 }
 
@@ -1115,7 +1115,7 @@ function handleUpdatePokedexSlot_(ss, payload) {
 
   if (payload.slotsPerPage !== undefined) {
     var spp = toNumber_(payload.slotsPerPage, 9);
-    if (spp === 4 || spp === 9 || spp === 12 || spp === 16) {
+    if (spp === 4 || spp === 9 || spp === 12 || spp === 16 || spp === 20) {
       sheet.getRange('H4').setValue(spp);
     }
   }

@@ -285,6 +285,30 @@
   }
 }
 
+.todo-copy-btn {
+  @include pressable;
+  height: 30px;
+  padding: 0 0.55rem;
+  border-radius: $radius-sm;
+  background-color: rgba($color-secondary, 0.14);
+  border: 1px solid rgba($color-secondary, 0.35);
+  color: $color-secondary;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  white-space: nowrap;
+
+  .material-symbols-outlined {
+    font-size: 14px;
+  }
+
+  &:hover {
+    background-color: rgba($color-secondary, 0.24);
+  }
+}
+
 .todo-link {
   @include pressable;
   width: 30px;

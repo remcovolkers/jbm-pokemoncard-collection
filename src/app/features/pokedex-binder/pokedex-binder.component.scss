@@ -217,6 +217,15 @@
   &.cols-4 {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
+
+  &.cols-5 {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0.35rem;
+
+    @include mq-md {
+      gap: 0.65rem;
+    }
+  }
 }
 
 .pocket {

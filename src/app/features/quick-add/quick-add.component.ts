@@ -335,7 +335,7 @@ export class QuickAddComponent implements OnDestroy {
     }
   }
 
-  async saveCard(stayInPackMode: boolean): Promise<void> {
+  async saveCard(stayOnPage: boolean, enablePackMode = false): Promise<void> {
     const card = this.previewCard();
     const parsed = parseCardIdInput(this.codeQuery());
 
@@ -350,9 +350,10 @@ export class QuickAddComponent implements OnDestroy {
 
     this.isSaving.set(true);
     try {
+      const nextPackMode = enablePackMode ? true : this.packMode();
       // Onthoud voorkeuren voor Pack Opening Mode
       this.store.updatePackDefaults({
-        enabled: stayInPackMode ? true : this.packMode(),
+        enabled: nextPackMode,
         setCode: parsed?.inputSetCode || this.store.packDefaults().setCode,
         condition: this.condition(),
         storageLocation: this.storageLocation(),
@@ -384,8 +385,8 @@ export class QuickAddComponent implements OnDestroy {
         setTotalCards: card?.officialCardCount || card?.totalCardCount,
       });
 
-      if (stayInPackMode || this.packMode()) {
-        this.prepareNextPackCard();
+      if (stayOnPage || nextPackMode) {
+        this.prepareNextPackCard(nextPackMode);
       } else {
         void this.router.navigateByUrl('/collectie');
       }
@@ -394,10 +395,11 @@ export class QuickAddComponent implements OnDestroy {
     }
   }
 
-  private prepareNextPackCard(): void {
-    const rememberedSet = this.store.packDefaults().setCode;
+  private prepareNextPackCard(rememberSet = this.packMode()): void {
+    const rememberedSet = rememberSet ? this.store.packDefaults().setCode : '';
     this.previewCard.set(null);
     this.nameResults.set([]);
+    this.lookupError.set(null);
     this.manualName.set('');
     this.manualSet.set('');
     this.manualNumber.set('');
