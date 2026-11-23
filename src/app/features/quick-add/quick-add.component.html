@@ -511,26 +511,20 @@
         </div>
 
         <div class="pb-field">
-          <label class="pb-label" for="qa-price">Aankoopprijs (€ · optioneel)</label>
+          <label class="pb-label" for="qa-price">Aankoopprijs (€)</label>
           <input
             id="qa-price"
             type="number"
             step="0.01"
             min="0"
             class="pb-input mono"
-            [placeholder]="
-              acquisitionMethod() === 'Pack Pull' ||
-              acquisitionMethod() === 'Geruild (Trade)' ||
-              acquisitionMethod() === 'Cadeau' ||
-              acquisitionMethod() === 'Oude collectie'
-                ? 'Niet v.t. (leeg = € 0)'
-                : 'Optioneel (bijv. 9.50)'
-            "
+            placeholder="0.00"
             [ngModel]="purchasePrice()"
             (ngModelChange)="onPurchasePriceChange($event)"
+            (blur)="normalizePurchasePriceInput($event)"
           />
           @if (previewCard(); as card) {
-            @if (card.marketPriceEur > 0) {
+            @if (card.marketPriceEur > 0 && purchasePrice() !== card.marketPriceEur) {
               <button type="button" class="price-optin-btn mono" (click)="applyMarketPriceAsPurchase()">
                 Marktprijs ({{ formatEur(card.marketPriceEur) }}) invullen als aankoopprijs
               </button>

@@ -136,3 +136,39 @@ img {
 .pb-spin {
   animation: pb-spin 0.9s linear infinite;
 }
+
+html.pb-modal-open,
+html:has(.pb-sheet-backdrop, [aria-modal='true']) {
+  overflow: hidden;
+  overscroll-behavior: none;
+
+  body {
+    overflow: hidden;
+    overscroll-behavior: none;
+    padding-right: var(--pb-scrollbar-comp, 0px);
+  }
+
+  .sync-pill__dot,
+  .pb-dot--pulse {
+    animation-play-state: paused;
+  }
+
+  .controls,
+  .dex-controls,
+  .topbar,
+  .bottom-nav {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pb-sheet {
+    animation: none;
+  }
+
+  .sync-pill__dot,
+  .pb-dot--pulse {
+    animation: none;
+  }
+}

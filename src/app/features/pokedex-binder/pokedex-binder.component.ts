@@ -1,4 +1,4 @@
-import { Component, HostListener, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, HostListener, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { getDisplaySetCode } from '../../core/domain/card-id.utils';
 import {
@@ -12,6 +12,7 @@ import {
   extractCardIdFromChoice,
   formatBinderChoice,
 } from '../../core/domain/pokedex-matching.utils';
+import { ModalScrollLockService } from '../../core/platform/modal-scroll-lock.service';
 import { CollectionStore } from '../../core/state/collection.store';
 import { CardArtworkComponent } from '../../shared/card-artwork/card-artwork.component';
 
@@ -23,9 +24,11 @@ type StatusFilter = 'all' | 'missing' | 'in_collection' | 'in_binder' | 'upgrade
   imports: [FormsModule, CardArtworkComponent],
   templateUrl: './pokedex-binder.component.html',
   styleUrl: './pokedex-binder.component.scss',
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class PokedexBinderComponent implements OnInit {
   readonly store = inject(CollectionStore);
+  private readonly scrollLock = inject(ModalScrollLockService);
 
   readonly generations = GENERATIONS;
   readonly formatDexNumber = formatDexNumber;
@@ -41,9 +44,14 @@ export class PokedexBinderComponent implements OnInit {
 
   // Bottom Sheet state voor slot-bewerking & variant-kiezer
   readonly activeSlot = signal<PokedexSlot | null>(null);
+  readonly isSheetOpen = computed(() => this.activeSlot() !== null);
   readonly draftSelectedCard = signal<string>('');
   readonly draftInBinder = signal<boolean>(false);
   readonly draftUpgradeWanted = signal<boolean>(false);
+
+  constructor() {
+    this.scrollLock.bind(() => this.isSheetOpen());
+  }
 
   readonly slotsPerPage = computed(() => this.store.binderSlotsPerPage());
 

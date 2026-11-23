@@ -1,4 +1,4 @@
-import { Component, HostListener, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, HostListener, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { buildDriveViewUrl } from '../../core/domain/image-compress.utils';
 import {
@@ -7,6 +7,7 @@ import {
   FeedbackItem,
   FeedbackStatus,
 } from '../../core/domain/models';
+import { ModalScrollLockService } from '../../core/platform/modal-scroll-lock.service';
 import { CollectionStore } from '../../core/state/collection.store';
 import { FeedbackStore } from '../../core/state/feedback.store';
 
@@ -18,10 +19,12 @@ type StatusFilter = 'all' | FeedbackStatus;
   imports: [FormsModule],
   templateUrl: './feedback-hub.component.html',
   styleUrl: './feedback-hub.component.scss',
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class FeedbackHubComponent implements OnInit, OnDestroy {
   readonly feedback = inject(FeedbackStore);
   private readonly store = inject(CollectionStore);
+  private readonly scrollLock = inject(ModalScrollLockService);
 
   readonly pages = FEEDBACK_PAGES;
   readonly categories: FeedbackCategory[] = ['Bug', 'Idee', 'Verbetering', 'UI / Design'];
@@ -33,8 +36,13 @@ export class FeedbackHubComponent implements OnInit, OnDestroy {
   readonly searchQuery = signal<string>('');
   readonly copiedKey = signal<string | null>(null);
   readonly activeLightboxItem = signal<FeedbackItem | null>(null);
+  readonly isLightboxOpen = computed(() => this.activeLightboxItem() !== null);
 
   private copyResetTimer: ReturnType<typeof setTimeout> | null = null;
+
+  constructor() {
+    this.scrollLock.bind(() => this.isLightboxOpen());
+  }
 
   readonly filteredItems = computed(() => {
     const status = this.statusFilter();

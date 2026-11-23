@@ -291,6 +291,9 @@
   flex-direction: column;
   gap: 0.5rem;
   cursor: pointer;
+  contain: layout style;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 290px;
 
   &:hover {
     border-color: rgba($color-primary-container, 0.5);
@@ -403,8 +406,7 @@
 .overlay-pill {
   padding: 0.16rem 0.45rem;
   border-radius: $radius-full;
-  background-color: rgba($color-surface-lowest, 0.86);
-  backdrop-filter: blur(6px);
+  background-color: rgba($color-surface-lowest, 0.92);
   color: $color-on-surface;
   font-size: 0.625rem;
   font-weight: 700;
@@ -446,6 +448,9 @@
   display: flex;
   align-items: center;
   gap: 0.85rem;
+  contain: layout style;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 84px;
 
   &:hover {
     border-color: rgba($color-primary-container, 0.45);

@@ -1,4 +1,4 @@
-import { Component, HostListener, computed, effect, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, HostListener, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { compressScreenshotFile } from '../../core/domain/image-compress.utils';
@@ -8,6 +8,7 @@ import {
   FeedbackPage,
   FeedbackScreenshotUpload,
 } from '../../core/domain/models';
+import { ModalScrollLockService } from '../../core/platform/modal-scroll-lock.service';
 import { CollectionStore } from '../../core/state/collection.store';
 import { FeedbackStore } from '../../core/state/feedback.store';
 
@@ -17,11 +18,13 @@ import { FeedbackStore } from '../../core/state/feedback.store';
   imports: [FormsModule],
   templateUrl: './feedback-modal.component.html',
   styleUrl: './feedback-modal.component.scss',
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class FeedbackModalComponent {
   readonly feedback = inject(FeedbackStore);
   private readonly collectionStore = inject(CollectionStore);
   private readonly router = inject(Router);
+  private readonly scrollLock = inject(ModalScrollLockService);
 
   readonly pages = FEEDBACK_PAGES;
   readonly categories: FeedbackCategory[] = ['Bug', 'Idee', 'Verbetering', 'UI / Design'];
@@ -67,6 +70,8 @@ export class FeedbackModalComponent {
   });
 
   constructor() {
+    this.scrollLock.bind(() => this.feedback.isComposerOpen());
+
     effect(() => {
       if (!this.feedback.isComposerOpen()) return;
       const editing = this.feedback.editingItem();

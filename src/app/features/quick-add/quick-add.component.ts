@@ -102,7 +102,7 @@ export class QuickAddComponent implements OnDestroy {
   readonly binderDetail = signal('');
   readonly language = signal(this.store.packDefaults().language || 'EN');
   readonly quantity = signal(1);
-  readonly purchasePrice = signal<number | null>(null);
+  readonly purchasePrice = signal<number>(0);
   readonly acquisitionMethod = signal<string>(
     this.store.packDefaults().enabled ? (this.store.packDefaults().acquisitionMethod || '') : ''
   );
@@ -181,11 +181,18 @@ export class QuickAddComponent implements OnDestroy {
 
   onPurchasePriceChange(value: unknown): void {
     if (value === '' || value === null || value === undefined) {
-      this.purchasePrice.set(null);
+      this.purchasePrice.set(0);
       return;
     }
     const num = Number(value);
-    this.purchasePrice.set(Number.isFinite(num) ? Math.max(0, num) : null);
+    this.purchasePrice.set(Number.isFinite(num) ? Math.max(0, num) : 0);
+  }
+
+  normalizePurchasePriceInput(event: Event): void {
+    const input = event.target as HTMLInputElement | null;
+    if (input) {
+      input.value = String(this.purchasePrice());
+    }
   }
 
   applyMarketPriceAsPurchase(): void {
@@ -435,7 +442,7 @@ export class QuickAddComponent implements OnDestroy {
     this.manualSet.set('');
     this.manualNumber.set('');
     this.quantity.set(1);
-    this.purchasePrice.set(null);
+    this.purchasePrice.set(0);
     this.acquisitionMethod.set(rememberSet ? (this.store.packDefaults().acquisitionMethod || '') : '');
     this.forTrade.set(false);
     this.grade.set('');

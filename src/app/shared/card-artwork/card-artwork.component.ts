@@ -1,9 +1,10 @@
-import { Component, computed, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, input, signal } from '@angular/core';
 import { buildTcgdexAssetUrl } from '../../core/domain/card-id.utils';
 
 @Component({
   selector: 'pb-card-artwork',
   standalone: true,
+  changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="art-frame" [class.art-frame--compact]="compact()">
       @if (!failed() && activeUrl()) {

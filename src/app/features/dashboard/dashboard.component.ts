@@ -53,8 +53,11 @@ export class DashboardComponent {
     return new Date(iso).toLocaleDateString('nl-NL');
   });
 
+  hasPurchasePrice(card: CollectionCard): boolean {
+    return (Number(card.purchasePrice) || 0) > 0;
+  }
+
   cardRoi(card: CollectionCard): number {
-    if (card.trendPercent !== undefined) return card.trendPercent;
     return calculateCardMetrics(card).roiPercent;
   }
 

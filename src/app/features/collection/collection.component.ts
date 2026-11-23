@@ -1,4 +1,4 @@
-import { Component, HostListener, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, HostListener, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import {
@@ -14,6 +14,7 @@ import {
   formatPercent,
 } from '../../core/domain/card-math.utils';
 import { CollectionCard, DEFAULT_DROPDOWN_SETTINGS } from '../../core/domain/models';
+import { ModalScrollLockService } from '../../core/platform/modal-scroll-lock.service';
 import { CARD_CATALOG_PORT } from '../../core/ports/card-catalog.port';
 import { CollectionStore } from '../../core/state/collection.store';
 import { CardArtworkComponent } from '../../shared/card-artwork/card-artwork.component';
@@ -26,10 +27,12 @@ type SortOption = 'value_desc' | 'value_asc' | 'number_asc' | 'name_asc' | 'qty_
   imports: [FormsModule, RouterLink, CardArtworkComponent],
   templateUrl: './collection.component.html',
   styleUrl: './collection.component.scss',
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class CollectionComponent implements OnInit {
   readonly store = inject(CollectionStore);
   private readonly catalog = inject(CARD_CATALOG_PORT);
+  private readonly scrollLock = inject(ModalScrollLockService);
 
   readonly formatEur = formatEur;
   readonly formatPercent = formatPercent;
@@ -46,8 +49,13 @@ export class CollectionComponent implements OnInit {
   // Detail Bottom Sheet state
   readonly activeCard = signal<CollectionCard | null>(null);
   readonly editDraft = signal<CollectionCard | null>(null);
+  readonly isDetailOpen = computed(() => this.editDraft() !== null);
   readonly activeCardmarketProductId = signal<number | undefined>(undefined);
   readonly confirmDelete = signal(false);
+
+  constructor() {
+    this.scrollLock.bind(() => this.isDetailOpen());
+  }
 
   readonly activeCardmarketUrl = computed(() => {
     const d = this.editDraft();
@@ -159,7 +167,10 @@ export class CollectionComponent implements OnInit {
 
   openDetail(card: CollectionCard): void {
     this.activeCard.set(card);
-    this.editDraft.set({ ...card });
+    this.editDraft.set({
+      ...card,
+      purchasePrice: Math.max(0, Number(card.purchasePrice) || 0),
+    });
     this.confirmDelete.set(false);
     const cachedId = this.catalog.getCachedCardmarketProductId?.(card.cardId);
     this.activeCardmarketProductId.set(cachedId);
@@ -219,6 +230,14 @@ export class CollectionComponent implements OnInit {
     this.patchDraft({ purchasePrice: nextPrice });
   }
 
+  normalizeDraftPurchasePriceInput(event: Event): void {
+    const input = event.target as HTMLInputElement | null;
+    const draft = this.editDraft();
+    if (input && draft) {
+      input.value = String(draft.purchasePrice);
+    }
+  }
+
   adjustDraftQty(delta: number): void {
     this.editDraft.update((prev) =>
       prev ? { ...prev, quantity: Math.max(1, (prev.quantity || 1) + delta) } : null
@@ -267,8 +286,11 @@ export class CollectionComponent implements OnInit {
     );
   }
 
+  hasPurchasePrice(card: Pick<CollectionCard, 'purchasePrice'>): boolean {
+    return (Number(card.purchasePrice) || 0) > 0;
+  }
+
   cardRoi(card: CollectionCard): number {
-    if (card.trendPercent !== undefined) return card.trendPercent;
     return calculateCardMetrics(card).roiPercent;
   }
 

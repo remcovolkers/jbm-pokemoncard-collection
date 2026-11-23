@@ -1,7 +1,8 @@
-import { Component, HostListener, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, HostListener, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { formatEur } from '../../core/domain/card-math.utils';
 import { WishlistItem } from '../../core/domain/models';
+import { ModalScrollLockService } from '../../core/platform/modal-scroll-lock.service';
 import { CARD_CATALOG_PORT } from '../../core/ports/card-catalog.port';
 import { CollectionStore } from '../../core/state/collection.store';
 import { CardArtworkComponent } from '../../shared/card-artwork/card-artwork.component';
@@ -14,16 +15,22 @@ type WishlistFilter = 'open' | 'high' | 'in_budget' | 'found';
   imports: [FormsModule, CardArtworkComponent],
   templateUrl: './wishlist.component.html',
   styleUrl: './wishlist.component.scss',
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class WishlistComponent {
   readonly store = inject(CollectionStore);
   private readonly catalog = inject(CARD_CATALOG_PORT);
+  private readonly scrollLock = inject(ModalScrollLockService);
 
   readonly formatEur = formatEur;
   readonly Math = Math;
 
   readonly filter = signal<WishlistFilter>('open');
   readonly showAddSheet = signal(false);
+
+  constructor() {
+    this.scrollLock.bind(() => this.showAddSheet());
+  }
 
   // TCGdex lookup & nieuwe wens formulier
   readonly lookupQuery = signal('');

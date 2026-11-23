@@ -279,6 +279,79 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
       expect(cleared.acquisitionMethod).toBe('');
       expect(cleared.purchasePrice).toBe(14.5);
     });
+
+    it('verbergt winst % bij kaarten met €0 aankoopprijs en toont € 0,00 in het detailmodaal', async () => {
+      const fixture = TestBed.createComponent(CollectionComponent);
+      const comp = fixture.componentInstance;
+      const store = TestBed.inject(CollectionStore);
+
+      const zeroCard = {
+        ...store.collection()[0],
+        rowIndex: 999,
+        cardId: 'sv03.5-zero',
+        name: 'Gratis Promo Pikachu',
+        purchasePrice: 0,
+        marketPrice: 25,
+        trendPercent: 12.5,
+      };
+      const paidCard = {
+        ...store.collection()[0],
+        rowIndex: 1000,
+        cardId: 'sv03.5-paid',
+        name: 'Gekochte Charizard',
+        purchasePrice: 20,
+        marketPrice: 30,
+      };
+      const breakEvenCard = {
+        ...store.collection()[0],
+        rowIndex: 1001,
+        cardId: 'sv03.5-even',
+        name: 'Break-even Mew',
+        purchasePrice: 15,
+        marketPrice: 15,
+      };
+      store.snapshot.update((snap) => ({
+        ...snap,
+        collection: [zeroCard, paidCard, breakEvenCard],
+      }));
+      fixture.detectChanges();
+
+      const el = fixture.nativeElement as HTMLElement;
+      const cards = Array.from(el.querySelectorAll('.card-slab'));
+      expect(cards.length).toBe(3);
+
+      const zeroCardEl = cards.find((c) => c.textContent?.includes('Gratis Promo Pikachu'))!;
+      const paidCardEl = cards.find((c) => c.textContent?.includes('Gekochte Charizard'))!;
+      const evenCardEl = cards.find((c) => c.textContent?.includes('Break-even Mew'))!;
+
+      // €0 kaart: geen winst % badge in grid
+      expect(zeroCardEl).toBeDefined();
+      expect(zeroCardEl.querySelector('.card-slab__roi')).toBeNull();
+
+      // Betaalde kaart en break-even kaart (> €0): winst % wél zichtbaar
+      expect(paidCardEl.querySelector('.card-slab__roi')?.textContent?.trim()).toBe('+50,0%');
+      expect(evenCardEl.querySelector('.card-slab__roi')?.textContent?.trim()).toBe('0,0%');
+
+      // Lijstweergave: €0 kaart verbergt ROI, betaalde kaart toont ROI
+      comp.viewMode.set('list');
+      fixture.detectChanges();
+      const rows = Array.from(el.querySelectorAll('.list-row'));
+      const zeroRowEl = rows.find((r) => r.textContent?.includes('Gratis Promo Pikachu'))!;
+      const paidRowEl = rows.find((r) => r.textContent?.includes('Gekochte Charizard'))!;
+      expect(zeroRowEl.querySelector('.list-row__qty strong')).toBeNull();
+      expect(paidRowEl.querySelector('.list-row__qty strong')?.textContent?.trim()).toBe('+50,0%');
+
+      // Detailmodaal op €0 kaart: toont € 0,00 i.p.v. 'Niet ingevuld' en geen Winst/Verlies of ROI
+      comp.openDetail(zeroCard);
+      fixture.detectChanges();
+      const sheet = el.querySelector('.pb-sheet')!;
+      expect(sheet.textContent).toContain('€\u00A00,00');
+      expect(sheet.textContent).not.toContain('Niet ingevuld');
+      expect(sheet.textContent).not.toContain('Winst / Verlies');
+      expect(sheet.querySelector('.sheet-hero__roi')).toBeNull();
+      comp.closeDetail();
+      fixture.detectChanges();
+    });
   });
 
   describe('QuickAddComponent', () => {
@@ -310,20 +383,20 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
       const store = TestBed.inject(CollectionStore);
       fixture.detectChanges();
 
-      // Zoek op naam en selecteer resultaat -> aankoopprijs blijft LEEG (nooit automatisch Cardmarket-prijs invullen!)
+      // Zoek op naam en selecteer resultaat -> aankoopprijs staat standaard op €0 (nooit automatisch Cardmarket-prijs invullen!)
       comp.inputMode.set('name');
       await comp.searchByName('Charizard');
       expect(comp.nameResults().length).toBe(1);
       await comp.selectNameResult(comp.nameResults()[0]);
       expect(comp.previewCard()?.id).toBe('sv03-125');
       expect(comp.matchedPokedexEntry()?.dexNumber).toBe(6);
-      expect(comp.purchasePrice()).toBeNull();
+      expect(comp.purchasePrice()).toBe(0);
 
       // Opt-in knop kan marktprijs expliciet overnemen als gebruiker dat zelf kiest
       comp.applyMarketPriceAsPurchase();
       expect(comp.purchasePrice()).toBe(MOCK_CATALOG_CARD.marketPriceEur);
 
-      // Opslaan & op scherm blijven ZONDER Pack Mode -> reset zoekveld, prijs, herkomst en te-ruil vlag!
+      // Opslaan & op scherm blijven ZONDER Pack Mode -> reset zoekveld, prijs naar €0, herkomst en te-ruil vlag!
       comp.toggleAcquisitionMethod('Single gekocht');
       expect(comp.acquisitionMethod()).toBe('Single gekocht');
       comp.purchasePrice.set(12.5);
@@ -335,14 +408,14 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
       expect(store.collection()[0].purchasePrice).toBe(12.5);
       expect(comp.packMode()).toBe(false);
       expect(comp.codeQuery()).toBe('');
-      expect(comp.purchasePrice()).toBeNull();
+      expect(comp.purchasePrice()).toBe(0);
       expect(comp.acquisitionMethod()).toBe('');
       expect(comp.forTrade()).toBe(false);
       expect(comp.previewCard()).toBeNull();
 
-      // Nieuwe lookup -> aankoopprijs blijft leeg en kaart wordt met € 0 opgeslagen als Pack Pull
+      // Nieuwe lookup -> aankoopprijs blijft €0 en kaart wordt met € 0 opgeslagen als Pack Pull
       await comp.lookupByCode('OBF 125');
-      expect(comp.purchasePrice()).toBeNull();
+      expect(comp.purchasePrice()).toBe(0);
       comp.toggleAcquisitionMethod('Pack Pull');
       await comp.saveCard(true, true);
       expect(comp.packMode()).toBe(true);
@@ -776,6 +849,89 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
 
       expect(feedback.isComposerOpen()).toBe(true);
       expect(feedback.composerDefaultPage()).toBe('Pokédex Binder');
+    });
+
+    it('vergrendelt achtergrond-scroll via pb-modal-open zodra een modaal opent en geeft vrij bij sluiten of destroy', () => {
+      const store = TestBed.inject(CollectionStore);
+      const feedback = TestBed.inject(FeedbackStore);
+
+      // 1. Collection detail modal
+      const colFix = TestBed.createComponent(CollectionComponent);
+      colFix.detectChanges();
+      expect(document.documentElement.classList.contains('pb-modal-open')).toBe(false);
+      colFix.componentInstance.openDetail(store.collection()[0]);
+      colFix.detectChanges();
+      expect(document.documentElement.classList.contains('pb-modal-open')).toBe(true);
+      colFix.componentInstance.closeDetail();
+      colFix.detectChanges();
+      expect(document.documentElement.classList.contains('pb-modal-open')).toBe(false);
+      colFix.destroy();
+
+      // 2. Pokédex Binder sheet
+      const dexFix = TestBed.createComponent(PokedexBinderComponent);
+      dexFix.detectChanges();
+      dexFix.componentInstance.openSlotSheet(dexFix.componentInstance.pageSlots()[0]);
+      dexFix.detectChanges();
+      expect(document.documentElement.classList.contains('pb-modal-open')).toBe(true);
+      dexFix.componentInstance.closeSlotSheet();
+      dexFix.detectChanges();
+      expect(document.documentElement.classList.contains('pb-modal-open')).toBe(false);
+      dexFix.destroy();
+
+      // 3. Wishlist add modal
+      const wlFix = TestBed.createComponent(WishlistComponent);
+      wlFix.detectChanges();
+      wlFix.componentInstance.openAddModal();
+      wlFix.detectChanges();
+      expect(document.documentElement.classList.contains('pb-modal-open')).toBe(true);
+      wlFix.componentInstance.showAddSheet.set(false);
+      wlFix.detectChanges();
+      expect(document.documentElement.classList.contains('pb-modal-open')).toBe(false);
+      wlFix.destroy();
+
+      // 4. Trades log modal (en cleanup bij destroy terwijl open)
+      const trFix = TestBed.createComponent(TradesComponent);
+      trFix.detectChanges();
+      trFix.componentInstance.openNewTradeModal();
+      trFix.detectChanges();
+      expect(document.documentElement.classList.contains('pb-modal-open')).toBe(true);
+      trFix.destroy();
+      expect(document.documentElement.classList.contains('pb-modal-open')).toBe(false);
+
+      // 5. Global FeedbackModal
+      const fbModalFix = TestBed.createComponent(FeedbackModalComponent);
+      fbModalFix.detectChanges();
+      feedback.openComposer('Dashboard');
+      fbModalFix.detectChanges();
+      expect(document.documentElement.classList.contains('pb-modal-open')).toBe(true);
+      fbModalFix.componentInstance.close();
+      fbModalFix.detectChanges();
+      expect(document.documentElement.classList.contains('pb-modal-open')).toBe(false);
+      fbModalFix.destroy();
+
+      // 6. FeedbackHub screenshot lightbox
+      const hubFix = TestBed.createComponent(FeedbackHubComponent);
+      hubFix.detectChanges();
+      hubFix.componentInstance.openLightbox({
+        id: 'fb-shot-1',
+        createdAt: '2026-01-01',
+        page: 'Collectie',
+        category: 'Bug',
+        title: 'Screenshot test',
+        description: '',
+        status: 'open',
+        votes: 1,
+        author: 'Test',
+        platform: 'Web',
+        source: 'hub',
+        screenshotUrl: 'https://example.com/shot.webp',
+      });
+      hubFix.detectChanges();
+      expect(document.documentElement.classList.contains('pb-modal-open')).toBe(true);
+      hubFix.componentInstance.closeLightbox();
+      hubFix.detectChanges();
+      expect(document.documentElement.classList.contains('pb-modal-open')).toBe(false);
+      hubFix.destroy();
     });
   });
 });

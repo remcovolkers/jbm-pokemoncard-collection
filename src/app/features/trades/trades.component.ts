@@ -1,8 +1,9 @@
-import { Component, HostListener, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, HostListener, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { getDisplaySetCode } from '../../core/domain/card-id.utils';
 import { formatEur, roundCurrency } from '../../core/domain/card-math.utils';
 import { CollectionCard } from '../../core/domain/models';
+import { ModalScrollLockService } from '../../core/platform/modal-scroll-lock.service';
 import { CollectionStore } from '../../core/state/collection.store';
 import { CardArtworkComponent } from '../../shared/card-artwork/card-artwork.component';
 
@@ -12,14 +13,20 @@ import { CardArtworkComponent } from '../../shared/card-artwork/card-artwork.com
   imports: [FormsModule, CardArtworkComponent],
   templateUrl: './trades.component.html',
   styleUrl: './trades.component.scss',
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class TradesComponent {
   readonly store = inject(CollectionStore);
+  private readonly scrollLock = inject(ModalScrollLockService);
 
   readonly formatEur = formatEur;
   readonly getDisplaySetCode = getDisplaySetCode;
 
   readonly showLogSheet = signal(false);
+
+  constructor() {
+    this.scrollLock.bind(() => this.showLogSheet());
+  }
 
   // Formuliervelden voor nieuwe transactie
   readonly date = signal(new Date().toISOString().slice(0, 10));

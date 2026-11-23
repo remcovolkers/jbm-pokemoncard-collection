@@ -245,12 +245,14 @@
               </p>
               <div class="top-card__price-row">
                 <span class="mono top-card__price">{{ formatEur(card.marketPrice) }}</span>
-                <span
-                  class="mono top-card__trend"
-                  [class.is-negative]="cardRoi(card) < 0"
-                >
-                  {{ formatPercent(cardRoi(card)) }}
-                </span>
+                @if (hasPurchasePrice(card)) {
+                  <span
+                    class="mono top-card__trend"
+                    [class.is-negative]="cardRoi(card) < 0"
+                  >
+                    {{ formatPercent(cardRoi(card)) }}
+                  </span>
+                }
               </div>
               <span class="top-card__loc mono">
                 {{ card.grading !== 'Raw' ? 'Slab' : shortCondition(card.condition) }} · {{ card.storageLocation }}

@@ -210,9 +210,11 @@
             <div class="card-slab__meta">
               <div class="card-slab__title-row">
                 <h2 class="card-slab__name">{{ card.name }}</h2>
-                <span class="mono card-slab__roi" [class.is-negative]="cardRoi(card) < 0">
-                  {{ formatPercent(cardRoi(card)) }}
-                </span>
+                @if (hasPurchasePrice(card)) {
+                  <span class="mono card-slab__roi" [class.is-negative]="cardRoi(card) < 0">
+                    {{ formatPercent(cardRoi(card)) }}
+                  </span>
+                }
               </div>
               <span class="card-slab__sub">{{ card.setName }} · {{ card.rarity }}</span>
               <div class="card-slab__foot">
@@ -261,8 +263,8 @@
             <div class="list-row__right">
               <span class="mono list-row__price">{{ formatEur(card.marketPrice) }}</span>
               <span class="mono list-row__qty">
-                ×{{ card.quantity }} ·
-                <strong [class.is-neg]="cardRoi(card) < 0">{{ formatPercent(cardRoi(card)) }}</strong>
+                ×{{ card.quantity }}@if (hasPurchasePrice(card)) { ·
+                <strong [class.is-neg]="cardRoi(card) < 0">{{ formatPercent(cardRoi(card)) }}</strong>}
               </span>
             </div>
           </article>
@@ -319,7 +321,7 @@
               <span class="sheet-stat-eyebrow">Cardmarket Marktwaarde p/s</span>
               <div class="sheet-hero__price-line">
                 <span class="mono sheet-hero__price">{{ formatEur(draft.marketPrice) }}</span>
-                @if (draft.purchasePrice > 0) {
+                @if (hasPurchasePrice(draft)) {
                   @if (activeDraftMetrics(); as m) {
                     <span class="mono sheet-hero__roi" [class.is-negative]="m.roiPercent < 0">
                       {{ formatPercent(m.roiPercent) }}
@@ -335,7 +337,7 @@
                   <span class="mini-stat__label">Totale waarde</span>
                   <span class="mono mini-stat__val">{{ formatEur(m.totalValue) }}</span>
                 </div>
-                @if (draft.purchasePrice > 0) {
+                @if (hasPurchasePrice(draft)) {
                   <div class="mini-stat mini-stat--profit" [class.is-negative]="m.profitLoss < 0">
                     <span class="mini-stat__label">Winst / Verlies</span>
                     <span class="mono mini-stat__val">{{ formatEur(m.profitLoss, true) }}</span>
@@ -343,7 +345,7 @@
                 } @else {
                   <div class="mini-stat">
                     <span class="mini-stat__label">Aankoopprijs</span>
-                    <span class="mono mini-stat__val">Niet ingevuld</span>
+                    <span class="mono mini-stat__val">{{ formatEur(0) }}</span>
                   </div>
                 }
               </div>
@@ -495,16 +497,17 @@
             </div>
 
             <div class="pb-field">
-              <label class="pb-label" for="edit-buy">Aankoopprijs p/s (€ · optioneel)</label>
+              <label class="pb-label" for="edit-buy">Aankoopprijs p/s (€)</label>
               <input
                 id="edit-buy"
                 type="number"
                 step="0.01"
                 min="0"
                 class="pb-input mono"
-                placeholder="Optioneel (leeg = niet ingevuld)"
-                [ngModel]="draft.purchasePrice > 0 ? draft.purchasePrice : null"
+                placeholder="0.00"
+                [ngModel]="draft.purchasePrice"
                 (ngModelChange)="onDraftPurchasePriceChange($event)"
+                (blur)="normalizeDraftPurchasePriceInput($event)"
               />
               @if (draft.marketPrice > 0 && draft.purchasePrice !== draft.marketPrice) {
                 <button

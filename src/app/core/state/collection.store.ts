@@ -549,7 +549,7 @@ export class CollectionStore {
       storageLocation: payload.storageLocation ?? 'Hoofdbinder',
       binderDetail: payload.binderDetail ?? '',
       purchaseDate: payload.purchaseDate ?? today,
-      purchasePrice: roundCurrency(payload.purchasePrice ?? 0),
+      purchasePrice: roundCurrency(Math.max(0, Number(payload.purchasePrice) || 0)),
       marketPrice: roundCurrency(payload.marketPrice ?? 0),
       imageUrl: payload.imageUrl || buildTcgdexAssetUrl(payload.cardId ?? '', 'high'),
       trendPercent: payload.trendPercent,
@@ -586,12 +586,16 @@ export class CollectionStore {
     cardId: string,
     patch: Partial<CollectionCard>
   ): Promise<void> {
+    const normalizedPatch: Partial<CollectionCard> =
+      patch.purchasePrice !== undefined
+        ? { ...patch, purchasePrice: roundCurrency(Math.max(0, Number(patch.purchasePrice) || 0)) }
+        : patch;
     const nextCollection = this.collection().map((card) =>
-      card.rowIndex === rowIndex && card.cardId === cardId ? { ...card, ...patch } : card
+      card.rowIndex === rowIndex && card.cardId === cardId ? { ...card, ...normalizedPatch } : card
     );
     this.applyLocalSnapshotUpdate({ collection: nextCollection });
 
-    const payload = { rowIndex, cardId, ...patch };
+    const payload = { rowIndex, cardId, ...normalizedPatch };
     await this.dispatchRemoteMutation(
       'updateCard',
       payload as Record<string, unknown>,
@@ -709,6 +713,7 @@ export class CollectionStore {
   }
 
   async markWishlistFound(item: WishlistItem, addToCollection: boolean, purchasePrice?: number): Promise<void> {
+    const normalizedPurchasePrice = roundCurrency(Math.max(0, Number(purchasePrice) || 0));
     const nextWishlist = this.wishlist().map((w) =>
       w.rowIndex === item.rowIndex && w.cardName === item.cardName ? { ...w, found: true } : w
     );
@@ -729,7 +734,7 @@ export class CollectionStore {
           quantity: 1,
           storageLocation: 'Hoofdbinder',
           binderDetail: 'Vanuit Verlanglijst',
-          purchasePrice: purchasePrice ?? 0,
+          purchasePrice: normalizedPurchasePrice,
           marketPrice: item.marketPrice,
           imageUrl: item.imageUrl,
           forTrade: false,
@@ -756,7 +761,7 @@ export class CollectionStore {
           storageLocation: cardPayload.storageLocation!,
           binderDetail: cardPayload.binderDetail!,
           purchaseDate: new Date().toISOString().slice(0, 10),
-          purchasePrice: cardPayload.purchasePrice ?? 0,
+          purchasePrice: normalizedPurchasePrice,
           marketPrice: cardPayload.marketPrice ?? 0,
           imageUrl: cardPayload.imageUrl,
           forTrade: false,
