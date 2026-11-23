@@ -470,6 +470,7 @@ const TCGDEX_TO_PTCG_SET_ID: Record<string, string> = {
   'sv08.5': 'sv8pt5',
   bog: 'bp',
   hgssp: 'hsp',
+  exu: 'ex10',
   '2011bw': 'mcd11',
   '2012bw': 'mcd12',
   '2016xy': 'mcd16',
@@ -482,7 +483,7 @@ const UNSUPPORTED_PTCG_EXACT_SETS = new Set([
   'mep',
   'mee',
   'mfb',
-  'exu',
+  'xya',
   'ex5.5',
   'miscp',
   'cel25cc',
@@ -493,6 +494,44 @@ const UNSUPPORTED_PTCG_EXACT_SETS = new Set([
   '2023sv',
   '2024sv',
 ]);
+
+/**
+ * Sets waarvan zowel TCGdex als PokemonTCG.io en LimitlessTCG momenteel nog 0% kaartscans hebben.
+ */
+export const KNOWN_NO_SCAN_SET_IDS: ReadonlySet<string> = new Set([
+  '30th-c',
+  'cel25cc',
+  'mfb',
+  'xya',
+  'ex5.5',
+  'miscp',
+  '2014xy',
+  '2015xy',
+  '2017sm',
+  '2018sm',
+  '2023sv',
+  '2024sv',
+  'tk-dp-l',
+  'tk-dp-m',
+  'tk-hs-r',
+  'tk-hs-g',
+  'tk-bw-e',
+  'tk-bw-z',
+  'tk-xy-n',
+  'tk-xy-sy',
+  'tk-xy-b',
+  'tk-xy-w',
+  'tk-xy-latio',
+  'tk-xy-latia',
+  'tk-xy-su',
+  'tk-xy-p',
+  'tk-sm-l',
+  'tk-sm-r',
+]);
+
+export function isKnownNoScanSet(setId: string): boolean {
+  return KNOWN_NO_SCAN_SET_IDS.has((setId || '').trim().toLowerCase());
+}
 
 function splitCardIdParts(cardId: string): { setId: string; localId: string } | null {
   const val = cardId.trim();
@@ -568,7 +607,24 @@ export function buildPokemonTcgAssetUrl(
 }
 
 /**
- * Kiest de beste beschikbare artwork URL voor een TCGdex-kaart (met subset- & PokemonTCG-fallback).
+ * Bouwt een fallback artwork URL via het LimitlessTCG CDN voor ondersteunde sets (zoals Mega Evolution Energy).
+ */
+export function buildLimitlessAssetUrl(
+  cardId: string,
+  quality: 'high' | 'low' = 'low'
+): string {
+  const parts = splitCardIdParts(cardId);
+  if (!parts) return '';
+  if (parts.setId === 'mee' && /^\d+$/.test(parts.localId)) {
+    const padded3 = String(parseInt(parts.localId, 10)).padStart(3, '0');
+    const size = quality === 'high' ? 'LG' : 'SM';
+    return `https://limitlesstcg.nyc3.cdn.digitaloceanspaces.com/tpci/MEE/MEE_${padded3}_R_EN_${size}.png`;
+  }
+  return '';
+}
+
+/**
+ * Kiest de beste beschikbare artwork URL voor een TCGdex-kaart (met subset-, LimitlessTCG- & PokemonTCG-fallback).
  */
 export function resolveCardArtworkUrl(
   cardId: string,
@@ -584,6 +640,9 @@ export function resolveCardArtworkUrl(
   if (parts && (TCGDEX_ASSET_SET_OVERRIDES[parts.setId] || parts.setId === 'mep')) {
     return buildTcgdexAssetUrl(cardId, quality);
   }
+
+  const limitlessUrl = buildLimitlessAssetUrl(cardId, quality);
+  if (limitlessUrl) return limitlessUrl;
 
   const ptcgUrl = buildPokemonTcgAssetUrl(cardId, quality);
   if (ptcgUrl) return ptcgUrl;

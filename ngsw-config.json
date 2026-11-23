@@ -38,7 +38,11 @@
     },
     {
       "name": "tcgdex-artwork",
-      "urls": ["https://assets.tcgdex.net/**", "https://images.pokemontcg.io/**"],
+      "urls": [
+        "https://assets.tcgdex.net/**",
+        "https://images.pokemontcg.io/**",
+        "https://limitlesstcg.nyc3.cdn.digitaloceanspaces.com/**"
+      ],
       "cacheConfig": {
         "maxSize": 800,
         "maxAge": "30d",

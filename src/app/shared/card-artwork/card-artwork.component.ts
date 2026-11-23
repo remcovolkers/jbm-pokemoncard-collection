@@ -1,5 +1,9 @@
 import { ChangeDetectionStrategy, Component, computed, input, linkedSignal } from '@angular/core';
-import { buildPokemonTcgAssetUrl, buildTcgdexAssetUrl } from '../../core/domain/card-id.utils';
+import {
+  buildLimitlessAssetUrl,
+  buildPokemonTcgAssetUrl,
+  buildTcgdexAssetUrl,
+} from '../../core/domain/card-id.utils';
 
 @Component({
   selector: 'pb-card-artwork',
@@ -115,6 +119,8 @@ export class CardArtworkComponent {
         pushUnique(explicit.replace('/low.webp', '/high.png'));
       } else if (explicit.endsWith('_hires.png')) {
         pushUnique(explicit.replace(/_hires\.png$/, '.png'));
+      } else if (explicit.endsWith('_LG.png')) {
+        pushUnique(explicit.replace(/_LG\.png$/, '_SM.png'));
       }
     } else if (id) {
       pushUnique(buildTcgdexAssetUrl(id, 'high'));
@@ -124,9 +130,12 @@ export class CardArtworkComponent {
     if (id) {
       pushUnique(buildTcgdexAssetUrl(id, preferredQuality));
       if (preferredQuality === 'high') {
+        pushUnique(buildLimitlessAssetUrl(id, 'high'));
+        pushUnique(buildLimitlessAssetUrl(id, 'low'));
         pushUnique(buildPokemonTcgAssetUrl(id, 'high'));
         pushUnique(buildPokemonTcgAssetUrl(id, 'low'));
       } else {
+        pushUnique(buildLimitlessAssetUrl(id, 'low'));
         pushUnique(buildPokemonTcgAssetUrl(id, 'low'));
       }
     }

@@ -320,6 +320,14 @@
                           <span class="set-picker__option-name">{{ s.name }}</span>
                         </span>
                         <span class="set-picker__option-meta mono">
+                          @if (isKnownNoScanSet(s.id)) {
+                            <span
+                              class="material-symbols-outlined set-picker__noscan"
+                              title="Nog geen kaartscans beschikbaar in API"
+                            >
+                              hide_image
+                            </span>
+                          }
                           @if (formatReleaseYear(s.releaseDate); as yr) {
                             {{ yr }} ·
                           }
@@ -354,6 +362,14 @@
                         }
                       </span>
                       <span class="set-picker__option-meta mono">
+                        @if (isKnownNoScanSet(s.id)) {
+                          <span
+                            class="material-symbols-outlined set-picker__noscan"
+                            title="Nog geen kaartscans beschikbaar in API"
+                          >
+                            hide_image
+                          </span>
+                        }
                         @if (formatReleaseYear(s.releaseDate); as yr) {
                           {{ yr }} ·
                         }
@@ -387,6 +403,16 @@
               aria-label="Filter kaarten in geselecteerde set"
             />
           </div>
+
+          @if (activeSetHasNoScans()) {
+            <div class="sets-browser__noscan-banner">
+              <span class="material-symbols-outlined">hide_image</span>
+              <span>
+                Voor deze set zijn nog geen kaartscans beschikbaar bij TCGdex/PokemonTCG. Je kunt elke kaart wel
+                gewoon aanklikken om metadata en marktprijzen te laden.
+              </span>
+            </div>
+          }
 
           <div class="search-results">
             @for (item of pagedSetCards(); track item.id) {

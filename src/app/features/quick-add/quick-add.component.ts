@@ -1,7 +1,7 @@
 import { Component, ElementRef, HostListener, OnDestroy, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { getDisplaySetCode, parseCardIdInput } from '../../core/domain/card-id.utils';
+import { getDisplaySetCode, isKnownNoScanSet, parseCardIdInput } from '../../core/domain/card-id.utils';
 import { formatDexNumber, formatEur, formatPercent } from '../../core/domain/card-math.utils';
 import {
   CatalogCard,
@@ -62,6 +62,7 @@ export class QuickAddComponent implements OnDestroy {
   readonly formatPercent = formatPercent;
   readonly formatDexNumber = formatDexNumber;
   readonly getDisplaySetCode = getDisplaySetCode;
+  readonly isKnownNoScanSet = isKnownNoScanSet;
 
   readonly inputMode = signal<'code' | 'name' | 'sets'>('code');
   readonly codeQuery = signal('');
@@ -89,6 +90,16 @@ export class QuickAddComponent implements OnDestroy {
   readonly selectedCatalogSet = computed(
     () => this.allSets().find((s) => s.id === this.selectedCatalogSetId()) ?? null
   );
+
+  readonly activeSetHasNoScans = computed(() => {
+    const detail = this.activeSetDetail();
+    return Boolean(
+      detail &&
+        detail.cards.length > 0 &&
+        isKnownNoScanSet(detail.id) &&
+        detail.cards.every((c) => !c.imageBase)
+    );
+  });
 
   readonly filteredCatalogSets = computed(() => {
     const q = this.setSearchQuery().trim().toLowerCase();
