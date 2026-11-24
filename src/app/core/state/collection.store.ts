@@ -43,6 +43,7 @@ import {
   createEmptySnapshot,
 } from '../adapters/demo-data';
 import { LocalCacheAdapter, PackOpeningDefaults } from '../adapters/local-cache.adapter';
+import { compareSemver } from '../platform/version.utils';
 import {
   coalesceOutboxMutation,
   computeMinTempRowCounter,
@@ -453,6 +454,12 @@ export class CollectionStore {
       this.connectedScriptVersion.set(nextSnap.scriptVersion?.trim() || null);
       this.tempRowCounter = computeMinTempRowCounter(this.snapshot(), this.pendingQueue());
       void this.syncFromRemote();
+    } else if (
+      !next.demoMode &&
+      partial.webAppUrl !== undefined &&
+      partial.webAppUrl.trim() !== prev.webAppUrl.trim()
+    ) {
+      this.connectedScriptVersion.set(null);
     }
   }
 
@@ -485,6 +492,7 @@ export class CollectionStore {
     const activate = options.activate !== false;
     if (activate) {
       const switched = prev.activeProfileId !== profile.id;
+      const urlChanged = prev.webAppUrl.trim() !== profile.webAppUrl.trim();
       if (switched) {
         this.bumpLocalRevision();
         this.inFlightIds.clear();
@@ -512,6 +520,8 @@ export class CollectionStore {
           : this.applyDeviceBinderLayout(createEmptySnapshot());
         this.snapshot.set(nextSnap);
         this.connectedScriptVersion.set(nextSnap.scriptVersion?.trim() || null);
+      } else if (urlChanged) {
+        this.connectedScriptVersion.set(null);
       }
     } else {
       this.config.set({
@@ -645,6 +655,28 @@ export class CollectionStore {
     return normalized;
   }
 
+  private applyDetectedScriptVersion(
+    webAppUrl: string,
+    rawVersion: string | null | undefined,
+    persistSnapshot = false
+  ): void {
+    const cleanUrl = webAppUrl.trim();
+    const cleanVer = (rawVersion ?? '').trim();
+    this.connectedScriptVersion.set(cleanVer);
+
+    if (cleanVer && compareSemver(cleanVer, '2.0.0') >= 0) {
+      if (cleanUrl) {
+        this.batchUnsupportedUrls.delete(cleanUrl);
+      }
+      this.legacyAppsScriptDetected.set(false);
+    }
+
+    if (persistSnapshot && (this.snapshot().scriptVersion ?? '') !== cleanVer) {
+      this.snapshot.update((s) => ({ ...s, scriptVersion: cleanVer || undefined }));
+      this.persistStateImmediately();
+    }
+  }
+
   async testConnection(overrideConfig?: AppConnectionConfig): Promise<ConnectionTestResult> {
     const cfg = overrideConfig ?? this.config();
     const res = await this.repo.testConnection(cfg);
@@ -654,7 +686,7 @@ export class CollectionStore {
       cfg.webAppUrl.trim() &&
       cfg.webAppUrl.trim() === this.config().webAppUrl.trim()
     ) {
-      this.connectedScriptVersion.set(res.scriptVersion?.trim() || '');
+      this.applyDetectedScriptVersion(cfg.webAppUrl, res.scriptVersion, true);
     }
     return res;
   }
@@ -697,7 +729,7 @@ export class CollectionStore {
 
       const revBefore = this.localRevision;
       const remote = await this.repo.bootstrap(cfg);
-      this.connectedScriptVersion.set(remote.scriptVersion?.trim() || '');
+      this.applyDetectedScriptVersion(cfg.webAppUrl, remote.scriptVersion);
       if (this.canApplyRemoteSnapshot(revBefore)) {
         this.snapshot.set(this.reconcileRemoteSnapshot(remote));
         this.persistStateImmediately();
@@ -752,8 +784,8 @@ export class CollectionStore {
       }
       const revBefore = this.localRevision;
       const result = await this.repo.refreshPrices(cfg);
-      if (result.snapshot?.scriptVersion !== undefined) {
-        this.connectedScriptVersion.set(result.snapshot.scriptVersion.trim() || '');
+      if (result.snapshot) {
+        this.applyDetectedScriptVersion(cfg.webAppUrl, result.snapshot.scriptVersion);
       }
       if (this.canApplyRemoteSnapshot(revBefore)) {
         this.snapshot.set(this.reconcileRemoteSnapshot(result.snapshot));
@@ -1622,8 +1654,11 @@ export class CollectionStore {
               this.inFlightIds.delete(id);
             }
 
-            if (res.snapshot && this.canApplyRemoteSnapshot(revBefore)) {
-              this.snapshot.set(this.reconcileRemoteSnapshot(res.snapshot));
+            if (res.snapshot) {
+              this.applyDetectedScriptVersion(url, res.snapshot.scriptVersion);
+              if (this.canApplyRemoteSnapshot(revBefore)) {
+                this.snapshot.set(this.reconcileRemoteSnapshot(res.snapshot));
+              }
             }
             this.persistStateImmediately();
 
@@ -1797,9 +1832,12 @@ export class CollectionStore {
       }
     }
 
-    if (lastUpdatedSnap && this.canApplyRemoteSnapshot(revBefore)) {
-      this.snapshot.set(this.reconcileRemoteSnapshot(lastUpdatedSnap));
-      this.persistStateImmediately();
+    if (lastUpdatedSnap) {
+      this.applyDetectedScriptVersion(cfg.webAppUrl, lastUpdatedSnap.scriptVersion);
+      if (this.canApplyRemoteSnapshot(revBefore)) {
+        this.snapshot.set(this.reconcileRemoteSnapshot(lastUpdatedSnap));
+        this.persistStateImmediately();
+      }
     }
 
     return { syncedCount, failedMessage: null };

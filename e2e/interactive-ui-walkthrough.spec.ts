@@ -299,15 +299,74 @@ test('Instellingen: barebones template-sectie, token generator & Code.gs kopiër
   const errors = attachErrorCollectors(page);
   await context.grantPermissions(['clipboard-read', 'clipboard-write']).catch(() => undefined);
 
+  let mockedScriptVersion: string | undefined = undefined;
+  await page.route('https://script.google.com/macros/s/**', async (route) => {
+    const reqUrl = route.request().url();
+    if (reqUrl.includes('action=ping')) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          spreadsheetName: 'Live Pokemon Kaarten Collectie',
+          ...(mockedScriptVersion ? { scriptVersion: mockedScriptVersion } : {}),
+          syncedAt: '2026-11-24T22:35:00Z',
+        }),
+      });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ok: true,
+        data: {
+          ...(mockedScriptVersion ? { scriptVersion: mockedScriptVersion } : {}),
+          collection: [],
+          setProgress: [],
+          pokedex: [],
+          binderSlotsPerPage: 9,
+          wishlist: [],
+          trades: [],
+          feedback: [],
+          settings: {
+            variants: ['Normal', 'Reverse Holo', 'Holo'],
+            conditions: ['Near Mint (NM)'],
+            gradings: ['Raw'],
+            binders: ['Hoofdbinder'],
+          },
+          syncedAt: '2026-11-24T22:35:00Z',
+        },
+      }),
+    });
+  });
+
   await page.goto('/meer/instellingen', { waitUntil: 'domcontentloaded' });
   await expect(page.locator('#sheet-setup')).toBeVisible();
   await expect(page.locator('button:has-text("Kopieer naar eigen Google Drive")')).toBeVisible();
+  await expect(page.locator('#sheet-setup')).toContainText(
+    'Implementaties beheren (maak geen nieuwe implementatie aan'
+  );
 
   await page.locator('.token-gen-btn').click();
   await expect(page.locator('#cfg-token')).toHaveValue(/^[A-Za-z0-9]{24,}$/);
 
   await page.locator('button:has-text("Kopieer nieuwste Code.gs")').click();
   await expect(page.locator('.toast--success').last()).toBeVisible();
+
+  // Simuleer gekoppelde v1.x Sheet -> toont Deployment ID hint & Controleer script-versie knop -> upgrade naar v2.1.0
+  await page
+    .locator('#cfg-url')
+    .fill(
+      'https://script.google.com/macros/s/AKfycbw9HJg8tJQeL9guRHL51gg1c8bOs-15QUNXmUOSKjNPNXm8dMpCKkLavxZQ/exec'
+    );
+  await page.locator('button:has-text("Opslaan & Live Sync")').click();
+  await expect(page.locator('#sheet-setup')).toContainText('AKfycbw9HJg8tJQe…LavxZQ');
+  await expect(page.locator('button:has-text("Controleer script-versie")')).toBeVisible();
+
+  mockedScriptVersion = '2.1.0';
+  await page.locator('button:has-text("Controleer script-versie")').click();
+  await expect(page.locator('#sheet-setup')).toContainText('Je Google Sheet script is up-to-date (v2.1.0)');
 
   const overflowOk = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
   expect(overflowOk, 'Horizontale overflow op Instellingen').toBe(true);

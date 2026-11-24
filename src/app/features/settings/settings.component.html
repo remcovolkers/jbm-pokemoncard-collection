@@ -267,15 +267,36 @@
               <span class="material-symbols-outlined">code</span>
               <span>Bekijk op GitHub</span>
             </button>
+
+            @if (isLiveSheetConnected()) {
+              <button
+                type="button"
+                class="pb-btn pb-btn--secondary"
+                [disabled]="isVerifyingScript()"
+                (click)="verifyScriptVersion(false)"
+              >
+                <span class="material-symbols-outlined" [class.pb-spin]="isVerifyingScript()">
+                  {{ isVerifyingScript() ? 'progress_activity' : 'sync' }}
+                </span>
+                <span>{{ isVerifyingScript() ? 'Controleren…' : 'Controleer script-versie' }}</span>
+              </button>
+            }
           </div>
 
           <ol class="guide-steps template-update-steps">
             <li>Open je eigen Google Sheet → <strong>Extensies → Apps Script</strong>.</li>
             <li>Selecteer alles in <code>Code.gs</code> (<code>Ctrl+A</code> / <code>Cmd+A</code>), plak en sla op (<code>Ctrl+S</code>).</li>
             <li>
-              Klik rechtsboven op <strong>Implementeren → Implementaties beheren</strong> <em>(maak geen nieuwe implementatie aan — zo blijft je Web App URL exact gelijk!)</em>.
+              Klik rechtsboven op <strong>Implementeren → Implementaties beheren</strong> (<em>maak geen nieuwe implementatie aan — zo blijft je Web App URL exact gelijk!</em>).
+              @if (activeDeploymentShortId(); as depId) {
+                <span class="deployment-id-hint">
+                  Staan er links meerdere onder <em>Actief</em>? Kies eerst de implementatie van jouw gekoppelde URL: <code>{{ depId }}</code>.
+                </span>
+              }
             </li>
-            <li>Klik op het <strong>potloodje (Bewerken)</strong> → kies bij <em>Versie</em> voor <strong>Nieuwe versie</strong> → <strong>Implementeren</strong>.</li>
+            <li>
+              Klik rechtsboven op het <strong>potloodje (Bewerken)</strong> → kies bij <em>Versie</em> voor <strong>Nieuwe versie</strong> → <strong>Implementeren</strong>, en klik op <strong>Controleer script-versie</strong>.
+            </li>
           </ol>
         </div>
       </div>

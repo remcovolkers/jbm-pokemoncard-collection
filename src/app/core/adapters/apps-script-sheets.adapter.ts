@@ -39,7 +39,7 @@ export class AppsScriptSheetsAdapter implements CollectionRepository {
     this.assertConfigured(config);
     const url = this.buildGetUrl(config.webAppUrl, 'ping', config.apiToken);
     try {
-      const response = await fetch(url, { method: 'GET', redirect: 'follow' });
+      const response = await fetch(url, { method: 'GET', redirect: 'follow', cache: 'no-store' });
       const json = (await response.json()) as AppsScriptResponse;
       if (!json.ok) {
         return { ok: false, error: json.error ?? 'Onbekende fout van Apps Script.' };
@@ -61,7 +61,7 @@ export class AppsScriptSheetsAdapter implements CollectionRepository {
   async bootstrap(config: AppConnectionConfig): Promise<AppSnapshot> {
     this.assertConfigured(config);
     const url = this.buildGetUrl(config.webAppUrl, 'bootstrap', config.apiToken);
-    const response = await fetch(url, { method: 'GET', redirect: 'follow' });
+    const response = await fetch(url, { method: 'GET', redirect: 'follow', cache: 'no-store' });
     if (!response.ok) {
       throw new Error(`HTTP ${response.status} bij ophalen van Google Sheets data.`);
     }

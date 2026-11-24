@@ -670,11 +670,29 @@ describe('CollectionStore (Signals, Optimistic UI & Offline Queue)', () => {
     expect(restarted.collection().find((c) => c.cardId === 'sv08-238')?.rowIndex).toBeGreaterThanOrEqual(2);
   });
 
-  it('valt automatisch terug op losse POST-calls wanneer oudere Apps Script geen batchMutations kent', async () => {
+  it('valt automatisch terug op losse POST-calls bij oudere Apps Script en herstelt batch-modus zodra v2.1.0 gedetecteerd wordt', async () => {
+    let upgraded = false;
+    let batchSuccessCount = 0;
     const legacyRepo: CollectionRepository = {
       ...mockRepo,
-      batchMutations: vi.fn(async () => {
-        throw new Error('Onbekende POST-actie: batchMutations');
+      testConnection: vi.fn(async () => ({
+        ok: true,
+        spreadsheetName: 'Live Collectie',
+        scriptVersion: upgraded ? '2.1.0' : undefined,
+      })),
+      batchMutations: vi.fn(async (_cfg, muts: BatchMutationItem[]): Promise<BatchMutationResponse> => {
+        if (!upgraded) {
+          throw new Error('Onbekende POST-actie: batchMutations');
+        }
+        batchSuccessCount++;
+        return {
+          results: muts.map((m, idx) => ({
+            id: m.id,
+            action: m.action,
+            ok: true,
+            result: { rowIndex: 30 + idx, cardId: String(m.payload['cardId'] ?? '') },
+          })),
+        };
       }),
     };
 
@@ -705,6 +723,23 @@ describe('CollectionStore (Signals, Optimistic UI & Offline Queue)', () => {
     expect(legacyRepo.addCard).toHaveBeenCalledTimes(1);
     expect(legacyStore.pendingQueue().length).toBe(0);
     expect(legacyStore.lastError()).toBeNull();
+
+    // Na het updaten van dezelfde Web App URL naar Code.gs v2.1.0 wist testConnection direct de legacy-vlag
+    upgraded = true;
+    const pingRes = await legacyStore.testConnection();
+    expect(pingRes.ok).toBe(true);
+    expect(legacyStore.connectedScriptVersion()).toBe('2.1.0');
+    expect(legacyStore.legacyAppsScriptDetected()).toBe(false);
+    expect(legacyStore.snapshot().scriptVersion).toBe('2.1.0');
+
+    await legacyStore.addCard({
+      cardId: 'sv03.5-025',
+      name: 'Pikachu',
+      setName: '151',
+      quantity: 1,
+    });
+    await legacyStore.waitForPendingSync();
+    expect(batchSuccessCount).toBe(1);
   });
 
   it('voegt meerdere kaarten atomisch toe via addCardsBatch met duplicaat-increment en aparte varianten in 1 batch', async () => {

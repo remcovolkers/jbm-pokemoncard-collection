@@ -1,4 +1,4 @@
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { formatEur } from '../../core/domain/card-math.utils';
@@ -8,6 +8,8 @@ import { PlatformService } from '../../core/platform/platform.service';
 import {
   SHEET_TEMPLATE_CONFIG,
   copyTextToClipboard,
+  extractAppsScriptDeploymentId,
+  formatDeploymentIdShort,
   generateSecureApiToken,
 } from '../../core/platform/sheet-template-config';
 import { isScriptUpdateAvailable } from '../../core/platform/version.utils';
@@ -21,7 +23,7 @@ import { CollectionStore } from '../../core/state/collection.store';
   templateUrl: './settings.component.html',
   styleUrl: './settings.component.scss',
 })
-export class SettingsComponent implements OnInit {
+export class SettingsComponent implements OnInit, OnDestroy {
   readonly store = inject(CollectionStore);
   readonly platform = inject(PlatformService);
   readonly updates = inject(AppUpdateService);
@@ -39,14 +41,32 @@ export class SettingsComponent implements OnInit {
   readonly showToken = signal(false);
 
   readonly isTesting = signal(false);
+  readonly isVerifyingScript = signal(false);
   readonly testResult = signal<ConnectionTestResult | null>(null);
   readonly cacheSizeKb = signal(this.store.getEstimatedCacheKb());
   readonly isCopyingScript = signal(false);
   readonly copiedScriptLines = signal<number | null>(null);
   readonly manualSetupOpen = signal<boolean | null>(null);
+  private lastAutoVerifyAt = 0;
+
+  private readonly onWindowFocus = (): void => {
+    this.maybeAutoVerifyScriptOnReturn();
+  };
+
+  private readonly onVisibilityChange = (): void => {
+    if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+      this.maybeAutoVerifyScriptOnReturn();
+    }
+  };
 
   readonly isLiveSheetConnected = computed(
     () => !this.store.config().demoMode && this.store.isSheetConfigured()
+  );
+  readonly activeDeploymentId = computed(() =>
+    extractAppsScriptDeploymentId(this.store.config().webAppUrl)
+  );
+  readonly activeDeploymentShortId = computed(() =>
+    formatDeploymentIdShort(this.activeDeploymentId())
   );
   readonly connectedScriptVersion = computed(() => this.store.connectedScriptVersion());
   readonly latestScriptVersion = computed(() => this.updates.latestScriptVersion());
@@ -88,10 +108,74 @@ export class SettingsComponent implements OnInit {
         this.scrollToSheetSetup();
       }
     });
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('focus', this.onWindowFocus);
+    }
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', this.onVisibilityChange);
+    }
+  }
+
+  ngOnDestroy(): void {
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('focus', this.onWindowFocus);
+    }
+    if (typeof document !== 'undefined') {
+      document.removeEventListener('visibilitychange', this.onVisibilityChange);
+    }
   }
 
   toggleSetupSection(): void {
     this.manualSetupOpen.set(!this.isSetupSectionExpanded());
+  }
+
+  async verifyScriptVersion(silent = false): Promise<void> {
+    if (!this.isLiveSheetConnected() || this.isVerifyingScript()) return;
+    const wasOutdated = this.scriptUpdateAvailable();
+    if (this.isSetupSectionExpanded()) {
+      this.manualSetupOpen.set(true);
+    }
+
+    this.isVerifyingScript.set(true);
+    try {
+      const res = await this.store.testConnection();
+      if (!res.ok) {
+        if (!silent) {
+          this.store.showToast(res.error || 'Kon Google Sheet niet bereiken.', 'error');
+        }
+        return;
+      }
+
+      if (!this.scriptUpdateAvailable()) {
+        if (!silent || wasOutdated) {
+          this.store.showToast(
+            `Script-versie gecontroleerd: v${res.scriptVersion || this.latestScriptVersion()} — helemaal up-to-date!`,
+            'success'
+          );
+        }
+      } else if (!silent) {
+        const depHint = this.activeDeploymentShortId();
+        const detectedLabel = res.scriptVersion ? `v${res.scriptVersion}` : 'v1.x';
+        this.store.showToast(
+          depHint
+            ? `Gekoppelde URL (${depHint}) draait nog op ${detectedLabel}. Kies links bij Implementaties beheren exact deze implementatie!`
+            : `Deze Web App URL draait nog op ${detectedLabel}. Kies bij Implementaties beheren → Bewerken → Nieuwe versie.`,
+          'warning'
+        );
+      }
+    } finally {
+      this.isVerifyingScript.set(false);
+    }
+  }
+
+  private maybeAutoVerifyScriptOnReturn(): void {
+    if (!this.isLiveSheetConnected() || this.isVerifyingScript() || this.isTesting()) return;
+    if (!this.scriptUpdateAvailable() && this.copiedScriptLines() === null) return;
+    const now = Date.now();
+    if (now - this.lastAutoVerifyAt < 4000) return;
+    this.lastAutoVerifyAt = now;
+    void this.verifyScriptVersion(true);
   }
 
   async openTemplateCopy(): Promise<void> {

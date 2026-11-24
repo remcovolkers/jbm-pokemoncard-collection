@@ -1051,10 +1051,35 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
       expect(comp.copiedScriptLines()).toBe(2);
       expect(writeTextSpy).toHaveBeenCalledWith(expect.stringContaining("SCRIPT_VERSION = '2.1.0'"));
 
+      // Deployment ID hint bij meerdere implementaties + spatie voor '(' + directe hercontrole knop
+      comp.webAppUrl.set(
+        'https://script.google.com/macros/s/AKfycbw9HJg8tJQeL9guRHL51gg1c8bOs-15QUNXmUOSKjNPNXm8dMpCKkLavxZQ/exec'
+      );
+      comp.saveConnectionOnly();
       store.connectedScriptVersion.set('1.9.0');
+      fixture.detectChanges();
+
       expect(comp.scriptUpdateAvailable()).toBe(true);
-      store.connectedScriptVersion.set(comp.latestScriptVersion());
+      expect(comp.activeDeploymentShortId()).toBe('AKfycbw9HJg8tJQe…LavxZQ');
+      expect(el.textContent).toContain('AKfycbw9HJg8tJQe…LavxZQ');
+      expect(el.textContent).toContain('Implementaties beheren (maak geen nieuwe implementatie aan');
+      expect(el.textContent).toContain('Controleer script-versie');
+
+      vi.spyOn(store, 'testConnection').mockImplementationOnce(async () => {
+        store.connectedScriptVersion.set(comp.latestScriptVersion());
+        store.legacyAppsScriptDetected.set(false);
+        return {
+          ok: true,
+          spreadsheetName: 'Remco Test',
+          scriptVersion: comp.latestScriptVersion(),
+        };
+      });
+      await comp.verifyScriptVersion(false);
+      fixture.detectChanges();
+
       expect(comp.scriptUpdateAvailable()).toBe(false);
+      expect(comp.isSetupSectionExpanded()).toBe(true);
+      expect(el.textContent).toContain('Je Google Sheet script is up-to-date');
     });
 
     it('ondersteunt de Alle Sets Catalogus browser in QuickAddComponent met in-bezit detectie, zoekbare dropdown en sortering', async () => {

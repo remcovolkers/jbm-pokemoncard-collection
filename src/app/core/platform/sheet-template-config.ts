@@ -76,3 +76,23 @@ export async function copyTextToClipboard(text: string): Promise<boolean> {
   }
   return copied;
 }
+
+/**
+ * Haalt het Google Apps Script Deployment ID (bijv. AKfycb...) uit een `/macros/s/<ID>/exec` Web App URL.
+ */
+export function extractAppsScriptDeploymentId(webAppUrl: string | null | undefined): string | null {
+  const clean = (webAppUrl || '').trim();
+  if (!clean) return null;
+  const match = clean.match(/\/macros\/s\/([^/?#]+)/i);
+  return match?.[1] ? match[1].trim() : null;
+}
+
+/**
+ * Verkort een lang Deployment ID leesbaar zodat begin én eind herkenbaar zijn in Google's Manage Deployments.
+ */
+export function formatDeploymentIdShort(deploymentId: string | null | undefined): string {
+  const id = (deploymentId || '').trim();
+  if (!id) return '';
+  if (id.length <= 24) return id;
+  return `${id.slice(0, 16)}…${id.slice(-6)}`;
+}
