@@ -1,3 +1,4 @@
+<a href="#main-content" class="skip-link">Ga naar hoofdinhoud</a>
 <div class="shell">
   <!-- Desktop Zijbalk (>= 768px) -->
   <aside class="sidebar" aria-label="Hoofdnavigatie">
@@ -144,20 +145,24 @@
           <span class="sync-pill__text">{{ syncLabel() }}</span>
         </button>
 
-        <a
-          routerLink="/meer/instellingen"
-          routerLinkActive="is-active"
-          class="topbar__profile-btn"
-          aria-label="Instellingen"
-        >
-          <span class="material-symbols-outlined">tune</span>
-        </a>
+        @if (!isQuickAddRoute() && !isCardDetailRoute()) {
+          <a
+            routerLink="/meer/instellingen"
+            routerLinkActive="is-active"
+            class="topbar__profile-btn"
+            aria-label="Instellingen"
+          >
+            <span class="material-symbols-outlined">tune</span>
+          </a>
+        }
       </div>
     </div>
   </header>
 
   <!-- Hoofdinhoud -->
   <main
+    id="main-content"
+    tabindex="-1"
     class="shell__main"
     [class.is-quick-add]="isQuickAddRoute()"
     [class.is-detail-dock]="isCardDetailRoute()"
@@ -355,6 +360,7 @@
             }
           </span>
           <span class="toast__text">{{ toast.text }}</span>
+          <span class="material-symbols-outlined toast__close" aria-hidden="true">close</span>
         </button>
       }
     </div>

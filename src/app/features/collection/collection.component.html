@@ -5,6 +5,7 @@
       <div class="search-wrap">
         <span class="material-symbols-outlined search-wrap__icon">search</span>
         <input
+          id="col-search-input"
           type="text"
           class="search-wrap__input"
           placeholder="Zoek op naam, Pokémon, set of nr…"
@@ -64,9 +65,11 @@
 
     <!-- Filter Chips Strip -->
     <div class="filters-bar">
-      <div class="pb-pill pb-pill--neutral filters-bar__count">
+      <div class="pb-pill pb-pill--neutral filters-bar__count mono">
         <span class="pb-dot pb-dot--secondary"></span>
-        <span>{{ filteredCards().length }} kaarten</span>
+        <span>
+          {{ filteredStats().uniqueCards }} kaarten@if (filteredStats().totalCopies > filteredStats().uniqueCards) { ({{ filteredStats().totalCopies }}×)} · {{ formatEur(filteredStats().totalValue) }}
+        </span>
       </div>
 
       <!-- Card Set Switcher -->
@@ -178,7 +181,11 @@
           <article
             class="card-slab"
             [class.card-slab--holo]="isHoloCard(card)"
+            tabindex="0"
+            role="button"
             (click)="openDetail(card)"
+            (keydown.enter)="openDetail(card)"
+            (keydown.space)="$event.preventDefault(); openDetail(card)"
           >
             <div class="card-slab__art">
               <pb-card-artwork [cardId]="card.cardId" [src]="card.imageUrl" [alt]="card.name">
@@ -235,7 +242,14 @@
       <!-- Compacte Lijstweergave -->
       <div class="cards-list">
         @for (card of filteredCards(); track card.rowIndex + '-' + card.cardId) {
-          <article class="pb-card list-row" (click)="openDetail(card)">
+          <article
+            class="pb-card list-row"
+            tabindex="0"
+            role="button"
+            (click)="openDetail(card)"
+            (keydown.enter)="openDetail(card)"
+            (keydown.space)="$event.preventDefault(); openDetail(card)"
+          >
             <div class="list-row__thumb">
               <pb-card-artwork [cardId]="card.cardId" [src]="card.imageUrl" [alt]="card.name" [compact]="true" />
             </div>

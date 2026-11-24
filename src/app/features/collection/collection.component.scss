@@ -291,6 +291,7 @@
 
 .card-slab {
   @include surface-slab;
+  @include focus-ring;
   padding: 0.55rem;
   display: flex;
   flex-direction: column;
@@ -454,6 +455,7 @@
 }
 
 .list-row {
+  @include focus-ring;
   cursor: pointer;
   padding: 0.65rem;
   display: flex;

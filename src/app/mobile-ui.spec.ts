@@ -634,6 +634,30 @@ describe('Mobiele UI, Gebaren, Routing & Toetsenbord Suite', () => {
       expect(comp.clampedPage()).toBe(1);
     });
 
+    it('bladert in Pokédex Binder ook met ArrowLeft/ArrowRight en linkt ontbrekende Pokémon door naar QuickAdd', async () => {
+      const router = TestBed.inject(Router);
+      const navSpy = vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
+      const fixture = TestBed.createComponent(PokedexBinderComponent);
+      const comp = fixture.componentInstance;
+      fixture.detectChanges();
+
+      expect(comp.clampedPage()).toBe(1);
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight' }));
+      expect(comp.clampedPage()).toBe(2);
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft' }));
+      expect(comp.clampedPage()).toBe(1);
+
+      // Ontbrekende Pokémon (#0004 Charmander als niet in collectie) -> klik "Zoek ... om toe te voegen"
+      const missingSlot = comp.pageSlots().find((s) => s.inCollectionCount === 0) ?? comp.pageSlots()[0];
+      comp.addMissingPokemon(missingSlot);
+      expect(navSpy).toHaveBeenCalledWith('/toevoegen');
+
+      const qaFixture = TestBed.createComponent(QuickAddComponent);
+      qaFixture.componentInstance.ngOnInit();
+      expect(qaFixture.componentInstance.inputMode()).toBe('name');
+      expect(qaFixture.componentInstance.nameQuery()).toBe(missingSlot.pokemonName);
+    });
+
     it('toont een shimmer-skeleton tijdens het laden van Alle Sets en voert Haptics veilig uit', async () => {
       const fixture = TestBed.createComponent(QuickAddComponent);
       const comp = fixture.componentInstance;

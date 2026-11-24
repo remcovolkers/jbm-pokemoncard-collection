@@ -55,41 +55,48 @@
     </div>
   </section>
 
-  <!-- Filter Pills -->
-  <div class="wl-filters">
-    <button
-      type="button"
-      class="pb-pill pb-pill--interactive"
-      [class.is-active]="filter() === 'open'"
-      (click)="filter.set('open')"
-    >
-      Alle open ({{ openItems().length }})
-    </button>
-    <button
-      type="button"
-      class="pb-pill pb-pill--interactive"
-      [class.is-active]="filter() === 'high'"
-      (click)="filter.set('high')"
-    >
-      <span class="pb-dot pb-dot--primary"></span>
-      Hoge Prioriteit ({{ highPriorityCount() }})
-    </button>
-    <button
-      type="button"
-      class="pb-pill pb-pill--interactive"
-      [class.is-active-emerald]="filter() === 'in_budget'"
-      (click)="filter.set('in_budget')"
-    >
-      <span class="pb-dot pb-dot--secondary"></span>
-      Binnen Budget ({{ inBudgetCount() }})
-    </button>
-    <button
-      type="button"
-      class="pb-pill pb-pill--interactive"
-      [class.is-active]="filter() === 'found'"
-      (click)="filter.set('found')"
-    >
-      Gevonden ({{ foundItems().length }})
+  <!-- Filter & Actiebalk -->
+  <div class="wl-toolbar">
+    <div class="wl-filters">
+      <button
+        type="button"
+        class="pb-pill pb-pill--interactive"
+        [class.is-active]="filter() === 'open'"
+        (click)="filter.set('open')"
+      >
+        Alle open ({{ openItems().length }})
+      </button>
+      <button
+        type="button"
+        class="pb-pill pb-pill--interactive"
+        [class.is-active]="filter() === 'high'"
+        (click)="filter.set('high')"
+      >
+        <span class="pb-dot pb-dot--primary"></span>
+        Hoge Prioriteit ({{ highPriorityCount() }})
+      </button>
+      <button
+        type="button"
+        class="pb-pill pb-pill--interactive"
+        [class.is-active-emerald]="filter() === 'in_budget'"
+        (click)="filter.set('in_budget')"
+      >
+        <span class="pb-dot pb-dot--secondary"></span>
+        Binnen Budget ({{ inBudgetCount() }})
+      </button>
+      <button
+        type="button"
+        class="pb-pill pb-pill--interactive"
+        [class.is-active]="filter() === 'found'"
+        (click)="filter.set('found')"
+      >
+        Gevonden ({{ foundItems().length }})
+      </button>
+    </div>
+
+    <button type="button" class="pb-btn pb-btn--primary wl-add-top-btn" (click)="openAddModal()">
+      <span class="material-symbols-outlined">playlist_add</span>
+      <span>Nieuwe wens</span>
     </button>
   </div>
 
@@ -101,6 +108,10 @@
       </div>
       <h2 class="pb-empty__title">Geen verlanglijst-kaarten in dit filter</h2>
       <p class="pb-empty__text">Voeg nieuwe droomkaarten toe met live Cardmarket budgetbewaking.</p>
+      <button type="button" class="pb-btn pb-btn--primary" (click)="openAddModal()">
+        <span class="material-symbols-outlined">playlist_add</span>
+        <span>Nieuwe kaart aan verlanglijst toevoegen</span>
+      </button>
     </div>
   } @else {
     <div class="wl-grid">
@@ -196,14 +207,6 @@
       }
     </div>
   }
-
-  <!-- Nieuwe Wens Toevoegen CTA -->
-  <div class="wl-add-cta">
-    <button type="button" class="pb-btn pb-btn--secondary pb-btn--full" (click)="openAddModal()">
-      <span class="material-symbols-outlined">playlist_add</span>
-      <span>+ Nieuwe Kaart aan Verlanglijst Toevoegen</span>
-    </button>
-  </div>
 
   <!-- Bottom Sheet: Nieuwe Wens Toevoegen met TCGdex Lookup -->
   @if (showAddSheet()) {

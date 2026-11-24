@@ -204,13 +204,34 @@ html:has(.pb-sheet-backdrop, [aria-modal='true']) {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .pb-sheet {
-    animation: none;
-  }
+.skip-link {
+  position: fixed;
+  left: -9999px;
+  top: 0.75rem;
+  z-index: 9999;
+  padding: 0.55rem 1rem;
+  border-radius: $radius-full;
+  background-color: $color-primary-container;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 0.85rem;
+  box-shadow: $shadow-elevated;
 
+  &:focus-visible {
+    left: 0.75rem;
+    outline: 2px solid #ffffff;
+    outline-offset: 2px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pb-sheet,
+  .pb-skeleton-tile,
+  .pb-spin,
+  .toast,
+  .update-banner,
   .sync-pill__dot,
   .pb-dot--pulse {
-    animation: none;
+    animation: none !important;
   }
 }

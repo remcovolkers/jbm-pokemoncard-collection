@@ -290,7 +290,7 @@
 }
 
 .pocket {
-  @include pressable;
+  @include focus-ring;
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
@@ -299,6 +299,14 @@
   background-color: rgba($color-surface-high, 0.75);
   border: 1px solid rgba($color-outline-variant, 0.5);
   text-align: left;
+  transition:
+    border-color 140ms ease,
+    background-color 140ms ease;
+
+  &:active {
+    background-color: $color-surface-highest;
+    border-color: rgba($color-primary-container, 0.55);
+  }
 
   @media (hover: hover) and (pointer: fine) {
     &:hover {
@@ -468,6 +476,17 @@
   }
 }
 
+.binder-kbd-hint {
+  display: none;
+  font-size: 0.68rem;
+  color: $color-on-surface-muted;
+  text-align: center;
+
+  @include mq-md {
+    display: block;
+  }
+}
+
 .page-summary {
   display: flex;
   align-items: center;
@@ -620,7 +639,7 @@
 }
 
 .check-row {
-  @include pressable;
+  @include focus-ring;
   width: 100%;
   display: flex;
   align-items: center;
@@ -630,6 +649,14 @@
   background-color: $color-surface-container;
   border: 1px solid rgba($color-outline-variant, 0.55);
   text-align: left;
+  transition:
+    border-color 140ms ease,
+    background-color 140ms ease;
+
+  &:active {
+    background-color: $color-surface-high;
+    border-color: rgba($color-primary-container, 0.5);
+  }
 
   @media (hover: hover) and (pointer: fine) {
     &:hover {
@@ -793,7 +820,8 @@
 
 .no-variants-note {
   display: flex;
-  gap: 0.6rem;
+  flex-direction: column;
+  gap: 0.65rem;
   padding: 0.8rem;
   border-radius: $radius-md;
   background-color: $color-surface-container;
@@ -801,9 +829,21 @@
   @include type-body-sm;
   color: $color-on-surface-variant;
 
-  .material-symbols-outlined {
-    color: $color-on-surface-muted;
-    flex-shrink: 0;
+  &__top {
+    display: flex;
+    gap: 0.6rem;
+    align-items: flex-start;
+
+    .material-symbols-outlined {
+      color: $color-on-surface-muted;
+      flex-shrink: 0;
+    }
+  }
+
+  &__btn {
+    min-height: 40px;
+    padding: 0.45rem 0.85rem;
+    font-size: 0.8rem;
   }
 }
 

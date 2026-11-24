@@ -93,9 +93,25 @@
 }
 
 .trade-card {
+  @include focus-ring;
+  cursor: pointer;
   display: flex;
   gap: 0.85rem;
   padding: 0.75rem;
+  transition:
+    border-color 140ms ease,
+    background-color 140ms ease;
+
+  &:active {
+    background-color: $color-surface-high;
+    border-color: rgba($color-primary-container, 0.5);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    &:hover {
+      border-color: rgba($color-primary-container, 0.45);
+    }
+  }
 
   &__art {
     width: 66px;

@@ -305,8 +305,10 @@
     font-size: 14px;
   }
 
-  &:hover {
-    background-color: rgba($color-secondary, 0.24);
+  @media (hover: hover) and (pointer: fine) {
+    &:hover {
+      background-color: rgba($color-secondary, 0.24);
+    }
   }
 
   &.is-copied {
@@ -331,12 +333,14 @@
     font-size: 16px;
   }
 
-  &:hover {
-    color: $color-secondary;
-  }
+  @media (hover: hover) and (pointer: fine) {
+    &:hover {
+      color: $color-secondary;
+    }
 
-  &--del:hover {
-    color: $color-primary-container;
+    &--del:hover {
+      color: $color-primary-container;
+    }
   }
 }
 

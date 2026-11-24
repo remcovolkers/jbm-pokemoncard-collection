@@ -8,6 +8,7 @@ import {
   FeedbackStatus,
 } from '../../core/domain/models';
 import { ModalScrollLockService } from '../../core/platform/modal-scroll-lock.service';
+import { isEditableEventTarget } from '../../core/platform/keyboard.utils';
 import { CollectionStore } from '../../core/state/collection.store';
 import { FeedbackStore } from '../../core/state/feedback.store';
 
@@ -102,6 +103,17 @@ export class FeedbackHubComponent implements OnInit, OnDestroy {
   onEscapeKey(): void {
     if (this.activeLightboxItem()) {
       this.closeLightbox();
+    }
+  }
+
+  @HostListener('document:keydown', ['$event'])
+  onGlobalKeydown(event: KeyboardEvent): void {
+    if (this.activeLightboxItem() || isEditableEventTarget(event.target)) return;
+    if (event.key === '/' && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      event.preventDefault();
+      const input = document.getElementById('hub-search') as HTMLInputElement | null;
+      input?.focus();
+      input?.select();
     }
   }
 

@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, HostListener, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 import { getDisplaySetCode } from '../../core/domain/card-id.utils';
 import { formatEur, roundCurrency } from '../../core/domain/card-math.utils';
 import { CollectionCard } from '../../core/domain/models';
@@ -19,6 +20,7 @@ import { PbSheetDismissDirective } from '../../shared/directives/sheet-dismiss.d
 })
 export class TradesComponent {
   readonly store = inject(CollectionStore);
+  private readonly router = inject(Router);
   private readonly scrollLock = inject(ModalScrollLockService);
   private readonly haptics = inject(HapticsService);
 
@@ -52,6 +54,11 @@ export class TradesComponent {
 
   tradableQty(card: CollectionCard): number {
     return card.forTrade ? card.quantity : Math.max(0, card.quantity - 1);
+  }
+
+  openCardDetail(card: CollectionCard): void {
+    void this.haptics.light();
+    void this.router.navigate(['/collectie/kaart', card.rowIndex, card.cardId]);
   }
 
   openNewTradeModal(prefillCard?: CollectionCard): void {

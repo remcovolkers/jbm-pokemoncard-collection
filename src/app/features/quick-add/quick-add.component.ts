@@ -1,4 +1,4 @@
-import { Component, ElementRef, HostListener, OnDestroy, computed, inject, signal } from '@angular/core';
+import { Component, ElementRef, HostListener, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { getDisplaySetCode, isKnownNoScanSet, parseCardIdInput } from '../../core/domain/card-id.utils';
@@ -56,7 +56,7 @@ function getSeriesSortPriority(seriesId?: string): number {
   templateUrl: './quick-add.component.html',
   styleUrl: './quick-add.component.scss',
 })
-export class QuickAddComponent implements OnDestroy {
+export class QuickAddComponent implements OnInit, OnDestroy {
   readonly store = inject(CollectionStore);
   private readonly catalog = inject(CARD_CATALOG_PORT);
   private readonly router = inject(Router);
@@ -68,6 +68,22 @@ export class QuickAddComponent implements OnDestroy {
 
   constructor() {
     this.scrollLock.registerDismissHandler(() => this.isSetDropdownOpen(), () => this.closeSetDropdown());
+  }
+
+  ngOnInit(): void {
+    const requested = this.store.requestedQuickAddSearch();
+    if (requested) {
+      this.store.requestedQuickAddSearch.set(null);
+      if (requested.mode === 'name') {
+        this.inputMode.set('name');
+        this.nameQuery.set(requested.query);
+        void this.searchByName(requested.query);
+      } else {
+        this.inputMode.set('code');
+        this.codeQuery.set(requested.query);
+        void this.lookupByCode(requested.query);
+      }
+    }
   }
 
   readonly formatEur = formatEur;
@@ -283,6 +299,15 @@ export class QuickAddComponent implements OnDestroy {
     if (this.debounceTimer) clearTimeout(this.debounceTimer);
     if (this.focusTimer) clearTimeout(this.focusTimer);
     if (this.setSearchFocusTimer) clearTimeout(this.setSearchFocusTimer);
+  }
+
+  @HostListener('document:keydown', ['$event'])
+  onGlobalKeydown(event: KeyboardEvent): void {
+    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+      if (this.isSaving() || (!this.previewCard() && !this.manualName().trim())) return;
+      event.preventDefault();
+      void this.saveCard(true);
+    }
   }
 
   @HostListener('document:click', ['$event'])

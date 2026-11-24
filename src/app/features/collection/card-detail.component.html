@@ -1,9 +1,39 @@
 <div class="detail-page">
-  <div class="detail-desktop-back">
-    <button type="button" class="pb-btn pb-btn--secondary" (click)="goBack()">
+  <div class="detail-nav-bar">
+    <button type="button" class="pb-btn pb-btn--secondary detail-desktop-back" (click)="goBack()">
       <span class="material-symbols-outlined">arrow_back</span>
       <span>Terug naar collectie</span>
     </button>
+
+    @if (orderedCards().length > 1 && currentCardIndex() >= 0) {
+      <div class="detail-stepper" role="group" aria-label="Blader door kaarten">
+        <button
+          type="button"
+          class="detail-stepper__btn"
+          [disabled]="!prevCard()"
+          (click)="goToAdjacentCard(prevCard())"
+          aria-label="Vorige kaart"
+        >
+          <span class="material-symbols-outlined">chevron_left</span>
+          <span>Vorige</span>
+        </button>
+
+        <span class="mono detail-stepper__count">
+          {{ currentCardIndex() + 1 }} / {{ orderedCards().length }}
+        </span>
+
+        <button
+          type="button"
+          class="detail-stepper__btn"
+          [disabled]="!nextCard()"
+          (click)="goToAdjacentCard(nextCard())"
+          aria-label="Volgende kaart"
+        >
+          <span>Volgende</span>
+          <span class="material-symbols-outlined">chevron_right</span>
+        </button>
+      </div>
+    }
   </div>
 
   @if (editDraft(); as draft) {
@@ -26,9 +56,18 @@
           <h1 class="hero-card__title">{{ draft.name }}</h1>
           <p class="hero-card__set">{{ draft.setName }} · ID: {{ draft.cardId }}</p>
 
-          <div class="hero-card__art">
-            <pb-card-artwork [cardId]="draft.cardId" [src]="draft.imageUrl" [alt]="draft.name" />
-          </div>
+          <button
+            type="button"
+            class="hero-card__art hero-card__art-btn"
+            aria-label="Kaart groot bekijken"
+            (click)="openLightbox()"
+          >
+            <pb-card-artwork [cardId]="draft.cardId" [src]="draft.imageUrl" [alt]="draft.name">
+              <span class="hero-card__zoom-pill" aria-hidden="true">
+                <span class="material-symbols-outlined">zoom_in</span>
+              </span>
+            </pb-card-artwork>
+          </button>
 
           <div class="hero-card__pricing">
             <span class="hero-card__eyebrow">Cardmarket Marktwaarde p/s</span>
@@ -314,13 +353,64 @@
 
     <!-- Sticky Bottom Action Dock -->
     <div class="detail-dock">
-      <div class="detail-dock__inner">
-        <button type="button" class="pb-btn pb-btn--primary pb-btn--full" (click)="saveDraft()">
+      <div class="detail-dock__inner" [class.has-changes]="hasUnsavedChanges()">
+        @if (hasUnsavedChanges()) {
+          <div class="detail-dock__meta">
+            <span class="pb-pill pb-pill--tertiary detail-unsaved-badge">Niet opgeslagen</span>
+            <button
+              type="button"
+              class="pb-btn pb-btn--secondary detail-dock__reset"
+              (click)="resetDraft()"
+            >
+              <span class="material-symbols-outlined">undo</span>
+              <span>Herstellen</span>
+            </button>
+          </div>
+        }
+
+        <button
+          type="button"
+          class="pb-btn pb-btn--primary pb-btn--full detail-dock__save"
+          [disabled]="!hasUnsavedChanges()"
+          (click)="saveDraft()"
+        >
           <span class="material-symbols-outlined">save</span>
-          <span>Wijzigingen opslaan</span>
+          <span>{{ hasUnsavedChanges() ? 'Wijzigingen opslaan' : 'Geen wijzigingen' }}</span>
         </button>
       </div>
     </div>
+
+    <!-- High-res Kaart Lightbox Modal -->
+    @if (isLightboxOpen()) {
+      <div
+        class="pb-sheet-backdrop art-lightbox-backdrop"
+        role="dialog"
+        aria-modal="true"
+        [attr.aria-label]="draft.name + ' groot bekijken'"
+        (click)="closeLightbox()"
+      >
+        <div class="art-lightbox" (click)="$event.stopPropagation()">
+          <div class="art-lightbox__head">
+            <div>
+              <strong>{{ draft.name }}</strong>
+              <span class="mono">{{ draft.setName }} · #{{ draft.cardNumber }}</span>
+            </div>
+            <button
+              type="button"
+              class="pb-btn pb-btn--icon"
+              aria-label="Vergroting sluiten"
+              (click)="closeLightbox()"
+            >
+              <span class="material-symbols-outlined">close</span>
+            </button>
+          </div>
+
+          <div class="art-lightbox__stage">
+            <pb-card-artwork [cardId]="draft.cardId" [src]="draft.imageUrl" [alt]="draft.name" />
+          </div>
+        </div>
+      </div>
+    }
   } @else {
     <div class="pb-empty">
       <div class="pb-empty__icon">

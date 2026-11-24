@@ -1,13 +1,14 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, HostListener, OnInit, computed, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
-import { getDisplaySetCode, parseCardIdInput } from '../../core/domain/card-id.utils';
-import { calculateCardMetrics, compareCardNumbers, formatEur, formatPercent } from '../../core/domain/card-math.utils';
+import { getDisplaySetCode } from '../../core/domain/card-id.utils';
+import { calculateCardMetrics, formatEur, formatPercent, roundCurrency } from '../../core/domain/card-math.utils';
 import { CollectionCard } from '../../core/domain/models';
 import { HapticsService } from '../../core/platform/haptics.service';
+import { isEditableEventTarget } from '../../core/platform/keyboard.utils';
 import { CollectionStore } from '../../core/state/collection.store';
 import { CardArtworkComponent } from '../../shared/card-artwork/card-artwork.component';
-import { CollectionViewStateService } from './collection-view-state.service';
+import { CollectionViewStateService, filterAndSortCollection } from './collection-view-state.service';
 
 @Component({
   selector: 'app-collection',
@@ -53,48 +54,31 @@ export class CollectionComponent implements OnInit {
     return Array.from(locs);
   });
 
-  readonly filteredCards = computed(() => {
-    const query = this.searchQuery().trim().toLowerCase();
-    const setFilter = this.selectedSet();
-    const locFilter = this.selectedLocation();
-    const rarityFilter = this.selectedRarity();
-    const tradeOnly = this.onlyForTrade();
-    const sort = this.sortBy();
+  readonly filteredCards = computed(() =>
+    filterAndSortCollection(this.store.collection(), {
+      searchQuery: this.searchQuery(),
+      selectedSet: this.selectedSet(),
+      selectedLocation: this.selectedLocation(),
+      selectedRarity: this.selectedRarity(),
+      onlyForTrade: this.onlyForTrade(),
+      sortBy: this.sortBy(),
+    })
+  );
 
-    const parsedCodeQuery = query ? parseCardIdInput(query) : null;
-
-    const list = this.store.collection().filter((card) => {
-      if (setFilter !== 'ALL' && card.setName !== setFilter) return false;
-      if (locFilter !== 'ALL' && card.storageLocation !== locFilter) return false;
-      if (rarityFilter !== 'ALL' && card.rarity !== rarityFilter) return false;
-      if (tradeOnly && !card.forTrade) return false;
-      if (query) {
-        const hay = `${card.name} ${card.cardId} ${card.setName} ${card.cardNumber} ${card.storageLocation} ${card.rarity} ${card.acquisitionMethod ?? ''}`.toLowerCase();
-        const matchesParsedCode =
-          parsedCodeQuery !== null &&
-          parsedCodeQuery.candidateIds.some((cid) => cid.toLowerCase() === card.cardId.toLowerCase());
-        if (!hay.includes(query) && !matchesParsedCode) return false;
-      }
-      return true;
-    });
-
-    return [...list].sort((a, b) => {
-      switch (sort) {
-        case 'number_asc': {
-          const setCmp = a.setName.localeCompare(b.setName, 'nl');
-          return setCmp !== 0 ? setCmp : compareCardNumbers(a.cardNumber, b.cardNumber);
-        }
-        case 'value_asc':
-          return a.marketPrice - b.marketPrice;
-        case 'name_asc':
-          return a.name.localeCompare(b.name, 'nl');
-        case 'qty_desc':
-          return b.quantity - a.quantity || b.marketPrice - a.marketPrice;
-        case 'value_desc':
-        default:
-          return b.marketPrice - a.marketPrice || compareCardNumbers(a.cardNumber, b.cardNumber);
-      }
-    });
+  readonly filteredStats = computed(() => {
+    const cards = this.filteredCards();
+    let totalCopies = 0;
+    let totalValue = 0;
+    for (const card of cards) {
+      const qty = Math.max(1, Number(card.quantity) || 1);
+      totalCopies += qty;
+      totalValue += (Number(card.marketPrice) || 0) * qty;
+    }
+    return {
+      uniqueCards: cards.length,
+      totalCopies,
+      totalValue: roundCurrency(totalValue),
+    };
   });
 
   readonly hasActiveFilters = computed(
@@ -112,6 +96,16 @@ export class CollectionComponent implements OnInit {
       this.selectedSet.set(requestedSet);
       this.store.requestedSetFilter.set(null);
     }
+  }
+
+  @HostListener('document:keydown', ['$event'])
+  onGlobalKeydown(event: KeyboardEvent): void {
+    if (event.key !== '/' || event.ctrlKey || event.metaKey || event.altKey) return;
+    if (isEditableEventTarget(event.target)) return;
+    event.preventDefault();
+    const input = document.getElementById('col-search-input') as HTMLInputElement | null;
+    input?.focus();
+    input?.select();
   }
 
   resetFilters(): void {

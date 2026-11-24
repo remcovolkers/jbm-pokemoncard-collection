@@ -49,7 +49,14 @@
     } @else {
       <div class="trade-grid">
         @for (card of store.tradeBinderCards(); track card.rowIndex + '-' + card.cardId) {
-          <article class="pb-card trade-card">
+          <article
+            class="pb-card trade-card"
+            tabindex="0"
+            role="button"
+            (click)="openCardDetail(card)"
+            (keydown.enter)="openCardDetail(card)"
+            (keydown.space)="$event.preventDefault(); openCardDetail(card)"
+          >
             <div class="trade-card__art">
               <pb-card-artwork [cardId]="card.cardId" [src]="card.imageUrl" [alt]="card.name" [compact]="true">
                 <span class="trade-card__qty mono">{{ tradableQty(card) }}× vrij</span>
@@ -68,7 +75,7 @@
                 <button
                   type="button"
                   class="pb-btn pb-btn--secondary trade-card__log-btn"
-                  (click)="openNewTradeModal(card)"
+                  (click)="$event.stopPropagation(); openNewTradeModal(card)"
                 >
                   Log deal
                 </button>

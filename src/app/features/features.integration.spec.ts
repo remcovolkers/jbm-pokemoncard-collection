@@ -323,6 +323,13 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
       const paidRowEl = rows.find((r) => r.textContent?.includes('Gekochte Charizard'))!;
       expect(zeroRowEl.querySelector('.list-row__qty strong')).toBeNull();
       expect(paidRowEl.querySelector('.list-row__qty strong')?.textContent?.trim()).toBe('+50,0%');
+
+      // filteredStats berekent unieke kaarten, exemplaren en gefilterde totale waarde
+      expect(comp.filteredStats()).toEqual({
+        uniqueCards: 3,
+        totalCopies: zeroCard.quantity + paidCard.quantity + breakEvenCard.quantity,
+        totalValue: zeroCard.quantity * 25 + paidCard.quantity * 30 + breakEvenCard.quantity * 15,
+      });
     });
   });
 
@@ -395,6 +402,51 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
       await appFixture.whenStable();
       expect(router.url).toBe('/collectie');
       expect(store.collection().some((c) => c.cardId === 'base1-44')).toBe(false);
+    });
+
+    it('ondersteunt dirty-state Herstellen, high-res artwork lightbox en Vorige/Volgende kaartnavigatie', async () => {
+      const router = TestBed.inject(Router);
+      const store = TestBed.inject(CollectionStore);
+      const appFixture = TestBed.createComponent(App);
+      appFixture.detectChanges();
+
+      const cards = store.collection();
+      expect(cards.length).toBeGreaterThanOrEqual(2);
+      const first = cards[0];
+
+      await router.navigate(['/collectie/kaart', first.rowIndex, first.cardId]);
+      appFixture.detectChanges();
+      await appFixture.whenStable();
+
+      const detail = appFixture.debugElement.query(By.directive(CardDetailComponent))
+        .componentInstance as CardDetailComponent;
+
+      expect(detail.hasUnsavedChanges()).toBe(false);
+      detail.adjustDraftQty(1);
+      expect(detail.hasUnsavedChanges()).toBe(true);
+      detail.resetDraft();
+      expect(detail.hasUnsavedChanges()).toBe(false);
+
+      // Artwork Lightbox opent en sluit eerst met Escape zonder pagina te verlaten
+      detail.openLightbox();
+      appFixture.detectChanges();
+      expect(detail.isLightboxOpen()).toBe(true);
+      detail.onEscapeKey();
+      expect(detail.isLightboxOpen()).toBe(false);
+      expect(router.url).toContain(`/collectie/kaart/${first.rowIndex}/${first.cardId}`);
+
+      // Volgende / Vorige kaart navigatie via ArrowRight / ArrowLeft
+      const expectedNext = detail.nextCard();
+      expect(expectedNext).not.toBeNull();
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight' }));
+      appFixture.detectChanges();
+      await appFixture.whenStable();
+      expect(router.url).toContain(`/collectie/kaart/${expectedNext!.rowIndex}/${expectedNext!.cardId}`);
+
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft' }));
+      appFixture.detectChanges();
+      await appFixture.whenStable();
+      expect(router.url).toContain(`/collectie/kaart/${first.rowIndex}/${first.cardId}`);
     });
 
     it('laat optionele herkomst en aankoopprijs instellen/wissen en toont € 0,00 zonder ROI op de detailpagina', async () => {
@@ -689,6 +741,10 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
 
       const tradeCard = store.tradeBinderCards()[0];
       expect(comp.tradableQty(tradeCard)).toBeGreaterThanOrEqual(1);
+
+      const navSpy = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+      comp.openCardDetail(tradeCard);
+      expect(navSpy).toHaveBeenCalledWith(['/collectie/kaart', tradeCard.rowIndex, tradeCard.cardId]);
 
       comp.openNewTradeModal(tradeCard);
       expect(comp.cardName()).toContain(tradeCard.name);

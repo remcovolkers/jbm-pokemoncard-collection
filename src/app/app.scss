@@ -230,9 +230,11 @@
     background-color: $color-surface-container;
     border: 1px solid rgba($color-outline-variant, 0.6);
 
-    &:hover {
-      color: $color-on-surface;
-      background-color: $color-surface-high;
+    @media (hover: hover) and (pointer: fine) {
+      &:hover {
+        color: $color-on-surface;
+        background-color: $color-surface-high;
+      }
     }
 
     &.is-active {
@@ -284,8 +286,10 @@
     justify-content: center;
     color: inherit;
 
-    &:hover {
-      background-color: rgba(255, 255, 255, 0.08);
+    @media (hover: hover) and (pointer: fine) {
+      &:hover {
+        background-color: rgba(255, 255, 255, 0.08);
+      }
     }
 
     .material-symbols-outlined {
@@ -465,9 +469,11 @@
     color: $color-on-surface-muted;
     flex-shrink: 0;
 
-    &:hover {
-      background-color: rgba(255, 255, 255, 0.08);
-      color: $color-on-surface;
+    @media (hover: hover) and (pointer: fine) {
+      &:hover {
+        background-color: rgba(255, 255, 255, 0.08);
+        color: $color-on-surface;
+      }
     }
   }
 }
@@ -610,6 +616,15 @@
   &__text {
     @include type-body-sm;
     font-weight: 500;
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__close {
+    font-size: 16px;
+    color: $color-on-surface-muted;
+    opacity: 0.75;
+    flex-shrink: 0;
   }
 
   &--success {

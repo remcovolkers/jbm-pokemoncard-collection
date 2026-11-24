@@ -19,14 +19,28 @@
 
   <!-- Zoek & Sorteer -->
   <div class="sets-toolbar">
-    <input
-      type="text"
-      class="pb-input"
-      placeholder="Zoek set of serie (bijv. 151, Evolving Skies)…"
-      [ngModel]="query()"
-      (ngModelChange)="query.set($event)"
-      aria-label="Zoek in Set Voortgang"
-    />
+    <div class="sets-search-wrap">
+      <span class="material-symbols-outlined sets-search-wrap__icon">search</span>
+      <input
+        id="sets-search-input"
+        type="text"
+        class="pb-input sets-search-wrap__input"
+        placeholder="Zoek set of serie (bijv. 151, Evolving Skies)…"
+        [ngModel]="query()"
+        (ngModelChange)="query.set($event)"
+        aria-label="Zoek in Set Voortgang"
+      />
+      @if (query()) {
+        <button
+          type="button"
+          class="sets-search-wrap__clear"
+          aria-label="Zoekopdracht wissen"
+          (click)="query.set('')"
+        >
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      }
+    </div>
     <select
       class="pb-select sets-toolbar__sort"
       [ngModel]="sortBy()"

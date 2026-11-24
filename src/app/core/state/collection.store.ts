@@ -76,6 +76,7 @@ export class CollectionStore {
   // Navigatie-hulpsignal voor doorklikken vanuit Set Voortgang naar Collectie
   readonly requestedSetFilter = signal<string | null>(null);
   readonly requestedPokedexFilter = signal<'all' | 'missing' | 'in_collection' | 'in_binder' | 'upgrade' | null>(null);
+  readonly requestedQuickAddSearch = signal<{ mode: 'code' | 'name'; query: string } | null>(null);
 
   // Derived Computed Signals
   readonly collection = computed(() => this.snapshot().collection);

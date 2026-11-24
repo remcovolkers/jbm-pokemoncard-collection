@@ -1,8 +1,9 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, HostListener, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { formatEur, formatPercent } from '../../core/domain/card-math.utils';
 import { SetProgress } from '../../core/domain/models';
+import { isEditableEventTarget } from '../../core/platform/keyboard.utils';
 import { CollectionStore } from '../../core/state/collection.store';
 
 @Component({
@@ -58,5 +59,15 @@ export class SetProgressComponent {
   openSetInCollection(set: SetProgress): void {
     this.store.requestedSetFilter.set(set.setName);
     void this.router.navigateByUrl('/collectie');
+  }
+
+  @HostListener('document:keydown', ['$event'])
+  onGlobalKeydown(event: KeyboardEvent): void {
+    if (event.key !== '/' || event.ctrlKey || event.metaKey || event.altKey) return;
+    if (isEditableEventTarget(event.target)) return;
+    event.preventDefault();
+    const input = document.getElementById('sets-search-input') as HTMLInputElement | null;
+    input?.focus();
+    input?.select();
   }
 }

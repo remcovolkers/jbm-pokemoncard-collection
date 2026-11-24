@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, HostListener, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 import { getDisplaySetCode } from '../../core/domain/card-id.utils';
 import {
   calculateBinderPosition,
@@ -13,6 +14,7 @@ import {
   formatBinderChoice,
 } from '../../core/domain/pokedex-matching.utils';
 import { HapticsService } from '../../core/platform/haptics.service';
+import { isEditableEventTarget } from '../../core/platform/keyboard.utils';
 import { ModalScrollLockService } from '../../core/platform/modal-scroll-lock.service';
 import { CollectionStore } from '../../core/state/collection.store';
 import { CardArtworkComponent } from '../../shared/card-artwork/card-artwork.component';
@@ -31,6 +33,7 @@ type StatusFilter = 'all' | 'missing' | 'in_collection' | 'in_binder' | 'upgrade
 })
 export class PokedexBinderComponent implements OnInit {
   readonly store = inject(CollectionStore);
+  private readonly router = inject(Router);
   private readonly scrollLock = inject(ModalScrollLockService);
   private readonly haptics = inject(HapticsService);
 
@@ -303,6 +306,34 @@ export class PokedexBinderComponent implements OnInit {
     if (this.activeSlot()) {
       this.closeSlotSheet();
     }
+  }
+
+  @HostListener('document:keydown', ['$event'])
+  onKeydown(event: KeyboardEvent): void {
+    if (this.activeSlot() || isEditableEventTarget(event.target)) return;
+    if (event.key === '/' && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      event.preventDefault();
+      const input = document.getElementById('dex-search-input') as HTMLInputElement | null;
+      input?.focus();
+      input?.select();
+      return;
+    }
+    if (this.viewMode() === 'binder') {
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        this.prevPage();
+      } else if (event.key === 'ArrowRight') {
+        event.preventDefault();
+        this.nextPage();
+      }
+    }
+  }
+
+  addMissingPokemon(slot: PokedexSlot): void {
+    void this.haptics.light();
+    this.closeSlotSheet();
+    this.store.requestedQuickAddSearch.set({ mode: 'name', query: slot.pokemonName });
+    void this.router.navigateByUrl('/toevoegen');
   }
 
   async chooseVariant(card: CollectionCard): Promise<void> {

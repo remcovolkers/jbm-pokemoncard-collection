@@ -67,8 +67,10 @@
     border-color: rgba(255, 255, 255, 0.12);
     box-shadow: $shadow-primary-glow;
 
-    &:hover:not(:disabled) {
-      background-color: $color-primary-hover;
+    @media (hover: hover) and (pointer: fine) {
+      &:hover:not(:disabled) {
+        background-color: $color-primary-hover;
+      }
     }
   }
 
@@ -77,8 +79,10 @@
     color: $color-on-surface;
     border-color: $color-outline-variant;
 
-    &:hover:not(:disabled) {
-      background-color: $color-surface-highest;
+    @media (hover: hover) and (pointer: fine) {
+      &:hover:not(:disabled) {
+        background-color: $color-surface-highest;
+      }
     }
   }
 
@@ -87,8 +91,10 @@
     color: $color-on-surface;
     border-color: $color-outline-variant;
 
-    &:hover:not(:disabled) {
-      background-color: $color-surface-high;
+    @media (hover: hover) and (pointer: fine) {
+      &:hover:not(:disabled) {
+        background-color: $color-surface-high;
+      }
     }
   }
 
@@ -98,8 +104,10 @@
     font-weight: 700;
     box-shadow: $shadow-secondary-glow;
 
-    &:hover:not(:disabled) {
-      background-color: $color-secondary;
+    @media (hover: hover) and (pointer: fine) {
+      &:hover:not(:disabled) {
+        background-color: $color-secondary;
+      }
     }
   }
 
@@ -108,8 +116,10 @@
     color: $color-primary-container;
     border-color: rgba($color-primary-container, 0.45);
 
-    &:hover:not(:disabled) {
-      background-color: rgba($color-primary-container, 0.2);
+    @media (hover: hover) and (pointer: fine) {
+      &:hover:not(:disabled) {
+        background-color: rgba($color-primary-container, 0.2);
+      }
     }
   }
 
@@ -121,9 +131,11 @@
     background-color: $color-surface-container;
     color: $color-on-surface-variant;
 
-    &:hover:not(:disabled) {
-      background-color: $color-surface-high;
-      color: $color-on-surface;
+    @media (hover: hover) and (pointer: fine) {
+      &:hover:not(:disabled) {
+        background-color: $color-surface-high;
+        color: $color-on-surface;
+      }
     }
   }
 }
@@ -153,9 +165,11 @@
     color: $color-on-surface-variant;
     border-color: rgba($color-outline-variant, 0.65);
 
-    &:hover {
-      background-color: $color-surface-high;
-      color: $color-on-surface;
+    @media (hover: hover) and (pointer: fine) {
+      &:hover {
+        background-color: $color-surface-high;
+        color: $color-on-surface;
+      }
     }
 
     &.is-active {

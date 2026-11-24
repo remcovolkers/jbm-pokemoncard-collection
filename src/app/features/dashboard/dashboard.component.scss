@@ -459,6 +459,7 @@
 
 .top-card {
   @include pressable;
+  @include focus-ring;
   scroll-snap-align: start;
   flex: 0 0 11.25rem;
   padding: 0.6rem;
@@ -566,6 +567,7 @@
 
 .set-card {
   @include pressable;
+  @include focus-ring;
   cursor: pointer;
   display: flex;
   flex-direction: column;

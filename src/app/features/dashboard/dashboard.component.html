@@ -195,7 +195,7 @@
         <span class="material-symbols-outlined section__icon section__icon--emerald">diamond</span>
         <h2>Top Waardevolste Kaarten</h2>
       </div>
-      <span class="mono section__meta">Top 5 Portfolio</span>
+      <a routerLink="/collectie" class="section__link">Bekijk collectie</a>
     </div>
 
     @if (store.topValuableCards().length === 0) {
@@ -226,7 +226,14 @@
     } @else {
       <div class="top-rail">
         @for (card of store.topValuableCards(); track card.rowIndex + '-' + card.cardId) {
-          <article class="pb-card top-card" (click)="openCardInCollection(card)">
+          <article
+            class="pb-card top-card"
+            tabindex="0"
+            role="button"
+            (click)="openCardInCollection(card)"
+            (keydown.enter)="openCardInCollection(card)"
+            (keydown.space)="$event.preventDefault(); openCardInCollection(card)"
+          >
             <div class="top-card__art">
               <pb-card-artwork [cardId]="card.cardId" [src]="card.imageUrl" [alt]="card.name">
                 <span
@@ -281,7 +288,14 @@
     } @else {
       <div class="sets-grid">
         @for (set of topMasterSets(); track set.setName) {
-          <article class="pb-card set-card" (click)="openSetInCollection(set)">
+          <article
+            class="pb-card set-card"
+            tabindex="0"
+            role="button"
+            (click)="openSetInCollection(set)"
+            (keydown.enter)="openSetInCollection(set)"
+            (keydown.space)="$event.preventDefault(); openSetInCollection(set)"
+          >
             <div class="set-card__top">
               <div class="set-card__left">
                 <div class="set-card__code mono">

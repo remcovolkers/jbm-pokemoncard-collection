@@ -147,6 +147,19 @@
   }
 }
 
+.wl-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+
+  @include mq-md {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: $space-sm;
+  }
+}
+
 .wl-filters {
   @include hide-scrollbar;
   display: flex;
@@ -158,6 +171,16 @@
   @include mq-md {
     flex-wrap: wrap;
     overflow-x: visible;
+    flex: 1;
+  }
+}
+
+.wl-add-top-btn {
+  width: 100%;
+  flex-shrink: 0;
+
+  @include mq-md {
+    width: auto;
   }
 }
 
@@ -287,10 +310,6 @@
 .wl-price-target {
   @include type-data-md;
   color: $color-on-surface-variant;
-}
-
-.wl-add-cta {
-  padding-top: $space-xs;
 }
 
 .sheet-sub {

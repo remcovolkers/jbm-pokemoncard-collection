@@ -6,6 +6,7 @@
       <div class="dex-search">
         <span class="material-symbols-outlined">search</span>
         <input
+          id="dex-search-input"
           type="text"
           placeholder="Spring naar Pokémon of #nr…"
           [ngModel]="searchQuery()"
@@ -273,6 +274,7 @@
 
         @if (totalPages() > 1) {
           <p class="binder-swipe-hint mono">Veeg links/rechts over de binder om te bladeren</p>
+          <p class="binder-kbd-hint mono">Tip: gebruik ← / → toetsen om snel te bladeren</p>
         }
 
         <!-- Helper Discovery Banner (zoals Stitch Dragonair #0148) -->
@@ -414,11 +416,21 @@
           </div>
         } @else {
           <div class="no-variants-note">
-            <span class="material-symbols-outlined">info</span>
-            <p>
-              Nog geen kaart van <strong>{{ slot.pokemonName }}</strong> gevonden in je Collectie. Je kunt dit
-              vakje wel handmatig afvinken voor een losse bulk-kaart.
-            </p>
+            <div class="no-variants-note__top">
+              <span class="material-symbols-outlined">info</span>
+              <p>
+                Nog geen kaart van <strong>{{ slot.pokemonName }}</strong> gevonden in je Collectie. Je kunt dit
+                vakje handmatig afvinken of direct een kaart toevoegen.
+              </p>
+            </div>
+            <button
+              type="button"
+              class="pb-btn pb-btn--secondary no-variants-note__btn"
+              (click)="addMissingPokemon(slot)"
+            >
+              <span class="material-symbols-outlined">add_circle</span>
+              <span>Zoek {{ slot.pokemonName }} om toe te voegen</span>
+            </button>
           </div>
         }
 
