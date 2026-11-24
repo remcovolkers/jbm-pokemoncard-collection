@@ -241,6 +241,8 @@ export interface PendingMutation {
     | 'updatePokedexSlot'
     | 'addWishlist'
     | 'markWishlistFound'
+    | 'updateWishlist'
+    | 'deleteWishlist'
     | 'logTrade'
     | 'addFeedback'
     | 'updateFeedback'

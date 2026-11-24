@@ -41,6 +41,16 @@ export class DashboardComponent {
 
   readonly topMasterSets = computed(() => this.store.activeSets().slice(0, 4));
 
+  readonly showSyncStrip = computed(() => {
+    const status = this.store.syncStatus();
+    return (
+      status === 'unconfigured' ||
+      status === 'offline' ||
+      status === 'error' ||
+      this.store.pendingQueue().length > 0
+    );
+  });
+
   readonly syncedTimeAgo = computed(() => {
     const iso = this.store.syncedAt();
     if (!iso) return 'zojuist';
@@ -68,6 +78,11 @@ export class DashboardComponent {
 
   openReadyForBinder(): void {
     this.store.requestedPokedexFilter.set('in_collection');
+    void this.router.navigateByUrl('/pokedex');
+  }
+
+  openGenInBinder(genId: number): void {
+    this.store.requestedPokedexGen.set(genId);
     void this.router.navigateByUrl('/pokedex');
   }
 

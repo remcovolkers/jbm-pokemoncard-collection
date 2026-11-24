@@ -39,6 +39,16 @@ export interface MarkWishlistFoundPayload {
   cardPayload?: AddCardPayload;
 }
 
+export interface UpdateWishlistPayload extends Partial<Omit<WishlistItem, 'rowIndex'>> {
+  rowIndex: number;
+  originalCardName?: string;
+}
+
+export interface DeleteWishlistPayload {
+  rowIndex: number;
+  cardName?: string;
+}
+
 export interface RefreshPricesResult {
   updated: number;
   total: number;
@@ -68,6 +78,8 @@ export interface CollectionRepository {
   updatePokedexSlot(config: AppConnectionConfig, payload: UpdatePokedexSlotPayload): Promise<AppSnapshot>;
   addWishlist(config: AppConnectionConfig, payload: Omit<WishlistItem, 'rowIndex' | 'found'>): Promise<AppSnapshot>;
   markWishlistFound(config: AppConnectionConfig, payload: MarkWishlistFoundPayload): Promise<AppSnapshot>;
+  updateWishlist?(config: AppConnectionConfig, payload: UpdateWishlistPayload): Promise<AppSnapshot>;
+  deleteWishlist?(config: AppConnectionConfig, payload: DeleteWishlistPayload): Promise<AppSnapshot>;
   logTrade(config: AppConnectionConfig, payload: Omit<TradeEntry, 'rowIndex' | 'netResult'>): Promise<AppSnapshot>;
   addFeedback?(config: AppConnectionConfig, payload: Omit<FeedbackItem, 'source' | 'rowIndex'>): Promise<AppSnapshot>;
   updateFeedback?(config: AppConnectionConfig, payload: UpdateFeedbackPayload): Promise<AppSnapshot>;

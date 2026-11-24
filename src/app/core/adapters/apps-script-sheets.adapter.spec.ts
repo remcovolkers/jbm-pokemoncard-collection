@@ -100,6 +100,8 @@ describe('AppsScriptSheetsAdapter', () => {
           }),
       },
       { name: 'markWishlistFound', run: () => adapter.markWishlistFound(validConfig, { rowIndex: 2, addToCollection: true }) },
+      { name: 'updateWishlist', run: () => adapter.updateWishlist(validConfig, { rowIndex: 2, maxBudget: 175 }) },
+      { name: 'deleteWishlist', run: () => adapter.deleteWishlist(validConfig, { rowIndex: 2, cardName: 'Lugia V' }) },
       {
         name: 'logTrade',
         run: () =>

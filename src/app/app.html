@@ -72,6 +72,15 @@
     </nav>
 
     <div class="sidebar__footer">
+      <button
+        type="button"
+        class="sidebar__feedback-btn"
+        (click)="openPageFeedback()"
+        aria-label="Feedback of idee indienen"
+      >
+        <span class="material-symbols-outlined">chat_bubble</span>
+        <span>Feedback geven</span>
+      </button>
       <div
         class="sync-pill sync-pill--full"
         [class.is-demo]="store.syncStatus() === 'demo'"
@@ -144,17 +153,6 @@
           <span class="sync-pill__dot"></span>
           <span class="sync-pill__text">{{ syncLabel() }}</span>
         </button>
-
-        @if (!isQuickAddRoute() && !isCardDetailRoute()) {
-          <a
-            routerLink="/meer/instellingen"
-            routerLinkActive="is-active"
-            class="topbar__profile-btn"
-            aria-label="Instellingen"
-          >
-            <span class="material-symbols-outlined">tune</span>
-          </a>
-        }
       </div>
     </div>
   </header>
@@ -165,7 +163,6 @@
     tabindex="-1"
     class="shell__main"
     [class.is-quick-add]="isQuickAddRoute()"
-    [class.is-detail-dock]="isCardDetailRoute()"
     [class.is-more-hub]="isMoreHubRoute()"
   >
     <div class="shell__content">
@@ -323,18 +320,6 @@
       </div>
     </nav>
   }
-
-  <!-- Desktop Feedback Knop (>= 768px op elke pagina; op mobiel alleen in Instellingen) -->
-  <button
-    type="button"
-    class="desktop-feedback-fab"
-    [class.is-raised]="isQuickAddRoute() || isCardDetailRoute()"
-    aria-label="Feedback geven over deze pagina"
-    (click)="openPageFeedback()"
-  >
-    <span class="material-symbols-outlined">feedback</span>
-    <span>Feedback</span>
-  </button>
 
   <!-- Globale Feedback Modal (met paginadropdown) -->
   <pb-feedback-modal />

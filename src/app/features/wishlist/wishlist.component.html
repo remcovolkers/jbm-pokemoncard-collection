@@ -12,8 +12,52 @@
       </div>
 
       <div class="budget-card__nums">
-        <div>
-          <strong class="budget-card__limit mono">{{ formatEur(budgetStats().limit) }}</strong>
+        <div class="budget-card__limit-col">
+          @if (!isEditingBudget()) {
+            <div class="budget-card__limit-row">
+              <strong class="budget-card__limit mono">{{ formatEur(budgetStats().limit) }}</strong>
+              <button
+                type="button"
+                class="budget-edit-btn"
+                aria-label="Maandbudget aanpassen"
+                title="Maandbudget aanpassen"
+                (click)="startBudgetEdit()"
+              >
+                <span class="material-symbols-outlined">edit</span>
+              </button>
+            </div>
+          } @else {
+            <div class="budget-edit-inline">
+              <input
+                id="wl-budget-input"
+                type="number"
+                min="1"
+                step="5"
+                class="pb-input mono budget-edit-inline__input"
+                aria-label="Nieuw maandbudget in euro"
+                [ngModel]="budgetDraft()"
+                (ngModelChange)="budgetDraft.set(+$event)"
+                (keydown.enter)="saveBudgetEdit()"
+                (keydown.escape)="cancelBudgetEdit()"
+              />
+              <button
+                type="button"
+                class="pb-btn pb-btn--emerald budget-edit-inline__btn"
+                aria-label="Maandbudget opslaan"
+                (click)="saveBudgetEdit()"
+              >
+                <span class="material-symbols-outlined">check</span>
+              </button>
+              <button
+                type="button"
+                class="pb-btn pb-btn--surface budget-edit-inline__btn"
+                aria-label="Annuleren"
+                (click)="cancelBudgetEdit()"
+              >
+                <span class="material-symbols-outlined">close</span>
+              </button>
+            </div>
+          }
           <span class="budget-card__sub mono">Totaal allocatieplafond</span>
         </div>
         <div class="budget-card__avail-wrap">
@@ -127,16 +171,39 @@
             </div>
 
             <div class="wl-card__info">
-              <div class="wl-card__badges">
-                <span
-                  class="pb-pill"
-                  [class.pb-pill--primary]="item.priority === 'Hoog'"
-                  [class.pb-pill--tertiary]="item.priority === 'Grail'"
-                  [class.pb-pill--neutral]="item.priority !== 'Hoog' && item.priority !== 'Grail'"
-                >
-                  {{ item.priority }}
-                </span>
-                <span class="mono wl-card__cond">{{ item.desiredVariant }} · min. {{ item.minCondition }}</span>
+              <div class="wl-card__head-row">
+                <div class="wl-card__badges">
+                  <span
+                    class="pb-pill"
+                    [class.pb-pill--primary]="item.priority === 'Hoog'"
+                    [class.pb-pill--tertiary]="item.priority === 'Grail'"
+                    [class.pb-pill--neutral]="item.priority !== 'Hoog' && item.priority !== 'Grail'"
+                  >
+                    {{ item.priority }}
+                  </span>
+                  <span class="mono wl-card__cond">{{ item.desiredVariant }} · min. {{ item.minCondition }}</span>
+                </div>
+
+                <div class="wl-card__tools">
+                  <button
+                    type="button"
+                    class="wl-card__tool-btn"
+                    [attr.aria-label]="'Bewerk wens ' + item.cardName"
+                    title="Wens bewerken"
+                    (click)="openEditModal(item)"
+                  >
+                    <span class="material-symbols-outlined">edit</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="wl-card__tool-btn wl-card__tool-btn--danger"
+                    [attr.aria-label]="'Verwijder wens ' + item.cardName"
+                    title="Wens verwijderen"
+                    (click)="requestDeleteItem(item)"
+                  >
+                    <span class="material-symbols-outlined">delete</span>
+                  </button>
+                </div>
               </div>
 
               <h3 class="wl-card__name">{{ item.cardName }}</h3>
@@ -182,11 +249,23 @@
             }
           </div>
 
-          @if (!item.found) {
+          @if (confirmDeleteKey() === wishKey(item)) {
+            <div class="wl-card__confirm">
+              <span>{{ item.cardName }} van verlanglijst verwijderen?</span>
+              <div class="wl-card__confirm-btns">
+                <button type="button" class="pb-btn pb-btn--secondary" (click)="cancelDeleteItem()">
+                  Annuleren
+                </button>
+                <button type="button" class="pb-btn pb-btn--danger" (click)="confirmDeleteItem(item)">
+                  Verwijderen
+                </button>
+              </div>
+            </div>
+          } @else if (!item.found) {
             <div class="wl-card__actions">
               <button
                 type="button"
-                class="pb-btn pb-btn--primary wl-card__primary-cta"
+                class="pb-btn pb-btn--secondary wl-card__primary-cta wl-card__found-cta"
                 (click)="markFoundAndAdd(item)"
               >
                 <span class="material-symbols-outlined">add_circle</span>
@@ -216,8 +295,10 @@
           <div class="pb-sheet__handle"></div>
           <div class="pb-sheet__header">
             <div>
-              <h2>Nieuwe kaart op verlanglijst</h2>
-              <p class="sheet-sub">Zoek via TCGdex of vul direct je doelprijs in</p>
+              <h2>{{ editingItem() ? 'Wens bewerken' : 'Nieuwe kaart op verlanglijst' }}</h2>
+              <p class="sheet-sub">
+                {{ editingItem() ? 'Pas doelprijs, prioriteit of notitie aan' : 'Zoek via TCGdex of vul direct je doelprijs in' }}
+              </p>
             </div>
             <button
               type="button"
@@ -400,8 +481,8 @@
 
         <div class="pb-sheet__footer">
           <button type="button" class="pb-btn pb-btn--primary pb-btn--full" (click)="saveNewWish()">
-            <span class="material-symbols-outlined">bookmark_add</span>
-            <span>Opslaan op Verlanglijst</span>
+            <span class="material-symbols-outlined">{{ editingItem() ? 'save' : 'bookmark_add' }}</span>
+            <span>{{ editingItem() ? 'Wijzigingen opslaan' : 'Opslaan op Verlanglijst' }}</span>
           </button>
         </div>
       </div>

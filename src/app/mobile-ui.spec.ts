@@ -333,8 +333,20 @@ describe('Mobiele UI, Gebaren, Routing & Toetsenbord Suite', () => {
       expect(el.querySelector('.pb-sheet')).toBeNull();
       expect(el.querySelector('.bottom-nav')).toBeNull();
       expect(el.querySelector('.topbar__icon-btn')).not.toBeNull();
-      expect(el.querySelector('.detail-dock')).not.toBeNull();
+      expect(el.querySelector('.topbar__profile-btn')).toBeNull();
+      expect(el.querySelector('.detail-dock')).toBeNull();
       expect(el.querySelector('.detail-layout')).not.toBeNull();
+
+      // Zodra er iets wijzigt, verschijnt de slimme .detail-dock en na Herstellen verdwijnt deze weer
+      const incBtn = el.querySelector('button[aria-label="Aantal vermeerderen"]') as HTMLButtonElement;
+      incBtn.click();
+      appFixture.detectChanges();
+      expect(el.querySelector('.detail-dock')).not.toBeNull();
+
+      const resetBtn = el.querySelector('.detail-dock__reset') as HTMLButtonElement;
+      resetBtn.click();
+      appFixture.detectChanges();
+      expect(el.querySelector('.detail-dock')).toBeNull();
 
       expect(platform.handleMobileBackButton()).toBe('popped_stack');
       appFixture.detectChanges();

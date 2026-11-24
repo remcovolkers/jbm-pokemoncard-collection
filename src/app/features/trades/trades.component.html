@@ -22,12 +22,15 @@
         </span>
       </div>
     </div>
+  </section>
 
-    <button type="button" class="pb-btn pb-btn--primary pb-btn--full" (click)="openNewTradeModal()">
+  <!-- Actiebalk (consistent met Verlanglijst) -->
+  <div class="tr-toolbar">
+    <button type="button" class="pb-btn pb-btn--primary tr-log-top-btn" (click)="openNewTradeModal()">
       <span class="material-symbols-outlined">add_business</span>
       <span>Verkoop of Ruil Loggen</span>
     </button>
-  </section>
+  </div>
 
   <!-- Live Trade Binder -->
   <section class="tr-section">
@@ -91,7 +94,9 @@
   <section class="tr-section">
     <div class="tr-section__head">
       <h2>Transactielogboek</h2>
-      <span class="mono tr-section__hint">Sheet rij 22+</span>
+      <span class="mono tr-section__hint">
+        {{ store.trades().length }} {{ store.trades().length === 1 ? 'transactie' : 'transacties' }} · netto {{ formatEur(store.portfolio().realizedProfit, true) }}
+      </span>
     </div>
 
     @if (store.trades().length === 0) {
@@ -153,7 +158,7 @@
           <div class="pb-sheet__header">
             <div>
               <h2>Transactie loggen</h2>
-              <p class="sheet-sub">Wordt opgeslagen in tabblad “Ruil &amp; Verkoop” (rij 22+)</p>
+              <p class="sheet-sub">Wordt opgeslagen in je transactielogboek</p>
             </div>
             <button
               type="button"

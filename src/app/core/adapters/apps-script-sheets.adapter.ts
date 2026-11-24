@@ -11,10 +11,12 @@ import {
   AddCardPayload,
   CollectionRepository,
   ConnectionTestResult,
+  DeleteWishlistPayload,
   MarkWishlistFoundPayload,
   RefreshPricesResult,
   UpdateFeedbackPayload,
   UpdatePokedexSlotPayload,
+  UpdateWishlistPayload,
 } from '../ports/collection-repository.port';
 
 interface AppsScriptResponse<T = unknown> {
@@ -100,6 +102,16 @@ export class AppsScriptSheetsAdapter implements CollectionRepository {
 
   async markWishlistFound(config: AppConnectionConfig, payload: MarkWishlistFoundPayload): Promise<AppSnapshot> {
     const res = await this.postAction(config, 'markWishlistFound', payload as unknown as Record<string, unknown>);
+    return res.data!;
+  }
+
+  async updateWishlist(config: AppConnectionConfig, payload: UpdateWishlistPayload): Promise<AppSnapshot> {
+    const res = await this.postAction(config, 'updateWishlist', payload as unknown as Record<string, unknown>);
+    return res.data!;
+  }
+
+  async deleteWishlist(config: AppConnectionConfig, payload: DeleteWishlistPayload): Promise<AppSnapshot> {
+    const res = await this.postAction(config, 'deleteWishlist', payload as unknown as Record<string, unknown>);
     return res.data!;
   }
 

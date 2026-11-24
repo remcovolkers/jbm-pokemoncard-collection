@@ -30,6 +30,12 @@ export class WishlistComponent {
 
   readonly filter = signal<WishlistFilter>('open');
   readonly showAddSheet = signal(false);
+  readonly editingItem = signal<WishlistItem | null>(null);
+  readonly confirmDeleteKey = signal<string | null>(null);
+
+  // Inline maandbudget bewerken
+  readonly isEditingBudget = signal(false);
+  readonly budgetDraft = signal<number>(this.store.config().monthlyBudget || 150);
 
   constructor() {
     this.scrollLock.bind(() => this.showAddSheet(), () => this.closeAddModal());
@@ -114,12 +120,35 @@ export class WishlistComponent {
     return item.maxBudget - item.marketPrice;
   }
 
+  wishKey(item: WishlistItem): string {
+    return `${item.rowIndex}|${item.cardName}`;
+  }
+
+  startBudgetEdit(): void {
+    this.budgetDraft.set(this.store.config().monthlyBudget || 150);
+    this.isEditingBudget.set(true);
+  }
+
+  cancelBudgetEdit(): void {
+    this.isEditingBudget.set(false);
+  }
+
+  saveBudgetEdit(): void {
+    this.store.updateMonthlyBudget(this.budgetDraft());
+    this.isEditingBudget.set(false);
+    void this.haptics.success();
+  }
+
   openAddModal(): void {
+    this.editingItem.set(null);
     this.lookupQuery.set('');
     this.newCardId.set('');
     this.newCardName.set('');
     this.newSetName.set('');
     this.newCardNumber.set('');
+    this.newDesiredVariant.set('Full Art');
+    this.newMinCondition.set('Near Mint (NM)');
+    this.newPriority.set('Hoog');
     this.newMaxBudget.set(25);
     this.newMarketPrice.set(0);
     this.newNotes.set('');
@@ -127,8 +156,27 @@ export class WishlistComponent {
     this.showAddSheet.set(true);
   }
 
+  openEditModal(item: WishlistItem): void {
+    this.confirmDeleteKey.set(null);
+    this.editingItem.set(item);
+    this.lookupQuery.set('');
+    this.newCardId.set(item.cardId || '');
+    this.newCardName.set(item.cardName);
+    this.newSetName.set(item.setName);
+    this.newCardNumber.set(item.cardNumber);
+    this.newDesiredVariant.set(item.desiredVariant || 'Normal');
+    this.newMinCondition.set(item.minCondition || 'Near Mint (NM)');
+    this.newPriority.set(item.priority || 'Gemiddeld');
+    this.newMaxBudget.set(Number(item.maxBudget) || 0);
+    this.newMarketPrice.set(Number(item.marketPrice) || 0);
+    this.newNotes.set(item.notes || '');
+    this.newImageUrl.set(item.imageUrl);
+    this.showAddSheet.set(true);
+  }
+
   closeAddModal(): void {
     this.showAddSheet.set(false);
+    this.editingItem.set(null);
   }
 
   async lookupCardForWishlist(): Promise<void> {
@@ -167,7 +215,8 @@ export class WishlistComponent {
       return;
     }
 
-    await this.store.addWishlistItem({
+    const editing = this.editingItem();
+    const payload = {
       cardId: this.newCardId().trim() || undefined,
       cardName: name,
       setName: this.newSetName().trim() || 'Onbekende set',
@@ -179,9 +228,29 @@ export class WishlistComponent {
       marketPrice: Number(this.newMarketPrice()) || 0,
       notes: this.newNotes().trim(),
       imageUrl: this.newImageUrl(),
-    });
+    };
+
+    if (editing) {
+      await this.store.updateWishlistItem(editing, payload);
+    } else {
+      await this.store.addWishlistItem(payload);
+    }
     void this.haptics.success();
-    this.showAddSheet.set(false);
+    this.closeAddModal();
+  }
+
+  requestDeleteItem(item: WishlistItem): void {
+    this.confirmDeleteKey.set(this.wishKey(item));
+  }
+
+  cancelDeleteItem(): void {
+    this.confirmDeleteKey.set(null);
+  }
+
+  async confirmDeleteItem(item: WishlistItem): Promise<void> {
+    this.confirmDeleteKey.set(null);
+    void this.haptics.light();
+    await this.store.deleteWishlistItem(item);
   }
 
   async markFoundAndAdd(item: WishlistItem): Promise<void> {

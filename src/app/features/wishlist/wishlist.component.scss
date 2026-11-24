@@ -67,6 +67,19 @@
     flex-wrap: wrap;
   }
 
+  &__limit-col {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    min-width: 0;
+  }
+
+  &__limit-row {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+  }
+
   &__limit {
     @include type-headline-xl;
     display: block;
@@ -107,6 +120,50 @@
     strong {
       color: $color-on-surface;
     }
+  }
+}
+
+.budget-edit-btn {
+  @include touch-target(34px);
+  @include pressable;
+  @include focus-ring;
+  border-radius: $radius-full;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba($color-surface-high, 0.9);
+  border: 1px solid rgba($color-outline-variant, 0.55);
+  color: $color-on-surface-variant;
+
+  .material-symbols-outlined {
+    font-size: 16px;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    &:hover {
+      color: $color-secondary;
+      border-color: rgba($color-secondary, 0.5);
+    }
+  }
+}
+
+.budget-edit-inline {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+
+  &__input {
+    width: 112px;
+    min-height: 38px;
+    padding: 0.35rem 0.6rem;
+    font-size: 1rem;
+    font-weight: 700;
+  }
+
+  &__btn {
+    min-width: 38px;
+    min-height: 38px;
+    padding: 0;
   }
 }
 
@@ -234,11 +291,54 @@
     gap: 0.25rem;
   }
 
+  &__head-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.4rem;
+  }
+
   &__badges {
     display: flex;
     align-items: center;
     gap: 0.45rem;
     flex-wrap: wrap;
+    min-width: 0;
+  }
+
+  &__tools {
+    display: flex;
+    align-items: center;
+    gap: 0.2rem;
+    flex-shrink: 0;
+    margin: -0.25rem -0.25rem 0 0;
+  }
+
+  &__tool-btn {
+    @include touch-target(34px);
+    @include pressable;
+    @include focus-ring;
+    border-radius: $radius-full;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: $color-on-surface-muted;
+
+    .material-symbols-outlined {
+      font-size: 18px;
+    }
+
+    @media (hover: hover) and (pointer: fine) {
+      &:hover {
+        background-color: $color-surface-high;
+        color: $color-on-surface;
+      }
+
+      &--danger:hover {
+        color: $color-primary;
+        background-color: rgba($color-error-container, 0.35);
+      }
+    }
   }
 
   &__cond {
@@ -282,6 +382,37 @@
     padding: 0.65rem 0.75rem;
     white-space: normal;
     text-align: center;
+  }
+
+  &__found-cta {
+    border-color: rgba($color-secondary, 0.45);
+    color: $color-secondary;
+    background-color: rgba($color-secondary, 0.1);
+
+    @media (hover: hover) and (pointer: fine) {
+      &:hover {
+        background-color: rgba($color-secondary, 0.18);
+        border-color: $color-secondary;
+      }
+    }
+  }
+
+  &__confirm {
+    padding: 0.7rem;
+    border-radius: $radius-md;
+    background-color: rgba($color-error-container, 0.32);
+    border: 1px solid rgba($color-primary-container, 0.5);
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+    @include type-body-sm;
+    color: $color-primary-fixed;
+  }
+
+  &__confirm-btns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: $space-sm;
   }
 
   &__check-only {

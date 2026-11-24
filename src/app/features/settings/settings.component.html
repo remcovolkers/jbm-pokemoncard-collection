@@ -42,35 +42,109 @@
     </button>
   </section>
 
-  <!-- Feedback & Openbare To-Do Hub (op mobiel de centrale plek voor feedback geven) -->
-  <section class="pb-card feedback-card">
+  <!-- App-versie, Automatische Updates & Android APK (bovenaan voor snelle zichtbaarheid) -->
+  <section class="pb-card updates-card">
     <div class="card-head">
-      <span class="material-symbols-outlined card-head__icon">feedback</span>
+      <span class="material-symbols-outlined card-head__icon card-head__icon--amber">system_update</span>
       <div>
-        <h2>Feedback &amp; To-Do Hub</h2>
-        <p>
-          Geef feedback voor elke pagina via het keuzemenu of bekijk de openbare to-do lijst met
-          alle ideeën en gemelde bugs.
+        <h2>App-versie &amp; Android APK</h2>
+        <p class="mono">
+          {{ platform.runtimeLabel() }} · Web v{{ updates.currentWebVersion() }}
+          @if (platform.isNative()) {
+            · APK v{{ updates.currentNativeVersion() }}
+          }
         </p>
       </div>
     </div>
 
-    <div class="feedback-actions">
+    <div class="updates-meta">
+      @if (updates.webUpdateAvailable()) {
+        <div class="update-notice update-notice--emerald">
+          <span class="material-symbols-outlined">new_releases</span>
+          <div>
+            <strong>Nieuwe versie beschikbaar (v{{ updates.latestWebVersion() }})</strong>
+            <p>
+              @if (platform.isNative() && updates.otaState() === 'downloading') {
+                OTA-update wordt op de achtergrond gedownload…
+              } @else if (platform.isNative() && updates.otaState() === 'ready') {
+                OTA-update staat klaar en wordt actief bij heropenen of via "Nieuwe versie toepassen".
+              } @else if (platform.isNative() && updates.otaState() === 'error') {
+                Non-APK update beschikbaar — tik op "Nieuwe versie toepassen" om handmatig opnieuw te proberen.
+              } @else {
+                Non-APK update: pas direct in de app toe zonder opnieuw te installeren.
+              }
+            </p>
+          </div>
+        </div>
+      }
+
+      @if (updates.apkUpdateAvailable()) {
+        <div class="update-notice update-notice--amber">
+          <span class="material-symbols-outlined">android</span>
+          <div>
+            <strong>Nieuwe Android APK beschikbaar (v{{ updates.latestNativeVersion() }})</strong>
+            <p>
+              {{ updates.releaseNotes() || 'Download de nieuwste APK rechtstreeks via onderstaande link.' }}
+            </p>
+          </div>
+        </div>
+      }
+
+      @if (updates.otaError() || updates.checkError()) {
+        <div class="update-notice update-notice--error">
+          <span class="material-symbols-outlined">error</span>
+          <div>
+            <strong>Update-diagnose</strong>
+            <p class="mono">{{ updates.otaError() || updates.checkError() }}</p>
+          </div>
+        </div>
+      }
+    </div>
+
+    <div class="updates-actions">
       <button
         type="button"
-        class="pb-btn pb-btn--primary"
-        (click)="feedback.openComposer('Algemeen / Hele app')"
+        class="pb-btn pb-btn--secondary"
+        [disabled]="updates.isChecking()"
+        (click)="updates.checkForUpdates(false)"
       >
-        <span class="material-symbols-outlined">add_comment</span>
-        <span>Feedback geven</span>
+        <span class="material-symbols-outlined" [class.pb-spin]="updates.isChecking()">
+          {{ updates.isChecking() ? 'progress_activity' : 'refresh' }}
+        </span>
+        <span>Controleer op updates</span>
       </button>
 
-      <a class="pb-btn pb-btn--secondary" routerLink="/meer/feedback">
-        <span class="material-symbols-outlined">checklist</span>
-        <span>Feedback Hub bekijken</span>
-        @if (feedback.stats().active > 0) {
-          <span class="pb-pill pb-pill--secondary mono">{{ feedback.stats().active }} open</span>
-        }
+      @if (updates.webUpdateAvailable()) {
+        <button
+          type="button"
+          class="pb-btn pb-btn--emerald"
+          [disabled]="updates.otaState() === 'downloading' || updates.otaState() === 'applying'"
+          (click)="updates.applyWebUpdate()"
+        >
+          <span class="material-symbols-outlined">upgrade</span>
+          <span>Nieuwe versie toepassen</span>
+        </button>
+      }
+
+      <button
+        type="button"
+        class="pb-btn"
+        [class.pb-btn--primary]="updates.apkUpdateAvailable()"
+        [class.pb-btn--secondary]="!updates.apkUpdateAvailable()"
+        (click)="updates.downloadLatestApk()"
+      >
+        <span class="material-symbols-outlined">download</span>
+        <span>Android APK direct downloaden</span>
+      </button>
+
+      <a
+        class="pb-btn pb-btn--surface"
+        [href]="updates.releasePageUrl()"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        <span>Alle APK releases</span>
+        <span class="material-symbols-outlined">open_in_new</span>
       </a>
     </div>
   </section>
@@ -200,20 +274,6 @@
             </span>
           </button>
         </div>
-      </div>
-
-      <div class="pb-field">
-        <label class="pb-label" for="cfg-budget">Maandbudget Verlanglijst (€)</label>
-        <input
-          id="cfg-budget"
-          name="monthlyBudget"
-          type="number"
-          min="0"
-          step="5"
-          class="pb-input mono budget-input"
-          [ngModel]="monthlyBudget()"
-          (ngModelChange)="monthlyBudget.set(+$event)"
-        />
       </div>
 
       @if (testResult(); as res) {
@@ -400,114 +460,24 @@
     }
   </section>
 
-  <!-- App-versie, Automatische Updates & Android APK -->
-  <section class="pb-card updates-card">
+  <!-- Voorkeuren & Actieve keuzelijsten -->
+  <section class="pb-card prefs-card">
     <div class="card-head">
-      <span class="material-symbols-outlined card-head__icon card-head__icon--amber">system_update</span>
+      <span class="material-symbols-outlined card-head__icon card-head__icon--emerald">account_balance_wallet</span>
       <div>
-        <h2>App-versie &amp; Android APK</h2>
-        <p class="mono">
-          {{ platform.runtimeLabel() }} · Web v{{ updates.currentWebVersion() }}
-          @if (platform.isNative()) {
-            · APK v{{ updates.currentNativeVersion() }}
-          }
-        </p>
+        <h2>Voorkeuren</h2>
+        <p>Maandbudget verlanglijst: <strong class="mono">{{ formatEur(store.config().monthlyBudget || 150) }}</strong></p>
       </div>
     </div>
 
-    <div class="updates-meta">
-      @if (updates.webUpdateAvailable()) {
-        <div class="update-notice update-notice--emerald">
-          <span class="material-symbols-outlined">new_releases</span>
-          <div>
-            <strong>Nieuwe versie beschikbaar (v{{ updates.latestWebVersion() }})</strong>
-            <p>
-              @if (platform.isNative() && updates.otaState() === 'downloading') {
-                OTA-update wordt op de achtergrond gedownload…
-              } @else if (platform.isNative() && updates.otaState() === 'ready') {
-                OTA-update staat klaar en wordt actief bij heropenen of via "Nieuwe versie toepassen".
-              } @else if (platform.isNative() && updates.otaState() === 'error') {
-                Non-APK update beschikbaar — tik op "Nieuwe versie toepassen" om handmatig opnieuw te proberen.
-              } @else {
-                Non-APK update: pas direct in de app toe zonder opnieuw te installeren.
-              }
-            </p>
-          </div>
-        </div>
-      }
-
-      @if (updates.apkUpdateAvailable()) {
-        <div class="update-notice update-notice--amber">
-          <span class="material-symbols-outlined">android</span>
-          <div>
-            <strong>Nieuwe Android APK beschikbaar (v{{ updates.latestNativeVersion() }})</strong>
-            <p>
-              {{ updates.releaseNotes() || 'Download de nieuwste APK rechtstreeks via onderstaande link.' }}
-            </p>
-          </div>
-        </div>
-      }
-
-      @if (updates.otaError() || updates.checkError()) {
-        <div class="update-notice update-notice--error">
-          <span class="material-symbols-outlined">error</span>
-          <div>
-            <strong>Update-diagnose</strong>
-            <p class="mono">{{ updates.otaError() || updates.checkError() }}</p>
-          </div>
-        </div>
-      }
-    </div>
-
-    <div class="updates-actions">
-      <button
-        type="button"
-        class="pb-btn pb-btn--secondary"
-        [disabled]="updates.isChecking()"
-        (click)="updates.checkForUpdates(false)"
-      >
-        <span class="material-symbols-outlined" [class.pb-spin]="updates.isChecking()">
-          {{ updates.isChecking() ? 'progress_activity' : 'refresh' }}
-        </span>
-        <span>Controleer op updates</span>
-      </button>
-
-      @if (updates.webUpdateAvailable()) {
-        <button
-          type="button"
-          class="pb-btn pb-btn--emerald"
-          [disabled]="updates.otaState() === 'downloading' || updates.otaState() === 'applying'"
-          (click)="updates.applyWebUpdate()"
-        >
-          <span class="material-symbols-outlined">upgrade</span>
-          <span>Nieuwe versie toepassen</span>
-        </button>
-      }
-
-      <button
-        type="button"
-        class="pb-btn pb-btn--primary"
-        (click)="updates.downloadLatestApk()"
-      >
-        <span class="material-symbols-outlined">download</span>
-        <span>Android APK direct downloaden</span>
-      </button>
-
-      <a
-        class="pb-btn pb-btn--surface"
-        [href]="updates.releasePageUrl()"
-        target="_blank"
-        rel="noopener noreferrer"
-      >
-        <span>Alle APK releases</span>
-        <span class="material-symbols-outlined">open_in_new</span>
-      </a>
-    </div>
+    <a routerLink="/meer/verlanglijst" class="pb-btn pb-btn--secondary">
+      <span class="material-symbols-outlined">edit</span>
+      <span>Aanpassen op Verlanglijst</span>
+    </a>
   </section>
 
-  <!-- Gesynchroniseerde Dropdown-opties uit tabblad Instellingen -->
   <section class="pb-card lists-card">
-    <h2>Actieve keuzelijsten (tabblad Instellingen)</h2>
+    <h2>Actieve keuzelijsten</h2>
     <div class="lists-grid">
       <div class="list-group">
         <span class="pb-label">Opslaglocaties</span>

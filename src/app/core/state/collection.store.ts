@@ -33,6 +33,7 @@ import {
   ConnectionTestResult,
   MarkWishlistFoundPayload,
   UpdatePokedexSlotPayload,
+  UpdateWishlistPayload,
 } from '../ports/collection-repository.port';
 import {
   buildPokedexFromCollection,
@@ -73,9 +74,10 @@ export class CollectionStore {
   readonly lastError = signal<string | null>(null);
   readonly toasts = signal<ToastMessage[]>([]);
 
-  // Navigatie-hulpsignal voor doorklikken vanuit Set Voortgang naar Collectie
+  // Navigatie-hulpsignal voor doorklikken vanuit Set Voortgang & Dashboard
   readonly requestedSetFilter = signal<string | null>(null);
   readonly requestedPokedexFilter = signal<'all' | 'missing' | 'in_collection' | 'in_binder' | 'upgrade' | null>(null);
+  readonly requestedPokedexGen = signal<number | null>(null);
   readonly requestedQuickAddSearch = signal<{ mode: 'code' | 'name'; query: string } | null>(null);
 
   // Derived Computed Signals
@@ -570,6 +572,24 @@ export class CollectionStore {
     this.packDefaults.update((prev) => ({ ...prev, ...partial }));
   }
 
+  updateMonthlyBudget(rawBudget: number): number {
+    const normalized = Math.max(1, roundCurrency(Number(rawBudget) || 150));
+    const prev = this.config();
+    const updatedProfiles = prev.activeProfileId
+      ? (prev.profiles ?? []).map((p) =>
+          p.id === prev.activeProfileId ? { ...p, monthlyBudget: normalized } : p
+        )
+      : prev.profiles;
+
+    this.config.set({
+      ...prev,
+      monthlyBudget: normalized,
+      ...(updatedProfiles ? { profiles: updatedProfiles } : {}),
+    });
+    this.showToast(`Maandbudget bijgewerkt naar ${roundCurrency(normalized).toLocaleString('nl-NL', { style: 'currency', currency: 'EUR' })}.`, 'success');
+    return normalized;
+  }
+
   async testConnection(overrideConfig?: AppConnectionConfig): Promise<ConnectionTestResult> {
     const cfg = overrideConfig ?? this.config();
     return this.repo.testConnection(cfg);
@@ -966,6 +986,89 @@ export class CollectionStore {
     );
   }
 
+  async updateWishlistItem(
+    original: WishlistItem,
+    changes: Partial<Omit<WishlistItem, 'rowIndex'>>
+  ): Promise<void> {
+    const merged: WishlistItem = {
+      ...original,
+      ...changes,
+      cardId: changes.cardId?.trim() || original.cardId,
+      cardName: (changes.cardName ?? original.cardName).trim(),
+      setName: (changes.setName ?? original.setName).trim(),
+      cardNumber: (changes.cardNumber ?? original.cardNumber).trim(),
+      desiredVariant: (changes.desiredVariant ?? original.desiredVariant).trim() || 'Normal',
+      minCondition: (changes.minCondition ?? original.minCondition).trim() || 'Near Mint (NM)',
+      priority: (changes.priority ?? original.priority).trim() || 'Gemiddeld',
+      maxBudget: Math.max(0, Number(changes.maxBudget ?? original.maxBudget) || 0),
+      marketPrice: Math.max(0, Number(changes.marketPrice ?? original.marketPrice) || 0),
+      notes: (changes.notes ?? original.notes).trim(),
+      imageUrl: changes.imageUrl ?? original.imageUrl,
+    };
+
+    const nextWishlist = this.wishlist().map((w) =>
+      w.rowIndex === original.rowIndex && w.cardName === original.cardName ? merged : w
+    );
+
+    this.rememberWishlistArtwork(merged);
+    this.bumpLocalRevision();
+    this.snapshot.update((snap) => ({
+      ...snap,
+      wishlist: nextWishlist,
+      syncedAt: new Date().toISOString(),
+    }));
+
+    const payload: UpdateWishlistPayload = {
+      rowIndex: original.rowIndex,
+      originalCardName: original.cardName,
+      cardId: merged.cardId,
+      cardName: merged.cardName,
+      setName: merged.setName,
+      cardNumber: merged.cardNumber,
+      desiredVariant: merged.desiredVariant,
+      minCondition: merged.minCondition,
+      priority: merged.priority,
+      maxBudget: merged.maxBudget,
+      marketPrice: merged.marketPrice,
+      notes: merged.notes,
+      found: merged.found,
+    };
+
+    if (this.repo.updateWishlist) {
+      await this.dispatchRemoteMutation(
+        'updateWishlist',
+        payload as unknown as Record<string, unknown>,
+        `Bijwerken wens: ${merged.cardName}`,
+        () => this.repo.updateWishlist!(this.config(), payload)
+      );
+    }
+    this.showToast(`${merged.cardName} bijgewerkt op Verlanglijst.`, 'success');
+  }
+
+  async deleteWishlistItem(item: WishlistItem): Promise<void> {
+    const nextWishlist = this.wishlist().filter(
+      (w) => !(w.rowIndex === item.rowIndex && w.cardName === item.cardName)
+    );
+
+    this.bumpLocalRevision();
+    this.snapshot.update((snap) => ({
+      ...snap,
+      wishlist: nextWishlist,
+      syncedAt: new Date().toISOString(),
+    }));
+
+    const payload = { rowIndex: item.rowIndex, cardName: item.cardName };
+    if (this.repo.deleteWishlist) {
+      await this.dispatchRemoteMutation(
+        'deleteWishlist',
+        payload as Record<string, unknown>,
+        `Verwijderd van verlanglijst: ${item.cardName}`,
+        () => this.repo.deleteWishlist!(this.config(), payload)
+      );
+    }
+    this.showToast(`${item.cardName} verwijderd van Verlanglijst.`, 'info');
+  }
+
   async logTrade(entry: Omit<TradeEntry, 'rowIndex' | 'netResult'>): Promise<void> {
     const netResult = roundCurrency(entry.saleValue - entry.purchasePrice - entry.platformFees);
     const newEntry: TradeEntry = {
@@ -1139,6 +1242,22 @@ export class CollectionStore {
                 cfg,
                 item.payload as unknown as MarkWishlistFoundPayload
               );
+              break;
+            case 'updateWishlist':
+              if (this.repo.updateWishlist) {
+                lastUpdatedSnap = await this.repo.updateWishlist(
+                  cfg,
+                  item.payload as unknown as UpdateWishlistPayload
+                );
+              }
+              break;
+            case 'deleteWishlist':
+              if (this.repo.deleteWishlist) {
+                lastUpdatedSnap = await this.repo.deleteWishlist(
+                  cfg,
+                  item.payload as { rowIndex: number; cardName?: string }
+                );
+              }
               break;
             case 'logTrade':
               lastUpdatedSnap = await this.repo.logTrade(

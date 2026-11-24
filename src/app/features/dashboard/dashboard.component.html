@@ -1,50 +1,44 @@
 <div class="dash">
-  <!-- Live Synchronisatie Strip -->
-  <div class="sync-strip">
-    <div class="sync-strip__left">
-      <span
-        class="pb-dot"
-        [class.pb-dot--pulse]="store.syncStatus() === 'synced' || store.syncStatus() === 'syncing'"
-        [class.pb-dot--secondary]="store.syncStatus() === 'synced'"
-        [class.pb-dot--tertiary]="store.syncStatus() === 'demo' || store.syncStatus() === 'offline' || store.syncStatus() === 'unconfigured'"
-        [class.pb-dot--primary]="store.syncStatus() === 'error'"
-      ></span>
-      <p class="sync-strip__text">
-        @if (store.config().demoMode) {
-          Demo-modus actief · <strong>Voorbeeldcollectie</strong> (koppel je Sheet bij Instellingen)
-        } @else if (store.syncStatus() === 'unconfigured') {
-          <strong>Nog geen Google Sheet gekoppeld</strong> · Koppel je spreadsheet bij Instellingen
-        } @else if (!store.isOnline()) {
-          Offline snapshot · <strong>{{ syncedTimeAgo() }}</strong>
-          @if (store.pendingQueue().length > 0) {
-            · {{ store.pendingQueue().length }} in wachtrij
-          }
-        } @else {
-          Google Sheets Live Sync: <strong>{{ syncedTimeAgo() }}</strong>
-          @if (store.activeProfile(); as prof) {
-            · <strong>{{ prof.name }}</strong> ({{ prof.role === 'test' ? 'Test' : 'Live' }})
+  <!-- Synchronisatie Strip (alleen zichtbaar wanneer actie of aandacht nodig is) -->
+  @if (showSyncStrip()) {
+    <div class="sync-strip">
+      <div class="sync-strip__left">
+        <span
+          class="pb-dot"
+          [class.pb-dot--pulse]="store.syncStatus() === 'syncing'"
+          [class.pb-dot--tertiary]="store.syncStatus() === 'offline' || store.syncStatus() === 'unconfigured'"
+          [class.pb-dot--primary]="store.syncStatus() === 'error'"
+        ></span>
+        <p class="sync-strip__text">
+          @if (store.syncStatus() === 'unconfigured') {
+            <strong>Nog geen Google Sheet gekoppeld</strong> · Koppel je spreadsheet bij Instellingen
+          } @else if (store.syncStatus() === 'error') {
+            <strong>Sync-fout</strong> · {{ store.lastError() || 'Controleer je verbinding of Sheet-instellingen' }}
           } @else {
-            · 100% up-to-date
+            Offline snapshot · <strong>{{ syncedTimeAgo() }}</strong>
+            @if (store.pendingQueue().length > 0) {
+              · {{ store.pendingQueue().length }} in wachtrij
+            }
           }
-        }
-      </p>
+        </p>
+      </div>
+      @if (store.syncStatus() === 'unconfigured') {
+        <a routerLink="/meer/instellingen" class="pb-btn pb-btn--primary sync-strip__cta">
+          <span class="material-symbols-outlined">link</span>
+          <span>Koppelen</span>
+        </a>
+      } @else {
+        <button
+          type="button"
+          class="sync-strip__refresh"
+          aria-label="Nu verversen"
+          (click)="store.syncFromRemote()"
+        >
+          <span class="material-symbols-outlined" [class.pb-spin]="store.isSyncing()">sync</span>
+        </button>
+      }
     </div>
-    @if (store.syncStatus() === 'unconfigured') {
-      <a routerLink="/meer/instellingen" class="pb-btn pb-btn--primary sync-strip__cta">
-        <span class="material-symbols-outlined">link</span>
-        <span>Koppelen</span>
-      </a>
-    } @else {
-      <button
-        type="button"
-        class="sync-strip__refresh"
-        aria-label="Nu verversen"
-        (click)="store.syncFromRemote()"
-      >
-        <span class="material-symbols-outlined" [class.pb-spin]="store.isSyncing()">sync</span>
-      </button>
-    }
-  </div>
+  }
 
   <!-- Bovenste Bento-rij op desktop: Hero Portfolio + Pokédex Binder -->
   <div class="dash__hero-grid">
@@ -76,23 +70,29 @@
           <span class="hero-card__profit-sub">(Ongerealiseerd)</span>
         </div>
 
-        <!-- 2x2 / 3x2 Sub-metrics Grid -->
+        <!-- 2x2 / 3x2 Sub-metrics Grid (klikbare drill-downs) -->
         <div class="kpi-grid">
-          <div class="kpi-tile">
-            <span class="kpi-tile__label">Unieke kaarten</span>
+          <a routerLink="/collectie" class="kpi-tile kpi-tile--link">
+            <div class="kpi-tile__top">
+              <span class="kpi-tile__label">Unieke kaarten</span>
+              <span class="material-symbols-outlined kpi-tile__chev" aria-hidden="true">chevron_right</span>
+            </div>
             <div class="kpi-tile__val-row">
               <span class="kpi-tile__val mono">{{ formatInteger(store.portfolio().uniqueCards) }}</span>
               <span class="kpi-tile__unit kpi-tile__unit--emerald">uniek</span>
             </div>
-          </div>
+          </a>
 
-          <div class="kpi-tile">
-            <span class="kpi-tile__label">Totaal exemplaren</span>
+          <a routerLink="/collectie" class="kpi-tile kpi-tile--link">
+            <div class="kpi-tile__top">
+              <span class="kpi-tile__label">Totaal exemplaren</span>
+              <span class="material-symbols-outlined kpi-tile__chev" aria-hidden="true">chevron_right</span>
+            </div>
             <div class="kpi-tile__val-row">
               <span class="kpi-tile__val mono">{{ formatInteger(store.portfolio().totalCopies) }}</span>
               <span class="kpi-tile__unit">stuks</span>
             </div>
-          </div>
+          </a>
 
           <div class="kpi-tile">
             <span class="kpi-tile__label">Aankoopwaarde</span>
@@ -101,8 +101,11 @@
             </div>
           </div>
 
-          <div class="kpi-tile">
-            <span class="kpi-tile__label">Gerealiseerde winst</span>
+          <a routerLink="/meer/ruil-verkoop" class="kpi-tile kpi-tile--link">
+            <div class="kpi-tile__top">
+              <span class="kpi-tile__label">Gerealiseerde winst</span>
+              <span class="material-symbols-outlined kpi-tile__chev" aria-hidden="true">chevron_right</span>
+            </div>
             <div class="kpi-tile__val-row">
               <span
                 class="kpi-tile__val mono"
@@ -112,17 +115,20 @@
                 {{ formatEur(store.portfolio().realizedProfit, true) }}
               </span>
             </div>
-          </div>
+          </a>
 
-          <div class="kpi-tile kpi-tile--wide">
-            <span class="kpi-tile__label">Openstaand verlanglijst-budget</span>
+          <a routerLink="/meer/verlanglijst" class="kpi-tile kpi-tile--wide kpi-tile--link">
+            <div class="kpi-tile__top">
+              <span class="kpi-tile__label">Openstaand verlanglijst-budget</span>
+              <span class="material-symbols-outlined kpi-tile__chev" aria-hidden="true">chevron_right</span>
+            </div>
             <div class="kpi-tile__val-row">
               <span class="kpi-tile__val mono">{{ formatEur(store.portfolio().openWishlistBudget) }}</span>
               <span class="kpi-tile__unit kpi-tile__unit--amber">
                 {{ store.portfolio().openWishlistCount }} open wensen
               </span>
             </div>
-          </div>
+          </a>
         </div>
       </div>
     </section>
@@ -174,7 +180,12 @@
       <!-- Generatie-overzicht (Gen 1 t/m Gen 9) -->
       <div class="gen-grid">
         @for (gen of generationSummaries(); track gen.id) {
-          <a routerLink="/pokedex" class="gen-chip" [title]="gen.region">
+          <button
+            type="button"
+            class="gen-chip"
+            [title]="gen.region + ' openen in Pokédex Binder'"
+            (click)="openGenInBinder(gen.id)"
+          >
             <div class="gen-chip__top">
               <span class="gen-chip__name">{{ gen.shortLabel }}</span>
               <span class="mono gen-chip__count">{{ gen.owned }}/{{ gen.total }}</span>
@@ -182,7 +193,7 @@
             <div class="pb-progress gen-chip__bar">
               <div class="pb-progress__bar" [style.width.%]="gen.pct"></div>
             </div>
-          </a>
+          </button>
         }
       </div>
     </section>

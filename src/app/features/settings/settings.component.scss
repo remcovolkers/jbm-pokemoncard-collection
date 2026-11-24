@@ -357,11 +357,27 @@
   }
 }
 
-.updates-actions,
-.feedback-actions {
+.updates-actions {
   display: flex;
   flex-wrap: wrap;
   gap: $space-sm;
+}
+
+.prefs-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: $space-sm;
+
+  .card-head {
+    margin-bottom: 0;
+  }
+
+  @include mq-sm {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
 }
 
 .lists-grid {

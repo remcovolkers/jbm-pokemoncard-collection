@@ -1,4 +1,4 @@
-<div class="detail-page">
+<div class="detail-page" [class.detail-page--dirty]="hasUnsavedChanges()">
   <div class="detail-nav-bar">
     <button type="button" class="pb-btn pb-btn--secondary detail-desktop-back" (click)="goBack()">
       <span class="material-symbols-outlined">arrow_back</span>
@@ -136,7 +136,7 @@
           <div class="stepper-row">
             <div>
               <strong class="stepper-row__title">Aantal in bezit</strong>
-              <span class="stepper-row__sub">Directe update naar Google Sheets</span>
+              <span class="stepper-row__sub">Gebruik + / − en sla onderaan op</span>
             </div>
             <div class="stepper">
               <button
@@ -363,10 +363,10 @@
       </div>
     </div>
 
-    <!-- Sticky Bottom Action Dock -->
-    <div class="detail-dock">
-      <div class="detail-dock__inner" [class.has-changes]="hasUnsavedChanges()">
-        @if (hasUnsavedChanges()) {
+    <!-- Slimme Sticky Bottom Action Dock (alleen bij niet-opgeslagen wijzigingen) -->
+    @if (hasUnsavedChanges()) {
+      <div class="detail-dock">
+        <div class="detail-dock__inner has-changes">
           <div class="detail-dock__meta">
             <span class="pb-pill pb-pill--tertiary detail-unsaved-badge">Niet opgeslagen</span>
             <button
@@ -378,19 +378,18 @@
               <span>Herstellen</span>
             </button>
           </div>
-        }
 
-        <button
-          type="button"
-          class="pb-btn pb-btn--primary pb-btn--full detail-dock__save"
-          [disabled]="!hasUnsavedChanges()"
-          (click)="saveDraft()"
-        >
-          <span class="material-symbols-outlined">save</span>
-          <span>{{ hasUnsavedChanges() ? 'Wijzigingen opslaan' : 'Geen wijzigingen' }}</span>
-        </button>
+          <button
+            type="button"
+            class="pb-btn pb-btn--primary pb-btn--full detail-dock__save"
+            (click)="saveDraft()"
+          >
+            <span class="material-symbols-outlined">save</span>
+            <span>Wijzigingen opslaan</span>
+          </button>
+        </div>
       </div>
-    </div>
+    }
 
     <!-- High-res Kaart Lightbox Modal -->
     @if (isLightboxOpen()) {

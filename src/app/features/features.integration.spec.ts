@@ -189,15 +189,28 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
       expect(comp.topMasterSets().length).toBeLessThanOrEqual(4);
     });
 
-    it('navigeert via de attentiebadge naar Pokédex gefilterd op Al in Collectie', () => {
+    it('navigeert via de attentiebadge naar Pokédex gefilterd op Al in Collectie en via Gen-tegels naar specifieke generatie', () => {
       const router = TestBed.inject(Router);
       const navSpy = vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
       const store = TestBed.inject(CollectionStore);
       const fixture = TestBed.createComponent(DashboardComponent);
+      fixture.detectChanges();
+
+      // In demo-modus blijft de dubbele sync-strip verborgen
+      expect(fixture.componentInstance.showSyncStrip()).toBe(false);
 
       fixture.componentInstance.openReadyForBinder();
       expect(store.requestedPokedexFilter()).toBe('in_collection');
       expect(navSpy).toHaveBeenCalledWith('/pokedex');
+
+      fixture.componentInstance.openGenInBinder(4);
+      expect(store.requestedPokedexGen()).toBe(4);
+      expect(navSpy).toHaveBeenCalledWith('/pokedex');
+
+      // Wanneer ontkoppeld buiten demo-modus verschijnt de sync-strip wél
+      store.updateConfig({ demoMode: false, webAppUrl: '', apiToken: '' });
+      fixture.detectChanges();
+      expect(fixture.componentInstance.showSyncStrip()).toBe(true);
     });
   });
 
@@ -770,6 +783,22 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
       expect(comp.showAddSheet()).toBe(false);
       expect(store.wishlist().some((w) => w.cardName === 'Charizard ex')).toBe(true);
 
+      // Inline maandbudget bewerken & opslaan
+      comp.startBudgetEdit();
+      comp.budgetDraft.set(275);
+      comp.saveBudgetEdit();
+      expect(store.config().monthlyBudget).toBe(275);
+      expect(comp.isEditingBudget()).toBe(false);
+
+      // Bestaand verlanglijst-item bewerken & verwijderen
+      const editable = store.wishlist().find((w) => w.cardName === 'Charizard ex')!;
+      comp.openEditModal(editable);
+      comp.newMaxBudget.set(320);
+      comp.newPriority.set('Grail');
+      await comp.saveNewWish();
+      expect(store.wishlist().find((w) => w.rowIndex === editable.rowIndex)?.maxBudget).toBe(320);
+      expect(store.wishlist().find((w) => w.rowIndex === editable.rowIndex)?.priority).toBe('Grail');
+
       // Budgetfilter
       comp.filter.set('in_budget');
       expect(comp.filteredItems().every((w) => comp.isWithinBudget(w))).toBe(true);
@@ -780,6 +809,11 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
       await comp.markFoundAndAdd(target);
       expect(store.collection().length).toBe(beforeCol + 1);
       expect(store.wishlist().find((w) => w.rowIndex === target.rowIndex)?.found).toBe(true);
+
+      // Verwijderen
+      const countBeforeDel = store.wishlist().length;
+      await comp.confirmDeleteItem(target);
+      expect(store.wishlist().length).toBe(countBeforeDel - 1);
 
       // Escape sluit modal
       comp.openAddModal();
@@ -819,38 +853,26 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
       expect(comp.showLogSheet()).toBe(false);
     });
 
-    it('schakelt Demo-modus, test verbinding, beheert cache en biedt mobiele Feedback-knop in SettingsComponent', async () => {
+    it('schakelt Demo-modus, test verbinding, beheert profielen & cache zonder dubbele feedback-kaart in SettingsComponent', async () => {
       const fixture = TestBed.createComponent(SettingsComponent);
       const comp = fixture.componentInstance;
       const store = TestBed.inject(CollectionStore);
-      const feedback = TestBed.inject(FeedbackStore);
       fixture.detectChanges();
 
       expect(store.config().demoMode).toBe(true);
-      comp.monthlyBudget.set(250);
-      comp.saveConnectionOnly();
-      expect(store.config().monthlyBudget).toBe(250);
-
       comp.clearCache();
       expect(store.pendingQueue().length).toBe(0);
 
       const el = fixture.nativeElement as HTMLElement;
-      expect(el.textContent).toContain('Feedback & To-Do Hub');
-      expect(el.textContent).toContain('Feedback geven');
-      expect(el.textContent).toContain('Feedback Hub bekijken');
+      expect(el.textContent).not.toContain('Feedback & To-Do Hub');
+      expect(el.textContent).toContain('Voorkeuren');
+      expect(el.textContent).toContain('Aanpassen op Verlanglijst');
       expect(el.textContent).toContain('Hoe koppel ik een eigen Google Sheet');
 
       // Demo-modus uitzetten zonder spreadsheet -> badge toont "Niet gekoppeld"
       comp.toggleDemoMode();
       fixture.detectChanges();
       expect(el.textContent).toContain('Niet gekoppeld');
-
-      const fbBtn = Array.from(el.querySelectorAll('button')).find((b) =>
-        b.textContent?.includes('Feedback geven')
-      )!;
-      fbBtn.click();
-      expect(feedback.isComposerOpen()).toBe(true);
-      expect(feedback.composerDefaultPage()).toBe('Algemeen / Hele app');
 
       // Spreadsheet-profielen aanmaken en wisselen via dropdown (Test <-> Live)
       comp.profileName.set('Remco Test');
@@ -1079,18 +1101,20 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
       expect(comp.activeLightboxItem()).toBeNull();
     });
 
-    it('toont desktop feedback-knop in App shell die huidige route meegeeft aan de modal', async () => {
+    it('toont desktop feedback-knop in de zijbalk van App shell (zonder zwevende FAB) en geeft huidige route mee', async () => {
       const router = TestBed.inject(Router);
       const feedback = TestBed.inject(FeedbackStore);
       const fixture = TestBed.createComponent(App);
       await router.navigateByUrl('/pokedex');
       fixture.detectChanges();
 
-      const fab = (fixture.nativeElement as HTMLElement).querySelector(
-        '.desktop-feedback-fab'
+      const el = fixture.nativeElement as HTMLElement;
+      expect(el.querySelector('.desktop-feedback-fab')).toBeNull();
+      const sidebarFeedbackBtn = el.querySelector(
+        '.sidebar__feedback-btn'
       ) as HTMLButtonElement | null;
-      expect(fab).not.toBeNull();
-      fab!.click();
+      expect(sidebarFeedbackBtn).not.toBeNull();
+      sidebarFeedbackBtn!.click();
 
       expect(feedback.isComposerOpen()).toBe(true);
       expect(feedback.composerDefaultPage()).toBe('Pokédex Binder');

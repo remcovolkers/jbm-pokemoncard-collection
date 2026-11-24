@@ -1,7 +1,7 @@
 # Feature Brief: UX Slag A — Rustige Shell, Slimme Detail-dock, Klikbaar Dashboard & Opschoning Beheerschermen
 
 - **Datum:** 2026-11-24
-- **Status:** Concept — wacht op gezamenlijke review
+- **Status:** Gebouwd (2026-11-24)
 - **Impactniveau:** Groot / App-brede UX & Informatiearchitectuur-verbetering
 - **Release-type verwachting:** WebView OTA (`apkChanged: false`) *(alle onderdelen puur web/UI; optioneel bewerken/verwijderen op Verlanglijst voegt daarnaast 2 lichte acties toe in `apps-script/Code.gs`)*
 
@@ -25,16 +25,16 @@
 ---
 
 ## 3. Must-Have Scope (UX Slag A — per blok aan/uit te vinken)
-- [ ] **1. Shell opschonen ([`app.html`](../../src/app/app.html), [`app.scss`](../../src/app/app.scss)):**
+- [x] **1. Shell opschonen ([`app.html`](../../src/app/app.html), [`app.scss`](../../src/app/app.scss)):**
   - Verwijder dubbele *Instellingen*-knop (`.topbar__profile-btn`) uit de mobiele topbar (Instellingen zit al één tap verder in `Meer`).
   - Verplaats `.desktop-feedback-fab` van rechtsonder over de content heen naar een vaste compacte link/knop onderaan in de linker desktop-zijbalk (boven de sync-pil).
-- [ ] **2. Dashboard opschonen & klikbaar maken ([`dashboard.component.html`](../../src/app/features/dashboard/dashboard.component.html), [`collection.store.ts`](../../src/app/core/state/collection.store.ts)):**
+- [x] **2. Dashboard opschonen & klikbaar maken ([`dashboard.component.html`](../../src/app/features/dashboard/dashboard.component.html), [`collection.store.ts`](../../src/app/core/state/collection.store.ts)):**
   - Verberg dubbele `.sync-strip` zodra status `synced` of `demo` is (toon alleen bij actie nodig: `unconfigured`, `offline` met wachtrij, of `error`).
   - Maak KPI-tegels klikbare drill-downs (*Unieke kaarten / Exemplaren* → `/collectie`, *Gerealiseerde winst* → `/meer/ruil-verkoop`, *Openstaand verlanglijst-budget* → `/meer/verlanglijst`).
   - Geef `Gen 1`–`Gen 9` tegels een echte selectie door aan Pokédex Binder (`requestedPokedexGen` in `CollectionStore`) zodat klikken op `Gen 4` ook echt `Gen 4` opent.
-- [ ] **3. Slimme Kaartdetail-dock ([`card-detail.component.html`](../../src/app/features/collection/card-detail.component.html), [`.scss`](../../src/app/features/collection/card-detail.component.scss)):**
+- [x] **3. Slimme Kaartdetail-dock ([`card-detail.component.html`](../../src/app/features/collection/card-detail.component.html), [`.scss`](../../src/app/features/collection/card-detail.component.scss)):**
   - Toon `.detail-dock` pas wanneer `hasUnsavedChanges()` `true` is (met zachte animatie); tijdens normaal bekijken/swipen blijft onderaan 74 px extra ruimte vrij.
-- [ ] **4. Verlanglijst, Ruil & Verkoop, Instellingen & Feedback Hub opschonen:**
+- [x] **4. Verlanglijst, Ruil & Verkoop, Instellingen & Feedback Hub opschonen:**
   - **Verlanglijst ([`wishlist.component.html`](../../src/app/features/wishlist/wishlist.component.html)):** Voeg direct naast het maandbudget (`€ 150,00`) een potloodje/bewerkactie toe om het maandbudget ter plekke te wijzigen; maak *Gevonden → Toevoegen* op kaarten secundair/groen i.p.v. knalroze zodat `+ Nieuwe wens` de enige primaire CTA is.
   - **Ruil & Verkoop ([`trades.component.html`](../../src/app/features/trades/trades.component.html)):** Maak *Verkoop of Ruil Loggen* een compacte primaire knop rechts naast de paginatitel/header (net als `+ Nieuwe wens`) i.p.v. een schermbrede rode balk; vervang technisch jargon `Sheet rij 22+` in de sectie-header en modal-subtitel door begrijpelijke info (*bijv. `3 transacties · netto +€ 47,55`*).
   - **Instellingen ([`settings.component.html`](../../src/app/features/settings/settings.component.html)):** Verwijder het dubbele *Feedback & To-Do Hub*-blok; zet *App-versie & Updates* bovenaan zodra een update klaarstaat; maak *Android APK direct downloaden* secundair wanneer geen nieuwe APK beschikbaar is (`!updates.apkUpdateAvailable()`); haal *Maandbudget* weg uit het API-tokenformulier naar een nette *Voorkeuren*-vermelding met link naar Verlanglijst.
@@ -46,12 +46,12 @@
 
 ### Consistentie-scan: Soortgelijke plekken in de app
 *Andere schermen/onderdelen waar ditzelfde patroon terugkomt:*
-- [ ] **Technisch Sheet-jargon in andere modals & labels:** Controleer bij het opschonen van `Sheet rij 22+` meteen *alle* subtitels en labels in `src/app/` (bijv. *Koppelt aan Sheet*, cel-/kolomverwijzingen in gebruikergerichte meldingen) zodat alleen het ingebouwde help-uitlegblok op *Instellingen* echte kolomletters noemt.
-- [ ] **Primaire vs. secundaire CTA-regel app-breed:** Controleer naast Verlanglijst ook *Instellingen* en *Feedback Hub* zodat elke kaart/pagina maximaal één felle primaire CTA heeft en de rest kalm blijft.
+- [x] **Technisch Sheet-jargon in andere modals & labels:** Controleer bij het opschonen van `Sheet rij 22+` meteen *alle* subtitels en labels in `src/app/` (bijv. *Koppelt aan Sheet*, cel-/kolomverwijzingen in gebruikergerichte meldingen) zodat alleen het ingebouwde help-uitlegblok op *Instellingen* echte kolomletters noemt.
+- [x] **Primaire vs. secundaire CTA-regel app-breed:** Controleer naast Verlanglijst ook *Instellingen* en *Feedback Hub* zodat elke kaart/pagina maximaal één felle primaire CTA heeft en de rest kalm blijft.
 
 ### Aanbevolen om direct mee te nemen (V1 Quick Wins)
-- [ ] **Verlanglijst-items kunnen bewerken & verwijderen:** Voeg naast *Gevonden* op elke verlanglijstkaart een compact menu/potlood + prullenbak toe (doelprijs, prioriteit of notitie bijwerken of wens wissen; met veilige `updateWishlist` & `deleteWishlist` acties in [`apps-script/Code.gs`](../../apps-script/Code.gs) zonder `I:J` formules te raken + demo-support).
-- [ ] **Contextuele actie rechtsboven op mobiel (na weghalen Instellingen-icoon):** Zet op `/dashboard` of `/collectie` op die vrije plek optioneel een snelle **Zoeken**-knop (of laat bewust leeg voor maximale rust naast de `Demo/Live`-syncpil).
+- [x] **Verlanglijst-items kunnen bewerken & verwijderen:** Voeg naast *Gevonden* op elke verlanglijstkaart een compact menu/potlood + prullenbak toe (doelprijs, prioriteit of notitie bijwerken of wens wissen; met veilige `updateWishlist` & `deleteWishlist` acties in [`apps-script/Code.gs`](../../apps-script/Code.gs) zonder `I:J` formules te raken + demo-support).
+- [x] **Contextuele actie rechtsboven op mobiel (na weghalen Instellingen-icoon):** Zet op `/dashboard` of `/collectie` op die vrije plek optioneel een snelle **Zoeken**-knop (of laat bewust leeg voor maximale rust naast de `Demo/Live`-syncpil). *(Optie A toegepast: bewust leeg gelaten voor maximale rust naast de syncpil.)*
 
 ### Logische vervolgstappen (V2 / Later)
 - [ ] **5-seconden "Ongedaan maken" (Undo) in delete-toast:** Voor kaarten op Kaartdetail én verlanglijst-items zodat per ongeluk wissen in één tik hersteld kan worden.

@@ -118,7 +118,7 @@ test('mobiele navigatie-chroom: tabbladen vs gerichte focus-routes', async ({ pa
   await page.locator('#qa-code-input').waitFor({ state: 'visible' });
   await expect(page.locator('.bottom-nav')).toBeHidden();
   await expect(page.locator('button[aria-label="Terug"]')).toBeVisible();
-  await expect(page.locator('.topbar__profile-btn')).toBeHidden();
+  await expect(page.locator('.topbar__profile-btn')).toHaveCount(0);
 
   await page.goto('/meer/sets', { waitUntil: 'domcontentloaded' });
   await page.locator('#sets-search-input').waitFor({ state: 'visible' });
@@ -143,8 +143,9 @@ test('Collectie -> Kaartdetail -> Lightbox -> Vorige/Volgende -> Dirty-state & H
 
   if (testInfo.project.name === 'mobile') {
     await expect(page.locator('.bottom-nav')).toBeHidden();
-    await expect(page.locator('.topbar__profile-btn')).toBeHidden();
+    await expect(page.locator('.topbar__profile-btn')).toHaveCount(0);
   }
+  await expect(page.locator('.detail-dock')).toHaveCount(0);
 
   // Lightbox openen, binnen vergroting bladeren zonder sluiten, en sluiten met Escape
   const firstUrl = page.url();
@@ -184,7 +185,20 @@ test('Collectie -> Kaartdetail -> Lightbox -> Vorige/Volgende -> Dirty-state & H
   await expect(page.locator('.toast--warning')).toBeVisible();
 
   await page.locator('.detail-dock__reset').click();
-  await expect(page.locator('.detail-unsaved-badge')).toBeHidden();
+  await expect(page.locator('.detail-dock')).toHaveCount(0);
+});
+
+test('Dashboard klikbare Gen 4 tegel en KPI drill-downs navigeren direct juist door', async ({ page }) => {
+  await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('.sync-strip')).toHaveCount(0);
+
+  await page.locator('.gen-chip:has-text("Gen 4")').click();
+  await page.waitForURL(/\/pokedex/);
+  await expect(page.locator('.gen-pills button:has-text("Gen 4")')).toHaveClass(/is-active/);
+
+  await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
+  await page.locator('.kpi-tile--link:has-text("Gerealiseerde winst")').click();
+  await page.waitForURL(/\/meer\/ruil-verkoop/);
 });
 
 test('Pokédex Binder -> ontbrekende Pokémon doorzetten naar Quick Add', async ({ page }) => {

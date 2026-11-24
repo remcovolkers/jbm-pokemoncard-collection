@@ -29,6 +29,19 @@
   }
 }
 
+.tr-toolbar {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.tr-log-top-btn {
+  width: 100%;
+
+  @include mq-md {
+    width: auto;
+  }
+}
+
 .tr-stat {
   display: flex;
   flex-direction: column;

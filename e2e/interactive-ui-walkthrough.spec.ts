@@ -184,11 +184,12 @@ test('Kaartdetail: doorscrollen, prijs bewerken en Herstellen', async ({ page })
   await scrollMainToBottomAndTop(page, '/collectie/kaart');
 
   const buyInput = page.locator('#edit-buy');
+  await expect(page.locator('.detail-dock')).toHaveCount(0);
   await buyInput.fill('99.5');
   await expect(page.locator('.detail-unsaved-badge')).toBeVisible();
 
   await page.locator('.detail-dock__reset').click();
-  await expect(page.locator('.detail-unsaved-badge')).toBeHidden();
+  await expect(page.locator('.detail-dock')).toHaveCount(0);
 
   expect(errors.pageErrors).toEqual([]);
   expect(errors.consoleErrors).toEqual([]);

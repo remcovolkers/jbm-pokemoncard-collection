@@ -197,6 +197,13 @@ export class PokedexBinderComponent implements OnInit {
       this.currentPage.set(1);
       this.store.requestedPokedexFilter.set(null);
     }
+    const requestedGen = this.store.requestedPokedexGen();
+    if (requestedGen !== null) {
+      this.selectedGen.set(requestedGen);
+      this.currentPage.set(1);
+      this.checklistLimit.set(60);
+      this.store.requestedPokedexGen.set(null);
+    }
   }
 
   selectGeneration(genId: number): void {

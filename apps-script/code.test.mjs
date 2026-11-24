@@ -435,6 +435,51 @@ describe('apps-script/Code.gs Backend API & Formule-integriteit', () => {
     assert.equal(sheets.Verlanglijst._grid[1][8], '=FORMULA_DIFF');
     assert.equal(sheets.Verlanglijst._grid[1][9], '=FORMULA_DEAL');
 
+    const updWl = JSON.parse(
+      sandbox.doPost({
+        postData: {
+          contents: JSON.stringify({
+            token: 'test-secret-token',
+            action: 'updateWishlist',
+            payload: {
+              rowIndex: 2,
+              cardName: 'Gengar Holo',
+              maxBudget: 110,
+              priority: 'Grail',
+              notes: 'Centering belangrijk',
+              cardId: 'ecard1-13',
+            },
+          }),
+        },
+      }).getContent()
+    );
+    assert.equal(updWl.ok, true);
+    assert.equal(sheets.Verlanglijst._grid[1][5], 'Grail');
+    assert.equal(sheets.Verlanglijst._grid[1][6], 110);
+    assert.equal(sheets.Verlanglijst._grid[1][10], 'Centering belangrijk');
+    assert.equal(sheets.Verlanglijst._grid[1][12], 'ecard1-13');
+    assert.equal(sheets.Verlanglijst._grid[1][8], '=FORMULA_DIFF');
+    assert.equal(sheets.Verlanglijst._grid[1][9], '=FORMULA_DEAL');
+
+    const delWl = JSON.parse(
+      sandbox.doPost({
+        postData: {
+          contents: JSON.stringify({
+            token: 'test-secret-token',
+            action: 'deleteWishlist',
+            payload: { rowIndex: 2, cardName: 'Gengar Holo' },
+          }),
+        },
+      }).getContent()
+    );
+    assert.equal(delWl.ok, true);
+    assert.equal(sheets.Verlanglijst._grid[1][0], '');
+    assert.equal(sheets.Verlanglijst._grid[1][10], '');
+    assert.equal(sheets.Verlanglijst._grid[1][11], false);
+    assert.equal(sheets.Verlanglijst._grid[1][12], '');
+    assert.equal(sheets.Verlanglijst._grid[1][8], '=FORMULA_DIFF');
+    assert.equal(sheets.Verlanglijst._grid[1][9], '=FORMULA_DEAL');
+
     const logTr = JSON.parse(
       sandbox.doPost({
         postData: {

@@ -657,6 +657,12 @@ function doPost(e) {
       case 'markWishlistFound':
         result = handleMarkWishlistFound_(ss, payload);
         break;
+      case 'updateWishlist':
+        result = handleUpdateWishlist_(ss, payload);
+        break;
+      case 'deleteWishlist':
+        result = handleDeleteWishlist_(ss, payload);
+        break;
       case 'logTrade':
         result = handleLogTrade_(ss, payload);
         break;
@@ -1307,23 +1313,29 @@ function handleAddWishlist_(ss, payload) {
   return { rowIndex: targetRow };
 }
 
-function handleMarkWishlistFound_(ss, payload) {
-  var sheet = ss.getSheetByName(SHEET_NAMES.WISHLIST);
-  if (!sheet) throw new Error('Tabblad "' + SHEET_NAMES.WISHLIST + '" niet gevonden.');
-
-  var rowIndex = toNumber_(payload.rowIndex, 0);
-  if (rowIndex < 2 && payload.cardName) {
+function findWishlistRow_(sheet, rowIndexInput, cardName) {
+  var rowIndex = toNumber_(rowIndexInput, 0);
+  if (rowIndex >= 2) return rowIndex;
+  if (cardName) {
     var lastRow = sheet.getLastRow();
     if (lastRow >= 2) {
       var names = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+      var needle = String(cardName).trim().toLowerCase();
       for (var i = 0; i < names.length; i++) {
-        if (String(names[i][0] || '').trim().toLowerCase() === String(payload.cardName).trim().toLowerCase()) {
-          rowIndex = i + 2;
-          break;
+        if (String(names[i][0] || '').trim().toLowerCase() === needle) {
+          return i + 2;
         }
       }
     }
   }
+  return 0;
+}
+
+function handleMarkWishlistFound_(ss, payload) {
+  var sheet = ss.getSheetByName(SHEET_NAMES.WISHLIST);
+  if (!sheet) throw new Error('Tabblad "' + SHEET_NAMES.WISHLIST + '" niet gevonden.');
+
+  var rowIndex = findWishlistRow_(sheet, payload.rowIndex, payload.cardName);
   if (rowIndex < 2) throw new Error('Verlanglijst-item niet gevonden.');
 
   sheet.getRange(rowIndex, 12).setValue(true);
@@ -1332,6 +1344,61 @@ function handleMarkWishlistFound_(ss, payload) {
     handleAddCard_(ss, payload.cardPayload);
   }
   return { rowIndex: rowIndex, found: true };
+}
+
+function handleUpdateWishlist_(ss, payload) {
+  var sheet = ss.getSheetByName(SHEET_NAMES.WISHLIST);
+  if (!sheet) throw new Error('Tabblad "' + SHEET_NAMES.WISHLIST + '" niet gevonden.');
+
+  var rowIndex = findWishlistRow_(sheet, payload.rowIndex, payload.originalCardName || payload.cardName);
+  if (rowIndex < 2) throw new Error('Verlanglijst-item niet gevonden om bij te werken.');
+
+  var curAH = sheet.getRange(rowIndex, 1, 1, 8).getValues()[0];
+  var curKL = sheet.getRange(rowIndex, 11, 1, 2).getValues()[0];
+
+  // Kolommen A:H (1..8) en K:L (11..12) — sla I:J (formules) bewust over!
+  sheet.getRange(rowIndex, 1, 1, 8).setValues([[
+    payload.cardName !== undefined ? String(payload.cardName || '').trim() : String(curAH[0] || ''),
+    payload.setName !== undefined ? String(payload.setName || '').trim() : String(curAH[1] || ''),
+    payload.cardNumber !== undefined ? String(payload.cardNumber || '').trim() : String(curAH[2] || ''),
+    payload.desiredVariant !== undefined ? String(payload.desiredVariant || 'Normal').trim() : String(curAH[3] || 'Normal'),
+    payload.minCondition !== undefined ? String(payload.minCondition || 'Near Mint (NM)').trim() : String(curAH[4] || 'Near Mint (NM)'),
+    payload.priority !== undefined ? String(payload.priority || 'Gemiddeld').trim() : String(curAH[5] || 'Gemiddeld'),
+    payload.maxBudget !== undefined ? toNumber_(payload.maxBudget, 0) : toNumber_(curAH[6], 0),
+    payload.marketPrice !== undefined ? toNumber_(payload.marketPrice, 0) : toNumber_(curAH[7], 0)
+  ]]);
+
+  sheet.getRange(rowIndex, 11, 1, 2).setValues([[
+    payload.notes !== undefined ? String(payload.notes || '').trim() : String(curKL[0] || ''),
+    payload.found !== undefined ? Boolean(payload.found) : (curKL[1] === true || String(curKL[1]).toLowerCase() === 'true')
+  ]]);
+
+  if (payload.cardId !== undefined) {
+    var cardId = String(payload.cardId || '').trim();
+    var alreadyHasCol13 = sheet.getLastColumn ? sheet.getLastColumn() >= 13 : false;
+    if (cardId || alreadyHasCol13) {
+      ensureWishlistCardIdColumn_(sheet);
+      sheet.getRange(rowIndex, 13).setValue(cardId);
+    }
+  }
+  return { rowIndex: rowIndex, updated: true };
+}
+
+function handleDeleteWishlist_(ss, payload) {
+  var sheet = ss.getSheetByName(SHEET_NAMES.WISHLIST);
+  if (!sheet) throw new Error('Tabblad "' + SHEET_NAMES.WISHLIST + '" niet gevonden.');
+
+  var rowIndex = findWishlistRow_(sheet, payload.rowIndex, payload.cardName);
+  if (rowIndex < 2) throw new Error('Verlanglijst-item niet gevonden om te verwijderen.');
+
+  // Wis alleen invoerkolommen A:H, K, L en optioneel M — formules I:J blijven intact!
+  sheet.getRange(rowIndex, 1, 1, 8).clearContent();
+  sheet.getRange(rowIndex, 11, 1, 1).clearContent();
+  sheet.getRange(rowIndex, 12, 1, 1).setValue(false);
+  if (sheet.getLastColumn && sheet.getLastColumn() >= 13) {
+    sheet.getRange(rowIndex, 13, 1, 1).clearContent();
+  }
+  return { rowIndex: rowIndex, deleted: true };
 }
 
 function handleLogTrade_(ss, payload) {

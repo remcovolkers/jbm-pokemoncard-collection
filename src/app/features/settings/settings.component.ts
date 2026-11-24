@@ -1,12 +1,12 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
+import { formatEur } from '../../core/domain/card-math.utils';
 import { SheetProfileRole } from '../../core/domain/models';
 import { AppUpdateService } from '../../core/platform/app-update.service';
 import { PlatformService } from '../../core/platform/platform.service';
 import { ConnectionTestResult } from '../../core/ports/collection-repository.port';
 import { CollectionStore } from '../../core/state/collection.store';
-import { FeedbackStore } from '../../core/state/feedback.store';
 
 @Component({
   selector: 'app-settings',
@@ -17,9 +17,9 @@ import { FeedbackStore } from '../../core/state/feedback.store';
 })
 export class SettingsComponent {
   readonly store = inject(CollectionStore);
-  readonly feedback = inject(FeedbackStore);
   readonly platform = inject(PlatformService);
   readonly updates = inject(AppUpdateService);
+  readonly formatEur = formatEur;
 
   readonly selectedProfileId = signal<string>(this.store.config().activeProfileId ?? '');
   readonly profileName = signal<string>(
@@ -28,7 +28,6 @@ export class SettingsComponent {
   readonly profileRole = signal<SheetProfileRole>(this.store.activeProfile()?.role ?? 'live');
   readonly webAppUrl = signal(this.store.config().webAppUrl);
   readonly apiToken = signal(this.store.config().apiToken);
-  readonly monthlyBudget = signal(this.store.config().monthlyBudget || 150);
   readonly showToken = signal(false);
 
   readonly isTesting = signal(false);
@@ -46,7 +45,6 @@ export class SettingsComponent {
       demoMode: next,
       webAppUrl: this.webAppUrl().trim(),
       apiToken: this.apiToken().trim(),
-      monthlyBudget: Number(this.monthlyBudget()) || 150,
     });
   }
 
@@ -63,9 +61,6 @@ export class SettingsComponent {
     this.profileRole.set(found.role);
     this.webAppUrl.set(found.webAppUrl);
     this.apiToken.set(found.apiToken);
-    if (found.monthlyBudget) {
-      this.monthlyBudget.set(found.monthlyBudget);
-    }
     this.testResult.set(null);
 
     await this.store.switchSheetProfile(found.id);
@@ -83,7 +78,7 @@ export class SettingsComponent {
           role: this.profileRole(),
           webAppUrl: currentUrl,
           apiToken: currentToken,
-          monthlyBudget: Math.max(1, Number(this.monthlyBudget()) || 150),
+          monthlyBudget: Math.max(1, Number(this.store.config().monthlyBudget) || 150),
         },
         { activate: false }
       );
@@ -110,7 +105,6 @@ export class SettingsComponent {
       this.profileRole.set(nextActive.role);
       this.webAppUrl.set(nextActive.webAppUrl);
       this.apiToken.set(nextActive.apiToken);
-      if (nextActive.monthlyBudget) this.monthlyBudget.set(nextActive.monthlyBudget);
     } else {
       this.selectedProfileId.set('');
       this.profileName.set('');
@@ -125,7 +119,7 @@ export class SettingsComponent {
   saveConnectionOnly(): void {
     const cleanUrl = this.webAppUrl().trim();
     const cleanToken = this.apiToken().trim();
-    const cleanBudget = Math.max(1, Number(this.monthlyBudget()) || 150);
+    const cleanBudget = Math.max(1, Number(this.store.config().monthlyBudget) || 150);
 
     if (cleanUrl && cleanToken) {
       const saved = this.store.saveSheetProfile(
@@ -145,7 +139,6 @@ export class SettingsComponent {
       this.store.updateConfig({
         webAppUrl: cleanUrl,
         apiToken: cleanToken,
-        monthlyBudget: cleanBudget,
       });
     }
     this.store.showToast('Instellingen opgeslagen in dit apparaat.', 'success');
@@ -159,7 +152,7 @@ export class SettingsComponent {
         webAppUrl: this.webAppUrl().trim(),
         apiToken: this.apiToken().trim(),
         demoMode: false,
-        monthlyBudget: Number(this.monthlyBudget()) || 150,
+        monthlyBudget: this.store.config().monthlyBudget || 150,
       });
       this.testResult.set(result);
     } finally {
@@ -170,7 +163,7 @@ export class SettingsComponent {
   async saveAndSync(): Promise<void> {
     const cleanUrl = this.webAppUrl().trim();
     const cleanToken = this.apiToken().trim();
-    const cleanBudget = Math.max(1, Number(this.monthlyBudget()) || 150);
+    const cleanBudget = Math.max(1, Number(this.store.config().monthlyBudget) || 150);
 
     if (cleanUrl && cleanToken) {
       const saved = this.store.saveSheetProfile(
@@ -191,7 +184,6 @@ export class SettingsComponent {
         webAppUrl: cleanUrl,
         apiToken: cleanToken,
         demoMode: false,
-        monthlyBudget: cleanBudget,
       });
     }
 
