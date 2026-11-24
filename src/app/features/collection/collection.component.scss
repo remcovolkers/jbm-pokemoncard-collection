@@ -175,6 +175,11 @@
   overflow-x: auto;
   padding: 2px 0;
 
+  @include mq-md {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+
   &__count {
     flex-shrink: 0;
   }
@@ -249,10 +254,10 @@
 }
 
 .col-body {
-  padding: $space-md $margin-mobile $space-xl;
+  padding: $space-md $margin-mobile $space-md;
 
   @include mq-md {
-    padding: $space-lg $margin-desktop $space-xl;
+    padding: $space-lg $margin-desktop $space-lg;
   }
 }
 

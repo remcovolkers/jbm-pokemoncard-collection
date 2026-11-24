@@ -5,13 +5,13 @@
   display: flex;
   flex-direction: column;
   gap: $space-md;
-  padding: $space-md $margin-mobile $space-xl;
+  padding: $space-md $margin-mobile $space-md;
   max-width: 960px;
   min-width: 0;
   overflow-x: clip;
 
   @include mq-md {
-    padding: $space-lg $margin-desktop $space-xl;
+    padding: $space-lg $margin-desktop $space-lg;
   }
 }
 

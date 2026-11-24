@@ -4,11 +4,12 @@
 .tr-page {
   display: flex;
   flex-direction: column;
-  gap: $space-lg;
-  padding: $space-md $margin-mobile $space-xl;
+  gap: $space-md;
+  padding: $space-md $margin-mobile $space-md;
 
   @include mq-md {
-    padding: $space-lg $margin-desktop $space-xl;
+    gap: $space-lg;
+    padding: $space-lg $margin-desktop $space-lg;
   }
 }
 

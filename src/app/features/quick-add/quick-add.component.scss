@@ -4,12 +4,12 @@
 .qa-page {
   display: flex;
   flex-direction: column;
-  padding: $space-sm $margin-mobile $space-xl;
+  padding: $space-sm $margin-mobile $space-sm;
   max-width: 780px;
   margin: 0 auto;
 
   @include mq-md {
-    padding: $space-lg $margin-desktop $space-xl;
+    padding: $space-lg $margin-desktop $space-md;
   }
 }
 

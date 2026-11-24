@@ -161,12 +161,12 @@ import { FeedbackStore } from '../../core/state/feedback.store';
         display: flex;
         flex-direction: column;
         gap: 0.65rem;
-        padding: 0.65rem $margin-mobile 0.25rem;
+        padding: 0.65rem $margin-mobile 0.65rem;
         max-width: 960px;
         margin: 0 auto;
 
         @include mq-md {
-          padding: $space-lg $margin-desktop $space-xl;
+          padding: $space-lg $margin-desktop $space-lg;
           gap: $space-lg;
         }
 

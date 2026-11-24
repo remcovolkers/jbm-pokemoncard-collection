@@ -35,8 +35,8 @@
     width: $sidebar-width;
     background-color: $color-surface-low;
     border-right: 1px solid rgba($color-outline-variant, 0.7);
-    padding: $space-lg $space-md;
-    gap: $space-md;
+    padding: $space-md;
+    gap: 0.75rem;
     z-index: $z-header;
     overflow-y: auto;
   }
@@ -45,7 +45,7 @@
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    padding: 0.25rem 0.25rem $space-sm;
+    padding: 0.1rem 0.25rem 0.25rem;
   }
 
   &__logo {
@@ -88,16 +88,16 @@
     @include type-data-sm;
     color: $color-on-surface-muted;
     text-transform: uppercase;
-    padding: $space-sm 0.75rem 0.25rem;
+    padding: 0.35rem 0.75rem 0.15rem;
   }
 
   &__link {
-    @include touch-target(44px);
+    @include touch-target(40px);
     @include pressable;
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    padding: 0.6rem 0.75rem;
+    padding: 0.45rem 0.75rem;
     border-radius: $radius-md;
     color: $color-on-surface-variant;
     font-weight: 500;
@@ -338,15 +338,15 @@
   overscroll-behavior: none;
   -webkit-overflow-scrolling: touch;
   padding-top: 0;
-  padding-bottom: 1.5rem;
+  padding-bottom: 0;
 
   &.is-quick-add,
   &.is-detail-dock {
-    padding-bottom: calc(5.75rem + env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(4.75rem + env(safe-area-inset-bottom, 0px));
   }
 
   &.is-more-hub {
-    padding-bottom: 0.35rem;
+    padding-bottom: 0;
   }
 
   @include mq-md {
@@ -355,15 +355,15 @@
     min-height: auto;
     overflow: visible;
     padding-top: 0;
-    padding-bottom: 5rem;
+    padding-bottom: 0;
 
     &.is-quick-add,
     &.is-detail-dock {
-      padding-bottom: 8rem;
+      padding-bottom: 4.75rem;
     }
 
     &.is-more-hub {
-      padding-bottom: 5rem;
+      padding-bottom: 0;
     }
   }
 }
