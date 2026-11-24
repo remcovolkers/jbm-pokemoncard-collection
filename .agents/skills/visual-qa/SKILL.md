@@ -22,7 +22,7 @@ Gebruik deze procedure na elke wijziging aan UI, styling, layout, navigatie of i
 
 ## 2. Eerlijke UI/UX Critic (`ui-ux-reviewer`) & Chrome DevTools MCP
 
-- Schakel waar nodig de custom agent [`ui-ux-reviewer`](../../agents/ui-ux-reviewer.md) in (of voer diens checklist zelf uit) om met een kritische UX-blik feedback op gebruiksvriendelijkheid, mobiel vs. desktop ergonomie en best practices op te leveren met een helder **`GO` / `NO-GO`**-oordeel.
+- Schakel waar nodig de custom agent [`ui-ux-reviewer`](../../agents/ui-ux-reviewer.md) in (of voer diens checklist zelf uit) om met de blik van een kritische Senior UX Developer feedback op **knopplaatsing, CTA-hiërarchie, progressive disclosure, dubbele controls, technisch jargon, mobiel vs. desktop schermruimte en best practices** op te leveren met een helder **`GO` / `NO-GO`**-oordeel.
 - Wanneer een scherm extra live CSS/DOM-onderzoek nodig heeft, gebruik je de `chrome_devtools` MCP-tools (`new_page`, `resize_page`, `take_snapshot`, `take_screenshot`, `get_css_styles`, `evaluate_script`, `list_console_messages`) op `http://127.0.0.1:4200`.
 - Vergeet niet op Windows `127.0.0.1:4200` te gebruiken als `localhost` naar IPv6 `::1` zou wijzen.
 
@@ -30,6 +30,7 @@ Gebruik deze procedure na elke wijziging aan UI, styling, layout, navigatie of i
 Sluit elke pre-push UI-review af met:
 - **Verdict:** `GO` of `NO-GO (eerst fixen)`
 - **Blokkerende issues:** exacte route + oorzaak + fix (moeten opgelost zijn vóór push)
+- **UX Developer Advies ("Dit kan logischer"):** concrete verbetervoorstellen volgens *Nu → Logischer voorstel (waarom)*
 - **Gebruiksvriendelijkheid & Best-Practice Feedback:** eerlijke observaties + 1–3 concrete UX-verbeterkansen voor mobiel en desktop.
 
 ## 3. PokéBinder-specifieke Visuele Checklist

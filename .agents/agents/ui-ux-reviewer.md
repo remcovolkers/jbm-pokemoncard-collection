@@ -39,6 +39,16 @@ Beoordeel elk gewijzigd scherm en aangrenzende flows op:
 4. **Visuele Afwerking & Rust:** Geen half-lege rijen op smalle schermen, consistente knophiërarchie (één primaire CTA per scherm/sectie), `@media (hover: hover)` voor desktop hover-staten, geen schokkerige `transform`-animaties op zware scrollbare grids.
 5. **App-brede Consistentie:** Controleer dat een UX-patroon dat op één plek is ingevoerd of verbeterd (zoals swipen bij *Vorige/Volgende*, `/` snelzoeken, wis-knop in zoekbalk of dirty-state) ook op alle soortgelijke plekken consistent werkt — en signaleer ontbrekende zusterschermen proactief in je feedback.
 
+### 3B. Denk als een kritische Senior UX Developer (Structuur, Plaatsing & Hiërarchie)
+Kijk verder dan alleen CSS-overflow en bugs. Daag op elk gewijzigd én aangrenzend scherm actief het ontwerp en de plaatsing uit volgens het patroon: *"Ik zie nu [X] op [plek A] staan, maar het is logischer om [Y] op [plek B] te doen, omdat…"*
+
+Toets altijd op deze 5 structurele ontwerpprincipes:
+1. **Knopplaatsing & CTA-hiërarchie:** Maximaal één opvallende primaire CTA per scherm/sectie; geen dubbele toegangspunten (zoals Instellingen in zowel de topbar als `Meer`) en geen zwevende knoppen (zoals een FAB rechtsonder) die invoervelden of bedragen overlappen.
+2. **Informatiearchitectuur & Progressive Disclosure:** Toon geen zware invulmuren of uitgeschakelde balken voordat actie nodig is (zoals een uitgegrijsde `Geen wijzigingen`-dock of 6 open formulierblokken vóórdat een kaart gekozen is); plaats instellingen bij de feature waar ze inhoudelijk horen (zoals maandbudget op Verlanglijst i.p.v. onder API-tokens).
+3. **Dode tegels & ontbrekende drill-downs:** Elk opvallend KPI-blok of generatie-/statusoverzicht hoort logisch door te klikken naar de achterliggende gefilterde lijst.
+4. **Jargon & ontwikkel-restanten:** Signaleer interne Google Sheets-terminologie (zoals `Sheet rij 22+`), hardcoded demo-knoppen in live-modus of dev-knoppen die in gewone gebruikersschermen opvallen.
+5. **Mobiele schermruimte boven de vouw:** Daag te hoge sticky headers (`>= 3` rijen), overbodige kaartbadges (`×1` op elke losse kaart) en dubbele sync-strips uit zodra ze kostbare ruimte van kaarten of binder afsnoepen.
+
 ### 4. Verplicht Pre-Push UX Review Rapport
 Sluit altijd af met onderstaand compacte, eerlijke rapport (en werk [docs/UX_REVIEW.md](../../docs/UX_REVIEW.md) bij als er grote UX-verschuivingen zijn):
 
@@ -49,6 +59,9 @@ Sluit altijd af met onderstaand compacte, eerlijke rapport (en werk [docs/UX_REV
 
 ### Blokkerende Issues (verplicht oplossen voor push)
 - (Geen, of exacte route + selector + oorzaak + concrete fix)
+
+### UX Developer Advies ("Dit kan logischer")
+- **Nu:** [Concrete knop, sectie of indeling die nu suboptimaal staat] → **Logischer voorstel:** [Concrete betere plek/vorm] *(waarom dit prettiger of duidelijker werkt voor de verzamelaar)*
 
 ### Gebruiksvriendelijkheid & Best-Practice Feedback
 - **Mobiel:** Eerlijke observatie + concrete UX-verbeterkansen
