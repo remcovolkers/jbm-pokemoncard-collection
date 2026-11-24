@@ -37,6 +37,7 @@ Beoordeel elk gewijzigd scherm en aangrenzende flows op:
 2. **Scroll & Viewport-hygiëne:** Nul horizontale overflow (`scrollWidth <= innerWidth`), nul onbedoelde micro-scrollbars (zoals op `/meer` of desktop `.sidebar`), vaste bottom docks schijnen niet storend door en bedekken geen knoppen.
 3. **Formulieren & Touch/Toetsenbord:** Zichtbare validatie/dirty-state, ongedaan maken / herstellen waar nodig, duidelijke lege/fout-staten, virtuele toetsenbordveiligheid op mobiel en productieve sneltoetsen op desktop.
 4. **Visuele Afwerking & Rust:** Geen half-lege rijen op smalle schermen, consistente knophiërarchie (één primaire CTA per scherm/sectie), `@media (hover: hover)` voor desktop hover-staten, geen schokkerige `transform`-animaties op zware scrollbare grids.
+5. **App-brede Consistentie:** Controleer dat een UX-patroon dat op één plek is ingevoerd of verbeterd (zoals swipen bij *Vorige/Volgende*, `/` snelzoeken, wis-knop in zoekbalk of dirty-state) ook op alle soortgelijke plekken consistent werkt — en signaleer ontbrekende zusterschermen proactief in je feedback.
 
 ### 4. Verplicht Pre-Push UX Review Rapport
 Sluit altijd af met onderstaand compacte, eerlijke rapport (en werk [docs/UX_REVIEW.md](../../docs/UX_REVIEW.md) bij als er grote UX-verschuivingen zijn):

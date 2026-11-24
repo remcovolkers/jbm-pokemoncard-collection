@@ -31,6 +31,11 @@
 
 ## 4. Ideeën van de Business Analyst ("Wat past hier logisch bij?")
 
+### Consistentie-scan: Soortgelijke plekken in de app
+*Andere schermen/onderdelen waar ditzelfde patroon voorkomt en waar deze verbetering waarschijnlijk ook logisch is:*
+- [ ] **[Scherm / Component A]:** ...
+- [ ] **[Scherm / Component B]:** ...
+
 ### Aanbevolen om direct mee te nemen (V1 Quick Wins)
 - [ ] **[Idee 1]:** Waarom het naadloos aansluit op deze feature + welke bestaande schermen er beter van worden.
 - [ ] **[Idee 2]:** Concrete tijdsbesparing of UX-koppeling (bijv. lege-staat CTA, prefill tussen schermen of snelfilter).

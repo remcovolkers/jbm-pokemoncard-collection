@@ -1,9 +1,9 @@
 # Workspace Guidelines
 
-## Feature Discovery (Business Analyst) bij Grote Features
+## Feature Discovery (Business Analyst) bij Grote Features & Patroon-Consistentie
 - Bij een grote of nieuwe feature (bijv. een nieuw scherm, ingrijpende workflow-uitbreiding, nieuwe datavelden/Google Sheets-kolommen of een open product-idee): begin **niet** direct met coderen.
-- Gebruik de [`business-analyst`](.agents/agents/business-analyst.md) agent / [`feature-discovery`](.agents/skills/feature-discovery/SKILL.md) skill: check kort relevante bestaande code/modellen, stel zo nodig max 3–5 gerichte vragen, denk proactief mee over wat er logisch bij past, en schrijf eerst een gestructureerd Feature Brief-document in `docs/features/YYYY-MM-DD-<slug>.md` met keuze-checkboxes (V1 quick wins vs V2).
-- Pauzeer voor gezamenlijke beoordeling en keuzes op het document voordat de bouw start (sla dit over bij kleine bugfixes, losse styling-tweaks of als de gebruiker expliciet vraagt direct zonder analyse-document te bouwen).
+- Gebruik de [`business-analyst`](.agents/agents/business-analyst.md) agent / [`feature-discovery`](.agents/skills/feature-discovery/SKILL.md) skill: check kort relevante bestaande code/modellen, **scan app-breed naar andere soortgelijke plekken of componenten met hetzelfde patroon** (want een wens op één item hoort vaak ook op zusterschermen, zoals swipen bij álle *Vorige/Volgende*-flows), stel zo nodig max 3–5 gerichte vragen, en schrijf eerst een gestructureerd Feature Brief-document in `docs/features/YYYY-MM-DD-<slug>.md` met keuze-checkboxes (soortgelijke plekken, V1 quick wins vs V2).
+- Pauzeer voor gezamenlijke beoordeling en keuzes op het document voordat de bouw start. Ook bij kleinere losse UX-wensen op één item: benoem meteen welke soortgelijke schermen in de app ditzelfde patroon delen zodat ze desgewenst direct meegenomen worden. (Sla een analyse-document alleen over bij kleine bugfixes, losse styling-tweaks of als de gebruiker expliciet vraagt direct zonder analyse-document te bouwen.)
 
 ## Pre-Push Volledige UI/UX Review Gate
 - Na elke UI-, CSS-, layout-, routing- of feature-wijziging — en **verplicht vóór elke push naar `main`**:
