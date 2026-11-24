@@ -57,3 +57,10 @@ android/keystore/
 *.keystore
 *.jks
 *.p12
+
+# Playwright E2E & visual inspection outputs
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/e2e/screenshots/

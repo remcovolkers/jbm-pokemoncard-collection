@@ -34,13 +34,17 @@
 
 .search-wrap {
   position: relative;
-  flex: 1 1 210px;
+  flex: 1 1 100%;
   min-width: 0;
   display: flex;
   align-items: center;
   background-color: $color-surface-lowest;
   border: 1px solid $color-outline-variant;
   border-radius: $radius-md;
+
+  @include mq-md {
+    flex: 1 1 210px;
+  }
 
   &:focus-within {
     border-color: $color-primary-container;
@@ -133,12 +137,17 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
+  flex: 1 1 140px;
   height: 44px;
   padding: 0 0.7rem;
   border-radius: $radius-md;
   background-color: $color-surface-container;
   border: 1px solid rgba($color-outline-variant, 0.55);
   min-width: 110px;
+
+  @include mq-md {
+    flex: 0 0 auto;
+  }
 
   &__label {
     @include type-data-sm;

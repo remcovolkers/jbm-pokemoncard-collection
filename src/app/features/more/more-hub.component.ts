@@ -120,7 +120,7 @@ import { FeedbackStore } from '../../core/state/feedback.store';
               </span>
               <span class="hub-row__copy">
                 <strong>Instellingen &amp; Sync</strong>
-                <span>Google Sheets, profielen &amp; app-updates</span>
+                <span>Google Sheets &amp; app-updates</span>
               </span>
               @if (updates.apkUpdateAvailable() || updates.webUpdateAvailable()) {
                 <span

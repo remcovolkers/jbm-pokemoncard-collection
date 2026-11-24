@@ -59,11 +59,12 @@
   @include mq-md {
     flex-wrap: wrap;
     overflow-x: visible;
+    gap: 0.35rem;
 
     .pb-pill--interactive {
-      min-height: 38px;
-      padding: 0.4rem 0.85rem;
-      font-size: 0.8125rem;
+      min-height: 36px;
+      padding: 0.35rem 0.68rem;
+      font-size: 0.78rem;
     }
   }
 }
