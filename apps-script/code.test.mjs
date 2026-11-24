@@ -15,6 +15,7 @@ function createFakeSheet(name, initialRows = [], options = {}) {
   const grid = initialRows.map((r) => [...r]);
   const validations = new Map();
   let maxCols = options.maxCols ?? Math.max(0, ...grid.map((r) => r.length));
+  const stats = { getDataValidationCalls: 0, getDataValidationsCalls: 0 };
 
   const ensureCell = (r, c) => {
     while (grid.length < r) grid.push([]);
@@ -63,9 +64,11 @@ function createFakeSheet(name, initialRows = [], options = {}) {
       validations.set(`${startRow}:${startCol}`, rule);
     },
     getDataValidation() {
+      stats.getDataValidationCalls++;
       return validations.get(`${startRow}:${startCol}`) ?? null;
     },
     getDataValidations() {
+      stats.getDataValidationsCalls++;
       const out = [];
       for (let r = 0; r < numRows; r++) {
         const row = [];
@@ -89,6 +92,7 @@ function createFakeSheet(name, initialRows = [], options = {}) {
   const sheetApi = {
     _grid: grid,
     _validations: validations,
+    _stats: stats,
     getName: () => name,
     getLastRow: () => grid.length,
     getLastColumn: () => Math.max(0, ...grid.map((r) => r.length)),
@@ -926,5 +930,116 @@ describe('apps-script/Code.gs Backend API & Formule-integriteit', () => {
 
     const svp = addWl.data.setProgress.find((s) => s.setName === 'SVP Black Star Promos');
     assert.equal(svp.totalSetValue, 46.21);
+  });
+
+  it('batchMutations verwerkt meerdere acties in 1 lock, remapt tijdelijke rijen, slaat skipBootstrap over en vermijdt bulk getDataValidations', () => {
+    const { sandbox, sheets, lockState } = createGasEnvironment();
+
+    const batchRes = JSON.parse(
+      sandbox.doPost({
+        postData: {
+          contents: JSON.stringify({
+            token: 'test-secret-token',
+            action: 'batchMutations',
+            skipBootstrap: true,
+            payload: {
+              mutations: [
+                {
+                  id: 'm1',
+                  action: 'addCard',
+                  tempRowIndex: -1,
+                  payload: {
+                    cardId: 'sv03.5-151',
+                    name: 'Mew ex',
+                    setName: '151',
+                    cardNumber: '151/165',
+                    quantity: 1,
+                    marketPrice: 11.4,
+                  },
+                },
+                {
+                  id: 'm2',
+                  action: 'updateCard',
+                  payload: { rowIndex: -1, cardId: 'sv03.5-151', quantity: 3, forTrade: true },
+                },
+                {
+                  id: 'm3',
+                  action: 'addWishlist',
+                  tempRowIndex: -2,
+                  payload: {
+                    cardId: 'base1-2',
+                    cardName: 'Blastoise',
+                    setName: 'Base Set',
+                    cardNumber: '2/102',
+                    maxBudget: 80,
+                    marketPrice: 75,
+                  },
+                },
+                {
+                  id: 'm4',
+                  action: 'updateWishlist',
+                  payload: { rowIndex: -2, originalCardName: 'Blastoise', maxBudget: 95, priority: 'Grail' },
+                },
+                {
+                  id: 'm5',
+                  action: 'logTrade',
+                  payload: {
+                    date: '2026-11-24',
+                    cardName: 'Mew ex',
+                    setName: '151',
+                    type: 'Verkoop',
+                    purchasePrice: 8,
+                    saleValue: 14,
+                    platformFees: 0.5,
+                    counterparty: 'Ruilavond',
+                  },
+                },
+              ],
+            },
+          }),
+        },
+      }).getContent()
+    );
+
+    assert.equal(batchRes.ok, true);
+    // skipBootstrap: true -> geen zware bootstrap-payload meegestuurd!
+    assert.equal(batchRes.data, undefined);
+    // 1 lock voor de hele batch!
+    assert.equal(lockState.waitCalls, 1);
+    assert.equal(lockState.releaseCalls, 1);
+
+    const results = batchRes.result.results;
+    assert.equal(results.length, 5);
+    assert.ok(results.every((r) => r.ok));
+    assert.equal(results[0].result.rowIndex, 2);
+    assert.equal(results[1].result.rowIndex, 2); // -1 geremapt binnen dezelfde batch!
+    assert.equal(results[2].result.rowIndex, 2);
+    assert.equal(results[3].result.rowIndex, 2); // -2 geremapt binnen dezelfde batch!
+
+    // Formules & bijgewerkte waarden intact
+    const colRow = sheets.Collectie._grid[1];
+    assert.equal(colRow[1], 'Mew ex');
+    assert.equal(colRow[11], 3);
+    assert.equal(colRow[20], true);
+    assert.equal(colRow[17], '=FORMULA_TOTAL_VAL');
+    assert.equal(colRow[18], '=FORMULA_PROFIT');
+    assert.equal(colRow[19], '=FORMULA_ROI');
+
+    const wlRow = sheets.Verlanglijst._grid[1];
+    assert.equal(wlRow[0], 'Blastoise');
+    assert.equal(wlRow[5], 'Grail');
+    assert.equal(wlRow[6], 95);
+    assert.equal(wlRow[8], '=FORMULA_DIFF');
+    assert.equal(wlRow[9], '=FORMULA_DEAL');
+
+    const trRow = sheets['Ruil & Verkoop']._grid[21];
+    assert.equal(trRow[1], 'Mew ex');
+    assert.equal(trRow[7], '=FORMULA_NET');
+
+    // Gerichte Pokédex-sync heeft 0x bulk getDataValidations() en slechts 1x getDataValidation() gedraaid!
+    assert.equal(sheets['Pokédex Binder']._stats.getDataValidationsCalls, 0);
+    assert.equal(sheets['Pokédex Binder']._stats.getDataValidationCalls, 1);
+    assert.equal(sheets['Pokédex Binder']._grid[10][3], true); // Mew (#151) in binder
+    assert.equal(sheets['Pokédex Binder']._grid[9][3], false); // Mewtwo (#150) onaangeroerd
   });
 });

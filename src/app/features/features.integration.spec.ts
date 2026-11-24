@@ -580,6 +580,48 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
       await appFixture.whenStable();
       expect((appFixture.nativeElement as HTMLElement).textContent).toContain('Kaart niet gevonden');
     });
+
+    it('behoudt onopgeslagen wijzigingen in editDraft als achtergrond-sync tempRowIndex (< 0) oplost', async () => {
+      const router = TestBed.inject(Router);
+      const store = TestBed.inject(CollectionStore);
+      const appFixture = TestBed.createComponent(App);
+      appFixture.detectChanges();
+
+      store.updateConfig({ demoMode: false, webAppUrl: 'https://example.com/exec', apiToken: 'tok' });
+      vi.spyOn(TestBed.inject(AppsScriptSheetsAdapter), 'batchMutations').mockImplementation(
+        () => new Promise(() => undefined)
+      );
+      store.isOnline.set(false);
+      await store.addCard({
+        cardId: 'sv03-125',
+        name: 'Charizard ex',
+        setName: 'Obsidian Flames',
+        cardNumber: '125/197',
+        quantity: 1,
+      });
+
+      const tempCard = store.collection().find((c) => c.cardId === 'sv03-125' && c.rowIndex < 0)!;
+      await router.navigate(['/collectie/kaart', tempCard.rowIndex, tempCard.cardId]);
+      appFixture.detectChanges();
+      await appFixture.whenStable();
+
+      const detail = appFixture.debugElement.query(By.directive(CardDetailComponent))
+        .componentInstance as CardDetailComponent;
+      detail.patchDraft({ notes: 'Zelf net getypte notitie' });
+      expect(detail.editDraft()?.notes).toBe('Zelf net getypte notitie');
+
+      // Simuleer achtergrond-sync die tempRowIndex -> 42 teruggeeft
+      store.snapshot.update((snap) => ({
+        ...snap,
+        collection: snap.collection.map((c) =>
+          c.rowIndex === tempCard.rowIndex && c.cardId === tempCard.cardId ? { ...c, rowIndex: 42 } : c
+        ),
+      }));
+      appFixture.detectChanges();
+
+      expect(detail.editDraft()?.rowIndex).toBe(42);
+      expect(detail.editDraft()?.notes).toBe('Zelf net getypte notitie');
+    });
   });
 
   describe('QuickAddComponent', () => {
@@ -665,6 +707,56 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
       comp.manualName.set('Final Card');
       await comp.saveCard(false);
       expect(navSpy).toHaveBeenCalledWith('/collectie');
+    });
+
+    it('maakt Opslaan & Volgende kaart in Live-modus direct (< 50 ms) vrij zonder op Google Sheets te wachten', async () => {
+      const fixture = TestBed.createComponent(QuickAddComponent);
+      const comp = fixture.componentInstance;
+      const store = TestBed.inject(CollectionStore);
+      const adapter = TestBed.inject(AppsScriptSheetsAdapter);
+      fixture.detectChanges();
+
+      let resolveRemote!: () => void;
+      vi.spyOn(adapter, 'bootstrap').mockResolvedValue(store.snapshot());
+      vi.spyOn(adapter, 'batchMutations').mockImplementation(
+        (_cfg, mutations) =>
+          new Promise((resolve) => {
+            resolveRemote = () =>
+              resolve({
+                results: [
+                  {
+                    id: mutations[0]?.id ?? 'x',
+                    action: 'addCard',
+                    ok: true,
+                    result: { rowIndex: 25, cardId: 'sv03-125' },
+                  },
+                ],
+              });
+          })
+      );
+
+      store.updateConfig({
+        demoMode: false,
+        webAppUrl: 'https://script.google.com/macros/s/test/exec',
+        apiToken: 'tok',
+      });
+      await store.syncFromRemote(true);
+
+      await comp.lookupByCode('OBF 125');
+      await comp.saveCard(true);
+
+      // Direct klaar terwijl netwerk nog wacht!
+      expect(comp.isSaving()).toBe(false);
+      expect(comp.previewCard()).toBeNull();
+      expect(comp.codeQuery()).toBe('');
+      expect(store.collection()[0].name).toBe('Charizard ex');
+      expect(store.collection()[0].rowIndex).toBeLessThan(0);
+      expect(store.syncStatus()).toBe('syncing');
+
+      resolveRemote();
+      await store.waitForPendingSync();
+      expect(store.collection()[0].rowIndex).toBe(25);
+      expect(store.pendingQueue().length).toBe(0);
     });
   });
 

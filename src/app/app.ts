@@ -80,21 +80,35 @@ export class App implements OnInit {
   });
 
   readonly syncLabel = computed(() => {
+    const pending = this.store.pendingCount();
     switch (this.store.syncStatus()) {
       case 'syncing':
-        return 'Syncen…';
+        return pending > 0 ? `Syncen (${pending})…` : 'Syncen…';
       case 'offline':
-        return 'Offline';
+        return pending > 0 ? `Offline (${pending})` : 'Offline';
       case 'demo':
         return 'Demo-modus';
       case 'unconfigured':
         return 'Niet gekoppeld';
       case 'error':
-        return 'Sync-fout';
+        return pending > 0 ? `Wachtrij (${pending})` : 'Sync-fout';
       default:
-        return 'Gesynct';
+        return pending > 0 ? `${pending} in wachtrij` : 'Gesynct';
     }
   });
+
+  onSyncPillClick(): void {
+    const status = this.store.syncStatus();
+    if (status === 'unconfigured') {
+      void this.router.navigateByUrl('/meer/instellingen');
+      return;
+    }
+    if (this.store.pendingCount() > 0 && !this.store.isSyncing()) {
+      void this.store.flushOfflineQueue(false);
+      return;
+    }
+    void this.store.syncFromRemote(false);
+  }
 
   openPageFeedback(): void {
     const page = this.feedback.mapUrlToFeedbackPage(this.currentUrl());

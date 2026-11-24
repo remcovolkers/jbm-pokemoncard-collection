@@ -135,4 +135,51 @@ describe('AppsScriptSheetsAdapter', () => {
       expect(parsedBody.action).toBe(tc.name);
     }
   });
+
+  it('ondersteunt batchMutations met en zonder skipBootstrap en geeft legacy Apps Script fouten netjes door', async () => {
+    const snap = createDemoSnapshot();
+
+    // Met skipBootstrap: true hoeft response geen data (snapshot) te bevatten
+    fetchSpy.mockResolvedValueOnce(
+      jsonResponse({
+        ok: true,
+        result: {
+          results: [{ id: 'm1', action: 'addCard', ok: true, result: { rowIndex: 12, cardId: 'sv03-125' } }],
+        },
+      })
+    );
+
+    const fastRes = await adapter.batchMutations(
+      validConfig,
+      [{ id: 'm1', action: 'addCard', payload: { cardId: 'sv03-125', name: 'Charizard ex' }, tempRowIndex: -1 }],
+      { skipBootstrap: true }
+    );
+    expect(fastRes.snapshot).toBeUndefined();
+    expect(fastRes.results).toHaveLength(1);
+    expect(fastRes.results[0].result?.rowIndex).toBe(12);
+
+    const fastBody = JSON.parse(String((fetchSpy.mock.calls.at(-1)![1] as RequestInit).body));
+    expect(fastBody.action).toBe('batchMutations');
+    expect(fastBody.skipBootstrap).toBe(true);
+    expect(fastBody.payload.mutations).toHaveLength(1);
+
+    // Zonder skipBootstrap vereist batchMutations wel data
+    fetchSpy.mockResolvedValueOnce(
+      jsonResponse({
+        ok: true,
+        result: { results: [{ id: 'm2', action: 'deleteCard', ok: true, result: { deletedRowIndex: 12 } }] },
+        data: snap,
+      })
+    );
+    const fullRes = await adapter.batchMutations(validConfig, [
+      { id: 'm2', action: 'deleteCard', payload: { rowIndex: 12 } },
+    ]);
+    expect(fullRes.snapshot).toBeDefined();
+
+    // Oudere Apps Script geeft "Onbekende POST-actie: batchMutations" terug
+    fetchSpy.mockResolvedValueOnce(jsonResponse({ ok: false, error: 'Onbekende POST-actie: batchMutations' }));
+    await expect(
+      adapter.batchMutations(validConfig, [{ id: 'm3', action: 'addCard', payload: {} }], { skipBootstrap: true })
+    ).rejects.toThrow(/Onbekende POST-actie: batchMutations/);
+  });
 });

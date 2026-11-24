@@ -83,6 +83,7 @@
       </button>
       <div
         class="sync-pill sync-pill--full"
+        [class.is-syncing]="store.syncStatus() === 'syncing'"
         [class.is-demo]="store.syncStatus() === 'demo'"
         [class.is-unconfigured]="store.syncStatus() === 'unconfigured'"
         [class.is-offline]="store.syncStatus() === 'offline'"
@@ -90,9 +91,6 @@
       >
         <span class="sync-pill__dot"></span>
         <span class="sync-pill__text">{{ syncLabel() }}</span>
-        @if (store.pendingQueue().length > 0) {
-          <span class="sync-pill__queue">{{ store.pendingQueue().length }} in wachtrij</span>
-        }
         @if (store.syncStatus() === 'unconfigured') {
           <a
             routerLink="/meer/instellingen"
@@ -106,8 +104,8 @@
           <button
             type="button"
             class="sync-pill__btn"
-            aria-label="Nu synchroniseren"
-            (click)="store.syncFromRemote()"
+            [attr.aria-label]="store.pendingCount() > 0 ? 'Wachtrij nu verzenden' : 'Nu synchroniseren'"
+            (click)="onSyncPillClick()"
           >
             <span class="material-symbols-outlined" [class.pb-spin]="store.isSyncing()">sync</span>
           </button>
@@ -143,11 +141,12 @@
         <button
           type="button"
           class="sync-pill"
+          [class.is-syncing]="store.syncStatus() === 'syncing'"
           [class.is-demo]="store.syncStatus() === 'demo'"
           [class.is-unconfigured]="store.syncStatus() === 'unconfigured'"
           [class.is-offline]="store.syncStatus() === 'offline'"
           [class.is-error]="store.syncStatus() === 'error'"
-          (click)="store.syncFromRemote()"
+          (click)="onSyncPillClick()"
           aria-label="Synchronisatiestatus"
         >
           <span class="sync-pill__dot"></span>

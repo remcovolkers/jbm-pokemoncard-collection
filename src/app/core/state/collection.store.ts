@@ -29,6 +29,7 @@ import { doesCardMatchPokemon, formatBinderChoice } from '../domain/pokedex-matc
 import { CARD_CATALOG_PORT } from '../ports/card-catalog.port';
 import {
   AddCardPayload,
+  BatchMutationItem,
   COLLECTION_REPOSITORY,
   ConnectionTestResult,
   MarkWishlistFoundPayload,
@@ -42,6 +43,12 @@ import {
   createEmptySnapshot,
 } from '../adapters/demo-data';
 import { LocalCacheAdapter, PackOpeningDefaults } from '../adapters/local-cache.adapter';
+import {
+  coalesceOutboxMutation,
+  computeMinTempRowCounter,
+  remapTempRowInQueue,
+  remapTempRowInSnapshot,
+} from './outbox.utils';
 
 export type SyncStatus = 'synced' | 'syncing' | 'offline' | 'demo' | 'unconfigured' | 'error';
 
@@ -56,6 +63,11 @@ export class CollectionStore {
   private deviceBinderLayout: BinderSlotsPerPage | null = this.cache.loadBinderLayoutPreference();
   private localRevision = 0;
   private mutationChain: Promise<void> = Promise.resolve();
+  private activeDrainPromise: Promise<void> | null = null;
+  private lastDrainFailed = false;
+  private inFlightIds = new Set<string>();
+  private batchUnsupportedUrls = new Set<string>();
+  private hasShownOutboxErrorToast = false;
   private activeSyncCount = 0;
   private tempRowCounter = 0;
   private setsCatalogCache: CatalogSetSummary[] = [];
@@ -73,6 +85,8 @@ export class CollectionStore {
   readonly isSyncing = signal<boolean>(false);
   readonly lastError = signal<string | null>(null);
   readonly toasts = signal<ToastMessage[]>([]);
+  readonly pendingCount = computed(() => this.pendingQueue().length);
+  readonly legacyAppsScriptDetected = signal<boolean>(false);
 
   // Navigatie-hulpsignal voor doorklikken vanuit Set Voortgang & Dashboard
   readonly requestedSetFilter = signal<string | null>(null);
@@ -152,6 +166,8 @@ export class CollectionStore {
   private toastCounter = 0;
 
   constructor() {
+    this.tempRowCounter = computeMinTempRowCounter(this.snapshot(), this.pendingQueue());
+
     // Persist snapshot & config gescheiden per modus én per profiel zodat test/live nooit door elkaar lekken
     effect(() => {
       const cfg = this.config();
@@ -185,9 +201,20 @@ export class CollectionStore {
         this.isOnline.set(false);
         this.showToast('Offline-modus actief. Lokale cache blijft volledig beschikbaar.', 'warning');
       });
+      window.addEventListener('beforeunload', (event) => {
+        const currentCfg = this.config();
+        if (
+          !currentCfg.demoMode &&
+          Boolean(currentCfg.webAppUrl?.trim() && currentCfg.apiToken?.trim()) &&
+          (this.pendingQueue().length > 0 || this.isSyncing())
+        ) {
+          event.preventDefault();
+          event.returnValue = '';
+        }
+      });
     }
 
-    // Als live Google Sheets geconfigureerd is en demo-modus uit staat, haal direct verse data op
+    // Als live Google Sheets geconfigureerd is en demo-modus uit staat, werk eerst wachtrij leeg en haal verse data op
     const cfg = this.config();
     if (!cfg.demoMode && cfg.webAppUrl?.trim() && cfg.apiToken?.trim() && this.isOnline()) {
       void this.syncFromRemote(true);
@@ -379,6 +406,7 @@ export class CollectionStore {
     const next = { ...prev, ...partial };
     const hasSheet = Boolean(next.webAppUrl?.trim() && next.apiToken?.trim());
     this.config.set(next);
+    this.legacyAppsScriptDetected.set(this.batchUnsupportedUrls.has(next.webAppUrl?.trim() ?? ''));
 
     if (partial.demoMode === true && !prev.demoMode) {
       this.bumpLocalRevision();
@@ -409,6 +437,7 @@ export class CollectionStore {
           ? this.reconcileSetProgress(this.applyDeviceBinderLayout(this.hydrateArtwork(liveCached)))
           : this.applyDeviceBinderLayout(createEmptySnapshot())
       );
+      this.tempRowCounter = computeMinTempRowCounter(this.snapshot(), this.pendingQueue());
       void this.syncFromRemote();
     }
   }
@@ -444,9 +473,12 @@ export class CollectionStore {
       const switched = prev.activeProfileId !== profile.id;
       if (switched) {
         this.bumpLocalRevision();
+        this.inFlightIds.clear();
+        this.hasShownOutboxErrorToast = false;
         this.pendingQueue.set([]);
       }
       this.lastError.set(null);
+      this.legacyAppsScriptDetected.set(this.batchUnsupportedUrls.has(profile.webAppUrl));
 
       const nextDemo = options.disableDemo ? false : prev.demoMode;
       this.config.set({
@@ -488,8 +520,11 @@ export class CollectionStore {
 
     const changedProfile = prev.activeProfileId !== profile.id;
     this.lastError.set(null);
+    this.hasShownOutboxErrorToast = false;
+    this.legacyAppsScriptDetected.set(this.batchUnsupportedUrls.has(profile.webAppUrl));
     if (changedProfile) {
       this.bumpLocalRevision();
+      this.inFlightIds.clear();
       this.pendingQueue.set([]);
     }
 
@@ -526,10 +561,15 @@ export class CollectionStore {
 
     if (prev.activeProfileId === profileId) {
       this.bumpLocalRevision();
+      this.inFlightIds.clear();
+      this.hasShownOutboxErrorToast = false;
       this.pendingQueue.set([]);
       this.lastError.set(null);
 
       const fallback = remaining[0];
+      this.legacyAppsScriptDetected.set(
+        fallback ? this.batchUnsupportedUrls.has(fallback.webAppUrl) : false
+      );
       if (fallback) {
         this.config.set({
           ...prev,
@@ -614,14 +654,28 @@ export class CollectionStore {
     }
 
     this.beginSync();
-    this.lastError.set(null);
+    if (!silent) {
+      this.lastError.set(null);
+    }
     try {
-      await this.mutationChain.catch(() => undefined);
-      await this.flushOfflineQueueInternal(true);
+      await this.waitForPendingSync();
+      if (this.pendingQueue().length > 0 && (!silent || !this.lastError())) {
+        await this.drainOutbox(true);
+      }
+      if (this.pendingQueue().length > 0) {
+        const blockedMsg =
+          this.lastError() || 'Wachtende lokale wijzigingen konden nog niet naar Sheets worden verstuurd.';
+        this.lastError.set(blockedMsg);
+        if (!silent) this.showToast(blockedMsg, 'warning');
+        return false;
+      }
+      this.lastError.set(null);
+
       const revBefore = this.localRevision;
       const remote = await this.repo.bootstrap(cfg);
       if (this.canApplyRemoteSnapshot(revBefore)) {
         this.snapshot.set(this.reconcileRemoteSnapshot(remote));
+        this.persistStateImmediately();
       }
       if (!silent) this.showToast('Google Sheets succesvol gesynchroniseerd!', 'success');
       return true;
@@ -667,11 +721,15 @@ export class CollectionStore {
         return;
       }
 
-      await this.mutationChain.catch(() => undefined);
+      await this.waitForPendingSync();
+      if (this.pendingQueue().length > 0) {
+        await this.drainOutboxLoop(true);
+      }
       const revBefore = this.localRevision;
       const result = await this.repo.refreshPrices(cfg);
       if (this.canApplyRemoteSnapshot(revBefore)) {
         this.snapshot.set(this.reconcileRemoteSnapshot(result.snapshot));
+        this.persistStateImmediately();
       }
       this.showToast(`${result.updated} van ${result.total} kaartprijzen bijgewerkt in Google Sheets.`, 'success');
     } catch (err) {
@@ -683,6 +741,10 @@ export class CollectionStore {
 
   clearOfflineCache(): void {
     this.bumpLocalRevision();
+    this.inFlightIds.clear();
+    this.tempRowCounter = 0;
+    this.lastError.set(null);
+    this.hasShownOutboxErrorToast = false;
     this.cache.clearDataCaches();
     this.pendingQueue.set([]);
     if (this.config().demoMode) {
@@ -744,14 +806,20 @@ export class CollectionStore {
           : undefined,
     });
 
-    await this.dispatchRemoteMutation(
+    const queueStatus = this.enqueueAndSync(
       'addCard',
       payload as Record<string, unknown>,
       `Kaart toevoegen: ${newCard.name}`,
-      () => this.repo.addCard(this.config(), payload)
+      { tempRowIndex: nextRowIndex < 0 ? nextRowIndex : undefined }
     );
 
-    this.showToast(`${newCard.name} opgeslagen & Pokédex gesynct!`, 'success');
+    if (queueStatus === 'queued') {
+      this.showToast(`${newCard.name} opgeslagen — wordt naar Google Sheets gesynct.`, 'success');
+    } else if (queueStatus === 'offline') {
+      this.showToast(`${newCard.name} opgeslagen in wachtrij (offline).`, 'warning');
+    } else {
+      this.showToast(`${newCard.name} opgeslagen & Pokédex gesynct!`, 'success');
+    }
   }
 
   async updateCard(
@@ -770,11 +838,10 @@ export class CollectionStore {
     this.applyLocalSnapshotUpdate({ collection: nextCollection });
 
     const payload = { rowIndex, cardId, ...normalizedPatch };
-    await this.dispatchRemoteMutation(
+    this.enqueueAndSync(
       'updateCard',
       payload as Record<string, unknown>,
-      `Kaart bijwerken: ${cardId}`,
-      () => this.repo.updateCard(this.config(), payload)
+      `Kaart bijwerken: ${cardId}`
     );
   }
 
@@ -792,11 +859,10 @@ export class CollectionStore {
     this.applyLocalSnapshotUpdate({ collection: nextCollection });
 
     const payload = { rowIndex: card.rowIndex, cardId: card.cardId };
-    await this.dispatchRemoteMutation(
+    this.enqueueAndSync(
       'deleteCard',
       payload,
-      `Kaart verwijderen: ${card.name}`,
-      () => this.repo.deleteCard(this.config(), payload)
+      `Kaart verwijderen: ${card.name}`
     );
     this.showToast(`${card.name} verwijderd uit collectie.`, 'info');
   }
@@ -845,13 +911,13 @@ export class CollectionStore {
       pokedex: nextPokedex,
       syncedAt: new Date().toISOString(),
     });
+    this.persistStateImmediately();
 
     if (payload.dexNumber !== undefined) {
-      await this.dispatchRemoteMutation(
+      this.enqueueAndSync(
         'updatePokedexSlot',
         payload as Record<string, unknown>,
-        `Pokédex #${payload.dexNumber} bijwerken`,
-        () => this.repo.updatePokedexSlot(this.config(), payload)
+        `Pokédex #${payload.dexNumber} bijwerken`
       );
     }
   }
@@ -892,11 +958,11 @@ export class CollectionStore {
       syncedAt: new Date().toISOString(),
     }));
 
-    await this.dispatchRemoteMutation(
+    this.enqueueAndSync(
       'addWishlist',
       { ...item, cardId: inferredCardId } as Record<string, unknown>,
       `Verlanglijst: ${item.cardName}`,
-      () => this.repo.addWishlist(this.config(), { ...item, cardId: inferredCardId })
+      { tempRowIndex: nextRow < 0 ? nextRow : undefined }
     );
     this.showToast(`${item.cardName} toegevoegd aan Verlanglijst.`, 'success');
   }
@@ -932,10 +998,12 @@ export class CollectionStore {
       : undefined;
 
     this.bumpLocalRevision();
+    let addedCardTempRow: number | undefined;
     if (cardPayload) {
+      addedCardTempRow = this.allocateLocalRowIndex(this.collection().map((c) => c.rowIndex));
       const nextCollection: CollectionCard[] = [
         {
-          rowIndex: this.allocateLocalRowIndex(this.collection().map((c) => c.rowIndex)),
+          rowIndex: addedCardTempRow,
           cardId: cardPayload.cardId!,
           name: cardPayload.name!,
           setName: cardPayload.setName!,
@@ -971,11 +1039,11 @@ export class CollectionStore {
       cardPayload,
     };
 
-    await this.dispatchRemoteMutation(
+    this.enqueueAndSync(
       'markWishlistFound',
       payload as unknown as Record<string, unknown>,
       `Gevonden: ${item.cardName}`,
-      () => this.repo.markWishlistFound(this.config(), payload)
+      { tempRowIndex: addedCardTempRow !== undefined && addedCardTempRow < 0 ? addedCardTempRow : undefined }
     );
 
     this.showToast(
@@ -1034,13 +1102,14 @@ export class CollectionStore {
       found: merged.found,
     };
 
-    if (this.repo.updateWishlist) {
-      await this.dispatchRemoteMutation(
+    if (this.repo.updateWishlist || typeof this.repo.batchMutations === 'function') {
+      this.enqueueAndSync(
         'updateWishlist',
         payload as unknown as Record<string, unknown>,
-        `Bijwerken wens: ${merged.cardName}`,
-        () => this.repo.updateWishlist!(this.config(), payload)
+        `Bijwerken wens: ${merged.cardName}`
       );
+    } else {
+      this.persistStateImmediately();
     }
     this.showToast(`${merged.cardName} bijgewerkt op Verlanglijst.`, 'success');
   }
@@ -1058,22 +1127,24 @@ export class CollectionStore {
     }));
 
     const payload = { rowIndex: item.rowIndex, cardName: item.cardName };
-    if (this.repo.deleteWishlist) {
-      await this.dispatchRemoteMutation(
+    if (this.repo.deleteWishlist || typeof this.repo.batchMutations === 'function') {
+      this.enqueueAndSync(
         'deleteWishlist',
         payload as Record<string, unknown>,
-        `Verwijderd van verlanglijst: ${item.cardName}`,
-        () => this.repo.deleteWishlist!(this.config(), payload)
+        `Verwijderd van verlanglijst: ${item.cardName}`
       );
+    } else {
+      this.persistStateImmediately();
     }
     this.showToast(`${item.cardName} verwijderd van Verlanglijst.`, 'info');
   }
 
   async logTrade(entry: Omit<TradeEntry, 'rowIndex' | 'netResult'>): Promise<void> {
     const netResult = roundCurrency(entry.saleValue - entry.purchasePrice - entry.platformFees);
+    const nextTradeRow = this.allocateLocalRowIndex(this.trades().map((t) => t.rowIndex), 22);
     const newEntry: TradeEntry = {
       ...entry,
-      rowIndex: this.allocateLocalRowIndex(this.trades().map((t) => t.rowIndex), 22),
+      rowIndex: nextTradeRow,
       netResult,
     };
 
@@ -1084,11 +1155,11 @@ export class CollectionStore {
       syncedAt: new Date().toISOString(),
     }));
 
-    await this.dispatchRemoteMutation(
+    this.enqueueAndSync(
       'logTrade',
       entry as Record<string, unknown>,
       `Transactie: ${entry.cardName}`,
-      () => this.repo.logTrade(this.config(), entry)
+      { tempRowIndex: nextTradeRow < 0 ? nextTradeRow : undefined }
     );
     this.showToast(`Transactie voor ${entry.cardName} gelogd.`, 'success');
   }
@@ -1187,100 +1258,411 @@ export class CollectionStore {
   }
 
   // ==========================================================================
-  // OFFLINE QUEUE & TOASTS
+  // OFFLINE OUTBOX & ACHTERGROND-SYNC
   // ==========================================================================
 
-  async flushOfflineQueue(silent = false): Promise<void> {
-    const run = async (): Promise<void> => {
-      await this.flushOfflineQueueInternal(silent);
-    };
-    const chained = this.mutationChain.then(run, run);
-    this.mutationChain = chained.catch(() => undefined);
-    await chained;
+  async waitForPendingSync(): Promise<void> {
+    while (this.activeDrainPromise) {
+      await this.activeDrainPromise.catch(() => undefined);
+    }
+    await this.mutationChain.catch(() => undefined);
   }
 
-  private async flushOfflineQueueInternal(silent = false): Promise<void> {
-    const cfg = this.config();
-    if (cfg.demoMode || !this.isOnline() || !cfg.webAppUrl || !cfg.apiToken) return;
-    const queue = this.pendingQueue();
-    if (!queue.length) return;
+  async flushOfflineQueue(silent = false): Promise<void> {
+    this.lastError.set(null);
+    this.hasShownOutboxErrorToast = false;
+    await this.drainOutbox(silent);
+  }
 
-    this.beginSync();
-    const revBefore = this.localRevision;
-    const remaining: PendingMutation[] = [];
-    let lastUpdatedSnap: AppSnapshot | null = null;
-    try {
-      for (const item of queue) {
-        try {
-          switch (item.action) {
-            case 'addCard':
-              lastUpdatedSnap = await this.repo.addCard(cfg, item.payload as AddCardPayload);
-              break;
-            case 'updateCard':
-              lastUpdatedSnap = await this.repo.updateCard(cfg, item.payload as Partial<CollectionCard>);
-              break;
-            case 'deleteCard':
-              lastUpdatedSnap = await this.repo.deleteCard(
-                cfg,
-                item.payload as { rowIndex?: number; cardId?: string }
-              );
-              break;
-            case 'updatePokedexSlot':
-              lastUpdatedSnap = await this.repo.updatePokedexSlot(
-                cfg,
-                item.payload as UpdatePokedexSlotPayload
-              );
-              break;
-            case 'addWishlist':
-              lastUpdatedSnap = await this.repo.addWishlist(
-                cfg,
-                item.payload as unknown as Omit<WishlistItem, 'rowIndex' | 'found'>
-              );
-              break;
-            case 'markWishlistFound':
-              lastUpdatedSnap = await this.repo.markWishlistFound(
-                cfg,
-                item.payload as unknown as MarkWishlistFoundPayload
-              );
-              break;
-            case 'updateWishlist':
-              if (this.repo.updateWishlist) {
-                lastUpdatedSnap = await this.repo.updateWishlist(
-                  cfg,
-                  item.payload as unknown as UpdateWishlistPayload
-                );
-              }
-              break;
-            case 'deleteWishlist':
-              if (this.repo.deleteWishlist) {
-                lastUpdatedSnap = await this.repo.deleteWishlist(
-                  cfg,
-                  item.payload as { rowIndex: number; cardName?: string }
-                );
-              }
-              break;
-            case 'logTrade':
-              lastUpdatedSnap = await this.repo.logTrade(
-                cfg,
-                item.payload as unknown as Omit<TradeEntry, 'rowIndex' | 'netResult'>
-              );
-              break;
-          }
-        } catch {
-          remaining.push(item);
-        }
-      }
-
-      this.pendingQueue.set(remaining);
-      if (lastUpdatedSnap && remaining.length === 0 && this.localRevision === revBefore) {
-        this.snapshot.set(this.reconcileRemoteSnapshot(lastUpdatedSnap));
-      }
-      if (!silent && remaining.length === 0) {
-        this.showToast(`${queue.length} offline wijziging(en) gesynchroniseerd met Google Sheets!`, 'success');
-      }
-    } finally {
-      this.endSync();
+  private drainOutbox(silent = true): Promise<void> {
+    if (this.activeDrainPromise) {
+      // Wacht op de lopende run en start daarna zo nodig een vervolg-run voor nieuw binnengekomen items
+      // (niet na een mislukte run: dan blijven items bewust in de wachtrij tot handmatig/online-retry)
+      return this.activeDrainPromise.then(() =>
+        this.canStartDrain() && !this.lastDrainFailed ? this.drainOutbox(silent) : undefined
+      );
     }
+
+    const run = async (): Promise<void> => {
+      try {
+        await this.drainOutboxLoop(silent);
+      } finally {
+        this.lastDrainFailed = Boolean(this.lastError());
+        this.activeDrainPromise = null;
+      }
+    };
+
+    this.activeDrainPromise = run();
+    return this.activeDrainPromise;
+  }
+
+  private canStartDrain(): boolean {
+    const cfg = this.config();
+    if (cfg.demoMode || !cfg.webAppUrl?.trim() || !cfg.apiToken?.trim() || !this.isOnline()) {
+      return false;
+    }
+    const activeProfileId = cfg.activeProfileId;
+    return this.pendingQueue().some(
+      (m) =>
+        !this.inFlightIds.has(m.id) &&
+        (!m.profileId || !activeProfileId || m.profileId === activeProfileId)
+    );
+  }
+
+  private async drainOutboxLoop(silent: boolean): Promise<void> {
+    let syncedCount = 0;
+
+    while (true) {
+      const cfg = this.config();
+      const url = cfg.webAppUrl?.trim() ?? '';
+      if (cfg.demoMode || !this.isOnline() || !url || !cfg.apiToken?.trim()) {
+        break;
+      }
+
+      const activeProfileId = cfg.activeProfileId;
+      const batch = this.pendingQueue().filter(
+        (m) => !m.profileId || !activeProfileId || m.profileId === activeProfileId
+      );
+      if (batch.length === 0) {
+        break;
+      }
+
+      this.beginSync();
+      this.lastError.set(null);
+      const revBefore = this.localRevision;
+      const batchIds = batch.map((m) => m.id);
+      for (const id of batchIds) {
+        this.inFlightIds.add(id);
+      }
+
+      try {
+        const canUseBatch =
+          typeof this.repo.batchMutations === 'function' && !this.batchUnsupportedUrls.has(url);
+
+        if (canUseBatch) {
+          try {
+            const payloadItems: BatchMutationItem[] = batch.map((m) => ({
+              id: m.id,
+              action: m.action,
+              payload: m.payload,
+              ...(m.tempRowIndex !== undefined ? { tempRowIndex: m.tempRowIndex } : {}),
+            }));
+            const needsBootstrap = batch.some(
+              (m) =>
+                (m.action === 'addCard' &&
+                  (!String(m.payload['name'] ?? '').trim() ||
+                    !String(m.payload['setName'] ?? '').trim())) ||
+                m.action === 'addFeedback' ||
+                m.action === 'updateFeedback' ||
+                m.action === 'deleteFeedback'
+            );
+
+            const res = await this.repo.batchMutations!(cfg, payloadItems, {
+              skipBootstrap: !needsBootstrap,
+            });
+
+            if (this.didTargetProfileChange(cfg)) {
+              break;
+            }
+
+            const resultMap = new Map(res.results.map((r) => [r.id, r]));
+            const succeededIds = new Set<string>();
+            let firstError: string | null = null;
+
+            for (const item of batch) {
+              const itemRes = resultMap.get(item.id);
+              if (!itemRes || !itemRes.ok) {
+                if (!firstError) {
+                  firstError = itemRes?.error || `Synchronisatie mislukt voor "${item.description}".`;
+                }
+                continue;
+              }
+              succeededIds.add(item.id);
+              syncedCount++;
+
+              if (
+                item.action === 'addCard' &&
+                item.tempRowIndex !== undefined &&
+                item.tempRowIndex < 0 &&
+                itemRes.result?.rowIndex &&
+                itemRes.result.rowIndex >= 2
+              ) {
+                this.remapTempRow('collection', item.tempRowIndex, itemRes.result.rowIndex);
+              } else if (
+                item.action === 'addWishlist' &&
+                item.tempRowIndex !== undefined &&
+                item.tempRowIndex < 0 &&
+                itemRes.result?.rowIndex &&
+                itemRes.result.rowIndex >= 2
+              ) {
+                this.remapTempRow('wishlist', item.tempRowIndex, itemRes.result.rowIndex);
+              } else if (
+                item.action === 'logTrade' &&
+                item.tempRowIndex !== undefined &&
+                item.tempRowIndex < 0 &&
+                itemRes.result?.rowIndex &&
+                itemRes.result.rowIndex >= 2
+              ) {
+                this.snapshot.update((snap) =>
+                  remapTempRowInSnapshot(snap, 'trades', item.tempRowIndex!, itemRes.result!.rowIndex!)
+                );
+              } else if (
+                item.action === 'markWishlistFound' &&
+                item.tempRowIndex !== undefined &&
+                item.tempRowIndex < 0 &&
+                itemRes.result?.addedCardRowIndex &&
+                itemRes.result.addedCardRowIndex >= 2
+              ) {
+                this.remapTempRow('collection', item.tempRowIndex, itemRes.result.addedCardRowIndex);
+              }
+            }
+
+            this.pendingQueue.update((q) =>
+              q
+                .filter((m) => !succeededIds.has(m.id))
+                .map((m) =>
+                  batchIds.includes(m.id) ? { ...m, attempts: (m.attempts ?? 0) + 1 } : m
+                )
+            );
+            for (const id of batchIds) {
+              this.inFlightIds.delete(id);
+            }
+
+            if (res.snapshot && this.canApplyRemoteSnapshot(revBefore)) {
+              this.snapshot.set(this.reconcileRemoteSnapshot(res.snapshot));
+            }
+            this.persistStateImmediately();
+
+            if (firstError) {
+              this.lastError.set(firstError);
+              if (!this.hasShownOutboxErrorToast) {
+                this.hasShownOutboxErrorToast = true;
+                this.showToast('Lokaal bijgewerkt; opgeslagen in sync-wachtrij.', 'warning');
+              }
+              break;
+            }
+            this.hasShownOutboxErrorToast = false;
+            continue;
+          } catch (batchErr) {
+            const msg = batchErr instanceof Error ? batchErr.message : String(batchErr);
+            if (/Onbekende POST-actie:\s*batchMutations/i.test(msg)) {
+              // Oudere Google Apps Script URL: onthoud dit voor deze URL en val terug op losse calls
+              this.batchUnsupportedUrls.add(url);
+              this.legacyAppsScriptDetected.set(true);
+            } else {
+              this.pendingQueue.update((q) =>
+                q.map((m) =>
+                  batchIds.includes(m.id) ? { ...m, attempts: (m.attempts ?? 0) + 1 } : m
+                )
+              );
+              this.lastError.set(msg || 'Kon wijziging niet direct naar Sheets sturen.');
+              this.persistStateImmediately();
+              if (!this.hasShownOutboxErrorToast) {
+                this.hasShownOutboxErrorToast = true;
+                this.showToast('Lokaal bijgewerkt; opgeslagen in sync-wachtrij.', 'warning');
+              }
+              break;
+            }
+          }
+        }
+
+        const seqOutcome = await this.flushBatchSequentially(cfg, batchIds, revBefore);
+        syncedCount += seqOutcome.syncedCount;
+        if (seqOutcome.failedMessage) {
+          this.lastError.set(seqOutcome.failedMessage);
+          this.persistStateImmediately();
+          if (!this.hasShownOutboxErrorToast) {
+            this.hasShownOutboxErrorToast = true;
+            this.showToast('Lokaal bijgewerkt; opgeslagen in sync-wachtrij.', 'warning');
+          }
+          break;
+        }
+        this.hasShownOutboxErrorToast = false;
+      } finally {
+        for (const id of batchIds) {
+          this.inFlightIds.delete(id);
+        }
+        this.endSync();
+      }
+    }
+
+    if (!silent && syncedCount > 0 && this.pendingQueue().length === 0) {
+      this.showToast(`${syncedCount} offline wijziging(en) gesynchroniseerd met Google Sheets!`, 'success');
+    }
+  }
+
+  private async flushBatchSequentially(
+    cfg: AppConnectionConfig,
+    batchIds: readonly string[],
+    revBefore: number
+  ): Promise<{ syncedCount: number; failedMessage: string | null }> {
+    let lastUpdatedSnap: AppSnapshot | null = null;
+    let syncedCount = 0;
+
+    for (const id of batchIds) {
+      const item = this.pendingQueue().find((q) => q.id === id);
+      if (!item) continue;
+
+      const prevSnap = this.snapshot();
+      try {
+        let returnedSnap: AppSnapshot | null = null;
+        switch (item.action) {
+          case 'addCard':
+            returnedSnap = await this.repo.addCard(cfg, item.payload as AddCardPayload);
+            break;
+          case 'updateCard':
+            returnedSnap = await this.repo.updateCard(cfg, item.payload as Partial<CollectionCard>);
+            break;
+          case 'deleteCard':
+            returnedSnap = await this.repo.deleteCard(
+              cfg,
+              item.payload as { rowIndex?: number; cardId?: string }
+            );
+            break;
+          case 'updatePokedexSlot':
+            returnedSnap = await this.repo.updatePokedexSlot(
+              cfg,
+              item.payload as UpdatePokedexSlotPayload
+            );
+            break;
+          case 'addWishlist':
+            returnedSnap = await this.repo.addWishlist(
+              cfg,
+              item.payload as unknown as Omit<WishlistItem, 'rowIndex' | 'found'>
+            );
+            break;
+          case 'markWishlistFound':
+            returnedSnap = await this.repo.markWishlistFound(
+              cfg,
+              item.payload as unknown as MarkWishlistFoundPayload
+            );
+            break;
+          case 'updateWishlist':
+            if (this.repo.updateWishlist) {
+              returnedSnap = await this.repo.updateWishlist(
+                cfg,
+                item.payload as unknown as UpdateWishlistPayload
+              );
+            }
+            break;
+          case 'deleteWishlist':
+            if (this.repo.deleteWishlist) {
+              returnedSnap = await this.repo.deleteWishlist(
+                cfg,
+                item.payload as { rowIndex: number; cardName?: string }
+              );
+            }
+            break;
+          case 'logTrade':
+            returnedSnap = await this.repo.logTrade(
+              cfg,
+              item.payload as unknown as Omit<TradeEntry, 'rowIndex' | 'netResult'>
+            );
+            break;
+        }
+
+        if (this.didTargetProfileChange(cfg)) {
+          return { syncedCount, failedMessage: null };
+        }
+
+        syncedCount++;
+        this.pendingQueue.update((q) => q.filter((m) => m.id !== item.id));
+        this.inFlightIds.delete(item.id);
+
+        if (returnedSnap) {
+          lastUpdatedSnap = returnedSnap;
+          if (item.tempRowIndex !== undefined && item.tempRowIndex < 0) {
+            if (item.action === 'addCard' || item.action === 'markWishlistFound') {
+              const targetCardId =
+                item.action === 'addCard'
+                  ? String(item.payload['cardId'] ?? '')
+                  : String((item.payload['cardPayload'] as AddCardPayload | undefined)?.cardId ?? '');
+              const realRow = this.findAddedCollectionRowIndex(returnedSnap, prevSnap, targetCardId);
+              if (realRow >= 2) {
+                this.remapTempRow('collection', item.tempRowIndex, realRow);
+              }
+            } else if (item.action === 'addWishlist') {
+              const realRow = this.findAddedWishlistRowIndex(
+                returnedSnap,
+                prevSnap,
+                String(item.payload['cardName'] ?? '')
+              );
+              if (realRow >= 2) {
+                this.remapTempRow('wishlist', item.tempRowIndex, realRow);
+              }
+            }
+          }
+        }
+        this.persistStateImmediately();
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Kon wijziging niet direct naar Sheets sturen.';
+        this.pendingQueue.update((q) =>
+          q.map((m) => (m.id === item.id ? { ...m, attempts: (m.attempts ?? 0) + 1 } : m))
+        );
+        return { syncedCount, failedMessage: msg };
+      }
+    }
+
+    if (lastUpdatedSnap && this.canApplyRemoteSnapshot(revBefore)) {
+      this.snapshot.set(this.reconcileRemoteSnapshot(lastUpdatedSnap));
+      this.persistStateImmediately();
+    }
+
+    return { syncedCount, failedMessage: null };
+  }
+
+  private findAddedCollectionRowIndex(
+    remote: AppSnapshot,
+    previous: AppSnapshot,
+    cardId: string
+  ): number {
+    const cleanId = cardId.trim().toLowerCase();
+    if (!cleanId) return -1;
+    const knownRows = new Set(previous.collection.filter((c) => c.rowIndex >= 2).map((c) => c.rowIndex));
+    const newMatch = remote.collection.find(
+      (c) => c.rowIndex >= 2 && c.cardId.trim().toLowerCase() === cleanId && !knownRows.has(c.rowIndex)
+    );
+    return newMatch ? newMatch.rowIndex : -1;
+  }
+
+  private findAddedWishlistRowIndex(
+    remote: AppSnapshot,
+    previous: AppSnapshot,
+    cardName: string
+  ): number {
+    const cleanName = cardName.trim().toLowerCase();
+    if (!cleanName) return -1;
+    const knownRows = new Set(previous.wishlist.filter((w) => w.rowIndex >= 2).map((w) => w.rowIndex));
+    const newMatch = remote.wishlist.find(
+      (w) => w.rowIndex >= 2 && w.cardName.trim().toLowerCase() === cleanName && !knownRows.has(w.rowIndex)
+    );
+    return newMatch ? newMatch.rowIndex : -1;
+  }
+
+  private remapTempRow(entity: 'collection' | 'wishlist', tempRowIndex: number, realRowIndex: number): void {
+    this.snapshot.update((snap) => remapTempRowInSnapshot(snap, entity, tempRowIndex, realRowIndex));
+    this.pendingQueue.update((q) => remapTempRowInQueue(q, entity, tempRowIndex, realRowIndex));
+  }
+
+  private didTargetProfileChange(startedWith: AppConnectionConfig): boolean {
+    const now = this.config();
+    return (
+      now.demoMode !== startedWith.demoMode ||
+      now.webAppUrl.trim() !== startedWith.webAppUrl.trim() ||
+      now.apiToken.trim() !== startedWith.apiToken.trim() ||
+      now.activeProfileId !== startedWith.activeProfileId
+    );
+  }
+
+  private persistStateImmediately(): void {
+    const cfg = this.config();
+    const snap = this.snapshot();
+    if (cfg.demoMode) {
+      this.cache.saveDemoSnapshot(snap);
+    } else if (cfg.webAppUrl?.trim() && cfg.apiToken?.trim()) {
+      this.cache.saveSnapshot(snap, cfg.activeProfileId);
+    }
+    this.cache.saveOfflineQueue(this.pendingQueue());
   }
 
   showToast(text: string, tone: ToastMessage['tone'] = 'info'): void {
@@ -1338,52 +1720,40 @@ export class CollectionStore {
     });
   }
 
-  private async dispatchRemoteMutation(
+  private enqueueAndSync(
     action: PendingMutation['action'],
     payload: Record<string, unknown>,
     description: string,
-    remoteCall: () => Promise<AppSnapshot>
-  ): Promise<void> {
+    options?: { tempRowIndex?: number }
+  ): 'skipped' | 'offline' | 'queued' {
     const cfg = this.config();
-    if (cfg.demoMode) return;
-
-    if (!cfg.webAppUrl || !cfg.apiToken) return;
-
-    if (!this.isOnline()) {
-      this.enqueueMutation(action, payload, description);
-      this.showToast('Offline opgeslagen in wachtrij — wordt gesynct zodra je online bent.', 'warning');
-      return;
+    if (cfg.demoMode || !cfg.webAppUrl?.trim() || !cfg.apiToken?.trim()) {
+      this.persistStateImmediately();
+      return 'skipped';
     }
 
-    const myRevision = this.localRevision;
-    const run = async (): Promise<void> => {
-      this.beginSync();
-      this.lastError.set(null);
-      try {
-        if (this.pendingQueue().length > 0) {
-          await this.flushOfflineQueueInternal(true);
-        }
-        if (this.pendingQueue().length > 0) {
-          this.enqueueMutation(action, payload, description);
-          return;
-        }
-        const updated = await remoteCall();
-        if (this.canApplyRemoteSnapshot(myRevision)) {
-          this.snapshot.set(this.reconcileRemoteSnapshot(updated));
-        }
-      } catch (err) {
-        this.enqueueMutation(action, payload, description);
-        const msg = err instanceof Error ? err.message : 'Kon wijziging niet direct naar Sheets sturen.';
-        this.lastError.set(msg);
-        this.showToast('Lokaal bijgewerkt; opgeslagen in sync-wachtrij.', 'warning');
-      } finally {
-        this.endSync();
-      }
+    const mutation: PendingMutation = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      action,
+      payload,
+      description,
+      createdAt: new Date().toISOString(),
+      ...(options?.tempRowIndex !== undefined ? { tempRowIndex: options.tempRowIndex } : {}),
+      ...(cfg.activeProfileId ? { profileId: cfg.activeProfileId } : {}),
+      attempts: 0,
     };
 
-    const chained = this.mutationChain.then(run, run);
-    this.mutationChain = chained.catch(() => undefined);
-    await chained;
+    this.pendingQueue.update((q) => coalesceOutboxMutation(q, mutation, this.inFlightIds));
+    this.lastError.set(null);
+    this.hasShownOutboxErrorToast = false;
+    this.persistStateImmediately();
+
+    if (!this.isOnline()) {
+      return 'offline';
+    }
+
+    void this.drainOutbox(true);
+    return 'queued';
   }
 
   private beginSync(): void {

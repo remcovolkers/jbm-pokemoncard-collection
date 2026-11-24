@@ -250,6 +250,9 @@ export interface PendingMutation {
   payload: Record<string, unknown>;
   createdAt: string;
   description: string;
+  tempRowIndex?: number;
+  profileId?: string;
+  attempts?: number;
 }
 
 export interface PortfolioSummary {

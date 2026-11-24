@@ -240,6 +240,15 @@
                       {{ shortCondition(card.condition) }}
                     </span>
                   }
+                  @if (!store.config().demoMode && card.rowIndex < 0) {
+                    <span
+                      class="overlay-pill overlay-pill--syncing"
+                      title="Wordt opgeslagen in Google Sheets…"
+                      aria-label="Wordt gesynchroniseerd met Google Sheets"
+                    >
+                      <span class="material-symbols-outlined">cloud_upload</span>
+                    </span>
+                  }
                 </div>
               </pb-card-artwork>
             </div>
@@ -294,6 +303,15 @@
                 }
                 @if (card.forTrade) {
                   <span class="pb-pill pb-pill--tertiary">Te ruil</span>
+                }
+                @if (!store.config().demoMode && card.rowIndex < 0) {
+                  <span
+                    class="pb-pill pb-pill--tertiary list-row__sync-badge"
+                    title="Wordt opgeslagen in Google Sheets…"
+                  >
+                    <span class="material-symbols-outlined">cloud_upload</span>
+                    <span>Syncen</span>
+                  </span>
                 }
               </div>
               <p class="mono list-row__sub">

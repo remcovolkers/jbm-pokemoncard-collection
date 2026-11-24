@@ -336,6 +336,13 @@
     border-radius: $radius-md;
   }
 
+  &.is-syncing {
+    background-color: rgba($color-tertiary, 0.14);
+    border-color: rgba($color-tertiary, 0.42);
+    color: $color-tertiary;
+    box-shadow: none;
+  }
+
   &.is-demo {
     background-color: rgba($color-tertiary, 0.14);
     border-color: rgba($color-tertiary, 0.35);

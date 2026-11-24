@@ -9,10 +9,14 @@ import {
 } from '../domain/models';
 import {
   AddCardPayload,
+  BatchMutationItem,
+  BatchMutationItemResult,
+  BatchMutationResponse,
   CollectionRepository,
   ConnectionTestResult,
   DeleteWishlistPayload,
   MarkWishlistFoundPayload,
+  MutationWriteOptions,
   RefreshPricesResult,
   UpdateFeedbackPayload,
   UpdatePokedexSlotPayload,
@@ -156,26 +160,50 @@ export class AppsScriptSheetsAdapter implements CollectionRepository {
     };
   }
 
+  async batchMutations(
+    config: AppConnectionConfig,
+    mutations: BatchMutationItem[],
+    options: MutationWriteOptions = {}
+  ): Promise<BatchMutationResponse> {
+    const skipBootstrap = Boolean(options.skipBootstrap);
+    const res = await this.postAction<{ results: BatchMutationItemResult[] }>(
+      config,
+      'batchMutations',
+      { mutations },
+      { skipBootstrap, requireData: !skipBootstrap }
+    );
+    return {
+      results: res.result?.results ?? [],
+      snapshot: res.data,
+    };
+  }
+
   /**
    * CORS-veilige POST via Content-Type: text/plain;charset=utf-8 (voorkomt OPTIONS preflight bij Apps Script).
    */
   private async postAction<T = unknown>(
     config: AppConnectionConfig,
     action: string,
-    payload: Record<string, unknown>
+    payload: Record<string, unknown>,
+    options?: { skipBootstrap?: boolean; requireData?: boolean }
   ): Promise<AppsScriptResponse<T>> {
     this.assertConfigured(config);
+    const bodyObj: Record<string, unknown> = {
+      token: config.apiToken.trim(),
+      action,
+      payload,
+    };
+    if (options?.skipBootstrap) {
+      bodyObj['skipBootstrap'] = true;
+    }
+
     const response = await fetch(config.webAppUrl.trim(), {
       method: 'POST',
       redirect: 'follow',
       headers: {
         'Content-Type': 'text/plain;charset=utf-8',
       },
-      body: JSON.stringify({
-        token: config.apiToken.trim(),
-        action,
-        payload,
-      }),
+      body: JSON.stringify(bodyObj),
     });
 
     if (!response.ok) {
@@ -183,7 +211,8 @@ export class AppsScriptSheetsAdapter implements CollectionRepository {
     }
 
     const json = (await response.json()) as AppsScriptResponse<T>;
-    if (!json.ok || !json.data) {
+    const requireData = options?.requireData ?? true;
+    if (!json.ok || (requireData && !json.data)) {
       throw new Error(json.error ?? `Actie "${action}" is mislukt in Apps Script.`);
     }
     return json;

@@ -2,7 +2,12 @@ import { TestBed } from '@angular/core/testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppSnapshot, CatalogCard } from '../domain/models';
 import { CARD_CATALOG_PORT, CardCatalogPort } from '../ports/card-catalog.port';
-import { COLLECTION_REPOSITORY, CollectionRepository } from '../ports/collection-repository.port';
+import {
+  BatchMutationItem,
+  BatchMutationResponse,
+  COLLECTION_REPOSITORY,
+  CollectionRepository,
+} from '../ports/collection-repository.port';
 import { createDemoSnapshot } from '../adapters/demo-data';
 import { CollectionStore } from './collection.store';
 
@@ -161,7 +166,7 @@ describe('CollectionStore (Signals, Optimistic UI & Offline Queue)', () => {
     expect(mockRepo.addCard).toHaveBeenCalledTimes(1);
     expect(mockRepo.updatePokedexSlot).toHaveBeenCalledTimes(1);
     expect(mockRepo.logTrade).toHaveBeenCalledTimes(1);
-    expect(store.pendingQueue().length).toBe(0);
+    expect(store.pendingQueue()).toEqual([]);
   });
 
   it('behoudt mislukte mutaties in de offline wachtrij wanneer remote faalt', async () => {
@@ -173,6 +178,7 @@ describe('CollectionStore (Signals, Optimistic UI & Offline Queue)', () => {
     vi.mocked(mockRepo.addCard).mockRejectedValueOnce(new Error('503 Unavailable'));
 
     await store.addCard({ cardId: 'sv03-125', name: 'Charizard ex', setName: 'Obsidian Flames', quantity: 1 });
+    await store.waitForPendingSync();
 
     expect(store.pendingQueue().length).toBe(1);
     expect(store.pendingQueue()[0].action).toBe('addCard');
@@ -343,10 +349,11 @@ describe('CollectionStore (Signals, Optimistic UI & Offline Queue)', () => {
     expect(store.collection().some((c) => c.cardId === cardB.cardId)).toBe(false);
 
     // Oude snapshot van delete 1 bevat cardB nog -> mag cardB NIET terugzetten!
+    await Promise.all([p1, p2]);
     serverCollection = serverCollection.filter((c) => c.cardId !== cardA.cardId);
     resolveFirstDelete({ ...baseSnap, collection: [...serverCollection] });
 
-    await Promise.all([p1, p2]);
+    await store.waitForPendingSync();
     expect(store.collection().some((c) => c.cardId === cardA.cardId)).toBe(false);
     expect(store.collection().some((c) => c.cardId === cardB.cardId)).toBe(false);
     expect(mockRepo.deleteCard).toHaveBeenCalledTimes(2);
@@ -431,6 +438,272 @@ describe('CollectionStore (Signals, Optimistic UI & Offline Queue)', () => {
 
     resolveStaleBootstrap(snap);
     await staleSync;
+    await store.waitForPendingSync();
     expect(store.collection().length).toBe(0);
+  });
+
+  it('voegt kaarten in 0 ms lokaal toe terwijl trage Google Sheets-sync op achtergrond draait', async () => {
+    let resolveRemote!: (snap: AppSnapshot) => void;
+    const remotePromise = new Promise<AppSnapshot>((resolve) => {
+      resolveRemote = resolve;
+    });
+    vi.mocked(mockRepo.addCard).mockImplementationOnce(() => remotePromise);
+
+    store.updateConfig({
+      demoMode: false,
+      webAppUrl: 'https://script.google.com/macros/s/slow/exec',
+      apiToken: 'tok',
+    });
+    await store.syncFromRemote(true);
+
+    let settledBeforeRemote = false;
+    await store.addCard({
+      cardId: 'sv03.5-151',
+      name: 'Mew ex',
+      setName: '151',
+      cardNumber: '151/165',
+      quantity: 1,
+    });
+    settledBeforeRemote = true;
+
+    expect(settledBeforeRemote).toBe(true);
+    expect(store.collection().some((c) => c.cardId === 'sv03.5-151' && c.rowIndex < 0)).toBe(true);
+    expect(store.pendingQueue().length).toBe(1);
+    expect(store.syncStatus()).toBe('syncing');
+    expect(window.localStorage.getItem('pokebinder_offline_queue_v1')).toContain('Mew ex');
+
+    const remoteSnap = createDemoSnapshot();
+    resolveRemote(remoteSnap);
+    await store.waitForPendingSync();
+
+    expect(store.pendingQueue().length).toBe(0);
+    expect(store.syncStatus()).toBe('synced');
+  });
+
+  it('bundelt mutaties via batchMutations, past coalescing toe (in-flight veilig) en remapt tempRowIndex (-1 -> 42)', async () => {
+    let resolveFirstBatch!: (res: BatchMutationResponse) => void;
+    const batchCalls: BatchMutationItem[][] = [];
+
+    const batchRepo: CollectionRepository = {
+      ...mockRepo,
+      batchMutations: vi.fn(async (_cfg, mutations: BatchMutationItem[]): Promise<BatchMutationResponse> => {
+        batchCalls.push(mutations);
+        if (batchCalls.length === 1) {
+          return new Promise<BatchMutationResponse>((resolve) => {
+            resolveFirstBatch = resolve;
+          });
+        }
+        return {
+          results: mutations.map((m) => ({
+            id: m.id,
+            action: m.action,
+            ok: true,
+            result: { rowIndex: Number(m.payload['rowIndex']) || 42 },
+          })),
+        };
+      }),
+    };
+
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: COLLECTION_REPOSITORY, useValue: batchRepo },
+        { provide: CARD_CATALOG_PORT, useValue: mockCatalog },
+      ],
+    });
+    const batchStore = TestBed.inject(CollectionStore);
+    batchStore.updateConfig({
+      demoMode: false,
+      webAppUrl: 'https://script.google.com/macros/s/batch/exec',
+      apiToken: 'tok',
+    });
+    await batchStore.syncFromRemote(true);
+
+    // 1. Eerste kaart direct gestart als in-flight batch #1
+    await batchStore.addCard({
+      cardId: 'sv03-125',
+      name: 'Charizard ex',
+      setName: 'Obsidian Flames',
+      cardNumber: '125/197',
+      quantity: 1,
+    });
+    const charizardTemp = batchStore.collection().find((c) => c.cardId === 'sv03-125')!;
+    expect(charizardTemp.rowIndex).toBeLessThan(0);
+
+    // 2. Terwijl batch #1 in-flight is: bewerk Charizard 2x + voeg Pikachu toe en verwijder direct weer
+    await batchStore.updateCard(charizardTemp.rowIndex, charizardTemp.cardId, { quantity: 2 });
+    await batchStore.updateCard(charizardTemp.rowIndex, charizardTemp.cardId, { quantity: 4, notes: 'Pack Pull' });
+    await batchStore.addCard({
+      cardId: 'sv08-238',
+      name: 'Pikachu ex',
+      setName: 'Surging Sparks',
+      cardNumber: '238/191',
+      quantity: 1,
+    });
+    const pikachuTemp = batchStore.collection().find((c) => c.cardId === 'sv08-238')!;
+    await batchStore.deleteCard(pikachuTemp);
+
+    expect(batchStore.collection().some((c) => c.cardId === 'sv08-238')).toBe(false);
+
+    // Sluit batch #1 af -> Charizard krijgt sheet-rij 42!
+    resolveFirstBatch({
+      results: [
+        {
+          id: batchCalls[0][0].id,
+          action: 'addCard',
+          ok: true,
+          result: { rowIndex: 42, cardId: 'sv03-125' },
+        },
+      ],
+    });
+    await batchStore.waitForPendingSync();
+
+    // Batch #2 bevat ALLEEN de gebundelde updateCard met geremapte rowIndex 42 (geen Pikachu!)
+    expect(batchCalls.length).toBe(2);
+    expect(batchCalls[1].length).toBe(1);
+    expect(batchCalls[1][0].action).toBe('updateCard');
+    expect(batchCalls[1][0].payload['rowIndex']).toBe(42);
+    expect(batchCalls[1][0].payload['quantity']).toBe(4);
+    expect(batchCalls[1][0].payload['notes']).toBe('Pack Pull');
+
+    const finalCharizard = batchStore.collection().find((c) => c.cardId === 'sv03-125')!;
+    expect(finalCharizard.rowIndex).toBe(42);
+    expect(finalCharizard.quantity).toBe(4);
+    expect(batchStore.pendingQueue().length).toBe(0);
+  });
+
+  it('behoudt lokale kaarten over herstart via localStorage en flusht outbox vóór bootstrap', async () => {
+    const baseSnap = createDemoSnapshot();
+    const unsyncedCard = {
+      ...baseSnap.collection[0],
+      rowIndex: -1,
+      cardId: 'sv03.5-199',
+      name: 'Charizard ex',
+      setName: '151',
+    };
+    const cachedSnap: AppSnapshot = {
+      ...baseSnap,
+      collection: [unsyncedCard, ...baseSnap.collection],
+    };
+
+    window.localStorage.setItem(
+      'pokebinder_config_v1',
+      JSON.stringify({
+        webAppUrl: 'https://script.google.com/macros/s/restart/exec',
+        apiToken: 'tok-restart',
+        demoMode: false,
+        monthlyBudget: 150,
+      })
+    );
+    window.localStorage.setItem('pokebinder_snapshot_v1', JSON.stringify(cachedSnap));
+    window.localStorage.setItem(
+      'pokebinder_offline_queue_v1',
+      JSON.stringify([
+        {
+          id: 'persisted-1',
+          action: 'addCard',
+          payload: { cardId: 'sv03.5-199', name: 'Charizard ex', setName: '151', quantity: 1 },
+          tempRowIndex: -1,
+          description: 'Kaart toevoegen: Charizard ex',
+          createdAt: '2026-11-24T12:00:00Z',
+        },
+      ])
+    );
+
+    const callOrder: string[] = [];
+    let releaseBatches!: () => void;
+    const batchGate = new Promise<void>((resolve) => {
+      releaseBatches = resolve;
+    });
+    const syncedServerCards = [{ ...unsyncedCard, rowIndex: 19 }];
+    const restartRepo: CollectionRepository = {
+      ...mockRepo,
+      bootstrap: vi.fn(async () => {
+        callOrder.push('bootstrap');
+        return { ...cachedSnap, collection: [...syncedServerCards, ...baseSnap.collection] };
+      }),
+      batchMutations: vi.fn(async (_cfg, muts: BatchMutationItem[]): Promise<BatchMutationResponse> => {
+        callOrder.push(`batch:${muts.map((m) => m.action).join(',')}`);
+        await batchGate;
+        return {
+          results: muts.map((m, idx) => {
+            const cardId = String(m.payload['cardId'] ?? '');
+            const assignedRow = cardId === 'sv03.5-199' ? 19 : 20 + idx;
+            if (cardId && !syncedServerCards.some((c) => c.cardId === cardId)) {
+              syncedServerCards.unshift({
+                ...unsyncedCard,
+                rowIndex: assignedRow,
+                cardId,
+                name: String(m.payload['name'] ?? ''),
+                setName: String(m.payload['setName'] ?? ''),
+              });
+            }
+            return {
+              id: m.id,
+              action: m.action,
+              ok: true,
+              result: { rowIndex: assignedRow, cardId },
+            };
+          }),
+        };
+      }),
+    };
+
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: COLLECTION_REPOSITORY, useValue: restartRepo },
+        { provide: CARD_CATALOG_PORT, useValue: mockCatalog },
+      ],
+    });
+    const restarted = TestBed.inject(CollectionStore);
+
+    // Direct na opstarten (vóór netwerk) is lokaal opgeslagen kaart zichtbaar én krijgt volgende kaart -2
+    expect(restarted.collection().some((c) => c.rowIndex === -1 && c.cardId === 'sv03.5-199')).toBe(true);
+    await restarted.addCard({ cardId: 'sv08-238', name: 'Pikachu ex', setName: 'Surging Sparks', quantity: 1 });
+    expect(restarted.collection()[0].rowIndex).toBe(-2);
+
+    releaseBatches();
+    await restarted.waitForPendingSync();
+    expect(callOrder[0]).toContain('batch:');
+    expect(restarted.pendingQueue().length).toBe(0);
+    expect(restarted.collection().find((c) => c.cardId === 'sv08-238')?.rowIndex).toBeGreaterThanOrEqual(2);
+  });
+
+  it('valt automatisch terug op losse POST-calls wanneer oudere Apps Script geen batchMutations kent', async () => {
+    const legacyRepo: CollectionRepository = {
+      ...mockRepo,
+      batchMutations: vi.fn(async () => {
+        throw new Error('Onbekende POST-actie: batchMutations');
+      }),
+    };
+
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: COLLECTION_REPOSITORY, useValue: legacyRepo },
+        { provide: CARD_CATALOG_PORT, useValue: mockCatalog },
+      ],
+    });
+    const legacyStore = TestBed.inject(CollectionStore);
+    legacyStore.updateConfig({
+      demoMode: false,
+      webAppUrl: 'https://script.google.com/macros/s/legacy/exec',
+      apiToken: 'tok-legacy',
+    });
+    await legacyStore.syncFromRemote(true);
+
+    await legacyStore.addCard({
+      cardId: 'sv03-125',
+      name: 'Charizard ex',
+      setName: 'Obsidian Flames',
+      quantity: 1,
+    });
+    await legacyStore.waitForPendingSync();
+
+    expect(legacyStore.legacyAppsScriptDetected()).toBe(true);
+    expect(legacyRepo.addCard).toHaveBeenCalledTimes(1);
+    expect(legacyStore.pendingQueue().length).toBe(0);
+    expect(legacyStore.lastError()).toBeNull();
   });
 });

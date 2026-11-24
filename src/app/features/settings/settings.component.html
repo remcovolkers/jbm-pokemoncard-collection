@@ -443,6 +443,20 @@
       </button>
     </div>
 
+    @if (store.legacyAppsScriptDetected()) {
+      <div class="update-notice update-notice--amber legacy-gas-notice">
+        <span class="material-symbols-outlined">bolt</span>
+        <div>
+          <strong>Snellere batch-sync beschikbaar</strong>
+          <p>
+            Plak de nieuwste <code>apps-script/Code.gs</code> eenmalig in je Google Sheet (Extensies → Apps Script →
+            Implementeren → Nieuwe versie) om meerdere kaarten in 1 razendsnelle batch weg te schrijven. Tot die tijd
+            blijft alles automatisch werken.
+          </p>
+        </div>
+      </div>
+    }
+
     @if (store.pendingQueue().length > 0) {
       <div class="queue-box">
         <div class="queue-box__head">

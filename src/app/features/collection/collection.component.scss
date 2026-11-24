@@ -425,6 +425,12 @@
     position: absolute;
     bottom: 6px;
     left: 6px;
+    right: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px;
+    pointer-events: none;
   }
 
   &__meta {
@@ -525,6 +531,21 @@
     color: $color-primary-fixed;
     text-transform: uppercase;
   }
+
+  &--syncing {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.14rem 0.35rem;
+    background-color: rgba($color-surface-lowest, 0.92);
+    border: 1px solid rgba($color-tertiary, 0.5);
+    color: $color-tertiary;
+    animation: pb-pulse 1.6s ease-in-out infinite;
+
+    .material-symbols-outlined {
+      font-size: 13px;
+    }
+  }
 }
 
 // Lijstweergave
@@ -580,6 +601,14 @@
       font-weight: 700;
       @include truncate;
       min-width: 0;
+    }
+  }
+
+  &__sync-badge {
+    animation: pb-pulse 1.6s ease-in-out infinite;
+
+    .material-symbols-outlined {
+      font-size: 13px;
     }
   }
 

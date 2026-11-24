@@ -8,6 +8,7 @@ import {
   FeedbackItem,
   FeedbackPage,
   FeedbackStatus,
+  PendingMutation,
   TradeEntry,
   WishlistItem,
 } from '../domain/models';
@@ -66,6 +67,40 @@ export interface UpdateFeedbackPayload {
   votes?: number;
 }
 
+export interface MutationWriteOptions {
+  skipBootstrap?: boolean;
+}
+
+export interface BatchMutationItem {
+  id: string;
+  action: PendingMutation['action'];
+  payload: Record<string, unknown>;
+  tempRowIndex?: number;
+}
+
+export interface BatchMutationItemResult {
+  id: string;
+  action: string;
+  ok: boolean;
+  result?: {
+    rowIndex?: number;
+    cardId?: string;
+    name?: string;
+    deletedRowIndex?: number;
+    addedCardRowIndex?: number;
+    addedCardName?: string;
+    updated?: boolean;
+    deleted?: boolean;
+    found?: boolean;
+  };
+  error?: string;
+}
+
+export interface BatchMutationResponse {
+  results: BatchMutationItemResult[];
+  snapshot?: AppSnapshot;
+}
+
 /**
  * Hexagonale port voor het lezen en schrijven van de volledige collectiestatus (Google Sheets / Demo / Cache).
  */
@@ -84,6 +119,11 @@ export interface CollectionRepository {
   addFeedback?(config: AppConnectionConfig, payload: Omit<FeedbackItem, 'source' | 'rowIndex'>): Promise<AppSnapshot>;
   updateFeedback?(config: AppConnectionConfig, payload: UpdateFeedbackPayload): Promise<AppSnapshot>;
   deleteFeedback?(config: AppConnectionConfig, payload: { id: string }): Promise<AppSnapshot>;
+  batchMutations?(
+    config: AppConnectionConfig,
+    mutations: BatchMutationItem[],
+    options?: MutationWriteOptions
+  ): Promise<BatchMutationResponse>;
   refreshPrices(config: AppConnectionConfig): Promise<RefreshPricesResult>;
 }
 

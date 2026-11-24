@@ -678,15 +678,21 @@ function doPost(e) {
       case 'refreshPrices':
         result = refreshCollectionPrices_(ss);
         break;
+      case 'batchMutations':
+        result = handleBatchMutations_(ss, payload);
+        break;
       default:
         return jsonResponse_({ ok: false, error: 'Onbekende POST-actie: ' + action });
     }
 
-    return jsonResponse_({
+    var responsePayload = {
       ok: true,
-      result: result,
-      data: buildBootstrapPayload_(ss)
-    });
+      result: result
+    };
+    if (!body.skipBootstrap) {
+      responsePayload.data = buildBootstrapPayload_(ss);
+    }
+    return jsonResponse_(responsePayload);
   } catch (err) {
     return jsonResponse_({ ok: false, error: String(err && err.message ? err.message : err) });
   } finally {
@@ -1070,7 +1076,7 @@ function readSettings_(ss) {
 // MUTATION HANDLERS (NEVER OVERWRITE FORMULA COLUMNS!)
 // ============================================================================
 
-function handleAddCard_(ss, payload) {
+function handleAddCard_(ss, payload, options) {
   var sheet = ss.getSheetByName(SHEET_NAMES.COLLECTION);
   if (!sheet) throw new Error('Tabblad "' + SHEET_NAMES.COLLECTION + '" niet gevonden.');
 
@@ -1115,8 +1121,10 @@ function handleAddCard_(ss, payload) {
     );
   }
 
-  syncPokedexBinder_(ss, cardData.name ? [cardData.name] : null);
-  return { rowIndex: targetRow, cardId: cardData.cardId };
+  if (!(options && options.skipPokedexSync)) {
+    syncPokedexBinder_(ss, cardData.name ? [cardData.name] : null);
+  }
+  return { rowIndex: targetRow, cardId: cardData.cardId, name: cardData.name || '' };
 }
 
 function ensureCollectionAcquisitionColumn_(sheet) {
@@ -1128,7 +1136,7 @@ function ensureCollectionAcquisitionColumn_(sheet) {
   }
 }
 
-function handleUpdateCard_(ss, payload) {
+function handleUpdateCard_(ss, payload, options) {
   var sheet = ss.getSheetByName(SHEET_NAMES.COLLECTION);
   if (!sheet) throw new Error('Tabblad "' + SHEET_NAMES.COLLECTION + '" niet gevonden.');
 
@@ -1140,6 +1148,7 @@ function handleUpdateCard_(ss, payload) {
   var hasCol23 = !sheet.getLastColumn || sheet.getLastColumn() >= 23;
   var existingW = hasCol23 ? String(sheet.getRange(rowIndex, 23).getValue() || '').trim() : '';
 
+  var oldName = String(existingAQ[1] || '').trim();
   var merged = {
     cardId: payload.cardId !== undefined ? payload.cardId : existingAQ[0],
     name: payload.name !== undefined ? payload.name : existingAQ[1],
@@ -1164,17 +1173,26 @@ function handleUpdateCard_(ss, payload) {
     notes: payload.notes !== undefined ? payload.notes : existingUV[1]
   };
 
+  var newName = String(merged.name || '').trim();
+  var touchedNames = [];
+  if (oldName) touchedNames.push(oldName);
+  if (newName && touchedNames.indexOf(newName) === -1) touchedNames.push(newName);
+
   writeCollectionRow_(sheet, rowIndex, merged);
-  syncPokedexBinder_(ss);
-  return { rowIndex: rowIndex };
+  if (!(options && options.skipPokedexSync)) {
+    syncPokedexBinder_(ss, touchedNames.length > 0 ? touchedNames : null);
+  }
+  return { rowIndex: rowIndex, touchedNames: touchedNames };
 }
 
-function handleDeleteCard_(ss, payload) {
+function handleDeleteCard_(ss, payload, options) {
   var sheet = ss.getSheetByName(SHEET_NAMES.COLLECTION);
   if (!sheet) throw new Error('Tabblad "' + SHEET_NAMES.COLLECTION + '" niet gevonden.');
 
   var rowIndex = resolveCollectionRowIndex_(sheet, payload.rowIndex, payload.cardId);
   if (rowIndex < 2) throw new Error('Kaartrij niet gevonden om te verwijderen.');
+
+  var deletedName = String(sheet.getRange(rowIndex, 2).getValue() || '').trim();
 
   // Wis alleen A:Q, U:V en optioneel W; laat formules in R:T intact!
   sheet.getRange(rowIndex, 1, 1, 17).clearContent();
@@ -1182,8 +1200,10 @@ function handleDeleteCard_(ss, payload) {
   if (!sheet.getLastColumn || sheet.getLastColumn() >= 23) {
     sheet.getRange(rowIndex, 23).clearContent();
   }
-  syncPokedexBinder_(ss);
-  return { deletedRowIndex: rowIndex };
+  if (!(options && options.skipPokedexSync)) {
+    syncPokedexBinder_(ss, deletedName ? [deletedName] : null);
+  }
+  return { deletedRowIndex: rowIndex, deletedName: deletedName };
 }
 
 function writeCollectionRow_(sheet, rowIndex, data) {
@@ -1331,7 +1351,7 @@ function findWishlistRow_(sheet, rowIndexInput, cardName) {
   return 0;
 }
 
-function handleMarkWishlistFound_(ss, payload) {
+function handleMarkWishlistFound_(ss, payload, options) {
   var sheet = ss.getSheetByName(SHEET_NAMES.WISHLIST);
   if (!sheet) throw new Error('Tabblad "' + SHEET_NAMES.WISHLIST + '" niet gevonden.');
 
@@ -1340,10 +1360,16 @@ function handleMarkWishlistFound_(ss, payload) {
 
   sheet.getRange(rowIndex, 12).setValue(true);
 
+  var addedCard = null;
   if (payload.addToCollection && payload.cardPayload) {
-    handleAddCard_(ss, payload.cardPayload);
+    addedCard = handleAddCard_(ss, payload.cardPayload, options);
   }
-  return { rowIndex: rowIndex, found: true };
+  return {
+    rowIndex: rowIndex,
+    found: true,
+    addedCardRowIndex: addedCard ? addedCard.rowIndex : undefined,
+    addedCardName: addedCard ? addedCard.name : undefined
+  };
 }
 
 function handleUpdateWishlist_(ss, payload) {
@@ -1399,6 +1425,133 @@ function handleDeleteWishlist_(ss, payload) {
     sheet.getRange(rowIndex, 13, 1, 1).clearContent();
   }
   return { rowIndex: rowIndex, deleted: true };
+}
+
+function handleBatchMutations_(ss, payload) {
+  var mutations = (payload && payload.mutations) || [];
+  var collectionRowMap = {};
+  var wishlistRowMap = {};
+  var touchedCardNames = [];
+  var needsFullPokedexSync = false;
+  var results = [];
+  var pushTouchedName = function (name) {
+    var clean = String(name || '').trim();
+    if (clean && touchedCardNames.indexOf(clean) === -1) {
+      touchedCardNames.push(clean);
+    }
+  };
+
+  for (var i = 0; i < mutations.length; i++) {
+    var item = mutations[i] || {};
+    var itemAction = item.action || '';
+    var itemPayload = Object.assign({}, item.payload || {});
+    var tempRow = toNumber_(item.tempRowIndex, 0);
+
+    try {
+      // Remap tijdelijke negatieve rijnummers van eerdere add-acties binnen dezelfde batch
+      if ((itemAction === 'updateCard' || itemAction === 'deleteCard') && toNumber_(itemPayload.rowIndex, 0) < 0) {
+        var mappedColRow = collectionRowMap[String(itemPayload.rowIndex)];
+        if (mappedColRow >= 2) {
+          itemPayload.rowIndex = mappedColRow;
+        }
+      }
+      if (
+        (itemAction === 'updateWishlist' || itemAction === 'deleteWishlist' || itemAction === 'markWishlistFound') &&
+        toNumber_(itemPayload.rowIndex, 0) < 0
+      ) {
+        var mappedWlRow = wishlistRowMap[String(itemPayload.rowIndex)];
+        if (mappedWlRow >= 2) {
+          itemPayload.rowIndex = mappedWlRow;
+        }
+      }
+
+      var itemRes;
+      switch (itemAction) {
+        case 'addCard':
+          itemRes = handleAddCard_(ss, itemPayload, { skipPokedexSync: true });
+          if (tempRow < 0 && itemRes && itemRes.rowIndex >= 2) {
+            collectionRowMap[String(tempRow)] = itemRes.rowIndex;
+          }
+          if (itemRes && itemRes.name) pushTouchedName(itemRes.name);
+          else needsFullPokedexSync = true;
+          break;
+        case 'updateCard':
+          itemRes = handleUpdateCard_(ss, itemPayload, { skipPokedexSync: true });
+          if (itemRes && itemRes.touchedNames && itemRes.touchedNames.length > 0) {
+            for (var tn = 0; tn < itemRes.touchedNames.length; tn++) {
+              pushTouchedName(itemRes.touchedNames[tn]);
+            }
+          } else {
+            needsFullPokedexSync = true;
+          }
+          break;
+        case 'deleteCard':
+          itemRes = handleDeleteCard_(ss, itemPayload, { skipPokedexSync: true });
+          if (itemRes && itemRes.deletedName) pushTouchedName(itemRes.deletedName);
+          else needsFullPokedexSync = true;
+          break;
+        case 'updatePokedexSlot':
+          itemRes = handleUpdatePokedexSlot_(ss, itemPayload);
+          break;
+        case 'addWishlist':
+          itemRes = handleAddWishlist_(ss, itemPayload);
+          if (tempRow < 0 && itemRes && itemRes.rowIndex >= 2) {
+            wishlistRowMap[String(tempRow)] = itemRes.rowIndex;
+          }
+          break;
+        case 'markWishlistFound':
+          itemRes = handleMarkWishlistFound_(ss, itemPayload, { skipPokedexSync: true });
+          if (tempRow < 0 && itemRes && itemRes.addedCardRowIndex >= 2) {
+            collectionRowMap[String(tempRow)] = itemRes.addedCardRowIndex;
+          }
+          if (itemRes && itemRes.addedCardName) pushTouchedName(itemRes.addedCardName);
+          else if (itemPayload.addToCollection) needsFullPokedexSync = true;
+          break;
+        case 'updateWishlist':
+          itemRes = handleUpdateWishlist_(ss, itemPayload);
+          break;
+        case 'deleteWishlist':
+          itemRes = handleDeleteWishlist_(ss, itemPayload);
+          break;
+        case 'logTrade':
+          itemRes = handleLogTrade_(ss, itemPayload);
+          break;
+        case 'addFeedback':
+          itemRes = handleAddFeedback_(ss, itemPayload);
+          break;
+        case 'updateFeedback':
+          itemRes = handleUpdateFeedback_(ss, itemPayload);
+          break;
+        case 'deleteFeedback':
+          itemRes = handleDeleteFeedback_(ss, itemPayload);
+          break;
+        default:
+          throw new Error('Onbekende batch-actie: ' + itemAction);
+      }
+
+      results.push({
+        id: item.id || ('item-' + i),
+        action: itemAction,
+        ok: true,
+        result: itemRes
+      });
+    } catch (itemErr) {
+      results.push({
+        id: item.id || ('item-' + i),
+        action: itemAction,
+        ok: false,
+        error: String(itemErr && itemErr.message ? itemErr.message : itemErr)
+      });
+    }
+  }
+
+  if (needsFullPokedexSync) {
+    syncPokedexBinder_(ss, null);
+  } else if (touchedCardNames.length > 0) {
+    syncPokedexBinder_(ss, touchedCardNames);
+  }
+
+  return { results: results };
 }
 
 function handleLogTrade_(ss, payload) {
@@ -1646,8 +1799,12 @@ function syncPokedexBinder_(ss, filterCardNames) {
 
   var numRows = lastRow - (DEX_START_ROW - 1);
   var dexRows = pokedexSheet.getRange(DEX_START_ROW, 1, numRows, 10).getValues();
-  var valRange = pokedexSheet.getRange(DEX_START_ROW, 9, numRows, 1);
-  var dexValidations = valRange.getDataValidations ? valRange.getDataValidations() : null;
+  var hasFilter = Boolean(filterCardNames && filterCardNames.length > 0);
+  var dexValidations = null;
+  if (!hasFilter) {
+    var valRange = pokedexSheet.getRange(DEX_START_ROW, 9, numRows, 1);
+    dexValidations = valRange.getDataValidations ? valRange.getDataValidations() : null;
+  }
 
   var updatedSlots = 0;
   var multiMatches = [];
@@ -1657,7 +1814,7 @@ function syncPokedexBinder_(ss, filterCardNames) {
     if (!pokemonName) continue;
 
     // Bij gerichte edit: sla Pokémon over die niet voorkomen in de zojuist gewijzigde kaartnamen
-    if (filterCardNames && filterCardNames.length > 0) {
+    if (hasFilter) {
       var touched = false;
       for (var f = 0; f < filterCardNames.length; f++) {
         if (doesCardMatchPokemon_(filterCardNames[f], pokemonName)) {
@@ -1683,13 +1840,16 @@ function syncPokedexBinder_(ss, filterCardNames) {
     var rowNum = i + DEX_START_ROW;
     var currentInBinder = dexRows[i][3] === true;
     var currentChoice = String(dexRows[i][8] || '').trim();
-    var currentRule = dexValidations && dexValidations[i] ? dexValidations[i][0] : null;
     var choiceCell = pokedexSheet.getRange(rowNum, 9);
     var checkCell = pokedexSheet.getRange(rowNum, 4);
+    var currentRule = hasFilter
+      ? (choiceCell.getDataValidation ? choiceCell.getDataValidation() : null)
+      : (dexValidations && dexValidations[i] ? dexValidations[i][0] : null);
+    var hasValidationLookup = hasFilter ? Boolean(choiceCell.getDataValidation) : Boolean(dexValidations);
 
     if (matches.length === 0) {
       var cleared = false;
-      if (currentRule || !dexValidations) {
+      if (currentRule || !hasValidationLookup) {
         choiceCell.clearDataValidations();
         if (currentRule) cleared = true;
       }
@@ -1737,7 +1897,7 @@ function syncPokedexBinder_(ss, filterCardNames) {
         choiceCell.setDataValidation(rule);
         rowChanged = true;
       }
-    } else if (currentRule || !dexValidations) {
+    } else if (currentRule || !hasValidationLookup) {
       choiceCell.clearDataValidations();
       if (currentRule) rowChanged = true;
     }

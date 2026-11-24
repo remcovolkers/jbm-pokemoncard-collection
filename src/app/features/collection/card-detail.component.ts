@@ -130,7 +130,23 @@ export class CardDetailComponent {
 
       const key = `${card.rowIndex}:${card.cardId}`;
       if (this.loadedCardKey === key) return;
+
+      const prevDraft = this.editDraft();
+      const isTempRowRemap =
+        Boolean(prevDraft) &&
+        prevDraft!.cardId === card.cardId &&
+        prevDraft!.rowIndex < 0 &&
+        card.rowIndex >= 2 &&
+        this.loadedCardKey === `${prevDraft!.rowIndex}:${card.cardId}`;
+
       this.loadedCardKey = key;
+      if (isTempRowRemap && prevDraft) {
+        this.editDraft.set({ ...prevDraft, rowIndex: card.rowIndex });
+        if (Number(this.paramMap().get('rowIndex')) < 0) {
+          void this.router.navigate(['/collectie/kaart', card.rowIndex, card.cardId], { replaceUrl: true });
+        }
+        return;
+      }
 
       this.editDraft.set({
         ...card,
