@@ -1,7 +1,7 @@
 # Feature Brief: UX Slag B — Slankere Mobiele Quick Add, Collectie Filter-Sheet & Pokédex 3×3 Fit
 
 - **Datum:** 2026-11-24
-- **Status:** Concept — wacht op gezamenlijke review
+- **Status:** Gebouwd (2026-11-24)
 - **Impactniveau:** Groot / Mobiele Ergonomie & Invoer-versnelling
 - **Release-type verwachting:** WebView OTA (`apkChanged: false`)
 
@@ -27,18 +27,18 @@
 ---
 
 ## 3. Must-Have Scope (UX Slag B — per onderdeel aan/uit te vinken)
-- [ ] **1. Kaart Toevoegen (`/toevoegen`) — Progressive Disclosure & Slimme Opslaan-knop ([`quick-add.component.html`](../../src/app/features/quick-add/quick-add.component.html), [`.ts`](../../src/app/features/quick-add/quick-add.component.ts)):**
+- [x] **1. Kaart Toevoegen (`/toevoegen`) — Progressive Disclosure & Slimme Opslaan-knop ([`quick-add.component.html`](../../src/app/features/quick-add/quick-add.component.html), [`.ts`](../../src/app/features/quick-add/quick-add.component.ts)):**
   - **Snel-chips op basis van modus:** Toon *Snel testen* (`DLR 11`, `MEW 181`...) uitsluitend in **Demo-modus**; toon in **Live-modus** je **3 laatst gebruikte setcodes** (idealiter uit recente kaarten / laatste `Pack Opening` invoer) om in 1 tik door te zoeken.
   - **Compacter handmatig & formulieropbouw (Progressive Disclosure):** Zet *Handmatig invoeren* als subtiele link/knop onder de zoekbalk, en bundel zelden veranderde opties (*Grading Slab Status, Herkomst, Taal, Aankoopprijs & Te ruil*) in één inklapbare accordeon **"Meer opties"** met live samenvatting (*bijv. `Raw · EN · Niet te ruil`*).
   - **Slimmere `.qa-dock` opslaan-acties:**
     - Pack Opening Mode **UIT:** één heldere primaire CTA **"Opslaan"** (gaat terug / slaat op) + compacte knop ernaast voor *"+ Nog een"*.
     - Pack Opening Mode **AAN:** één heldere primaire CTA **"Opslaan & Volgende kaart"** (zonder tweeregelige tekstpropping op 390 px).
   - **Consistente desktop header:** Vervang zwevende `×` op desktop (`/toevoegen`) door *Terug naar collectie* zoals op Kaartdetail.
-- [ ] **2. Collectie (`/collectie`) — 1-rij Mobiele Controls + Filter Sheet & `>1` Hoeveelheidsbadge ([`collection.component.html`](../../src/app/features/collection/collection.component.html), [`.scss`](../../src/app/features/collection/collection.component.scss)):**
+- [x] **2. Collectie (`/collectie`) — 1-rij Mobiele Controls + Filter Sheet & `>1` Hoeveelheidsbadge ([`collection.component.html`](../../src/app/features/collection/collection.component.html), [`.scss`](../../src/app/features/collection/collection.component.scss)):**
   - Verberg `×1` op losse kaarten in kaartengallery; toon `×2`, `×3`, … alleen bij dubbele exemplaren (`card.quantity > 1`).
   - **Mobiel (`< 768 px`):** Slank de sticky header af naar één zoek-/weergave-balk (`[Zoekbalk] [Filters (N)] [Grid/Lijst]`) + één compacte waardestrip (`25 kaarten (32×) · € 2.875,82`). Tikken op **Filters** opent een mobiele **Filter Bottom Sheet** (`pb-sheet--structured` + `pbSheetDismiss`) voor *Sortering, Set, Zeldzaamheid, Opslaglocatie* en *Alleen Te Ruil*, met directe *Filters resetten*-knop.
   - **Desktop (`>= 768 px`):** Behoud directe inline filters & sortering (want desktop heeft de breedte wél).
-- [ ] **3. Pokédex Binder (`/pokedex`) — 3×3 Pagina Past in Eén Blik op Mobiel ([`pokedex-binder.component.html`](../../src/app/features/pokedex-binder/pokedex-binder.component.html), [`.scss`](../../src/app/features/pokedex-binder/pokedex-binder.component.scss)):**
+- [x] **3. Pokédex Binder (`/pokedex`) — 3×3 Pagina Past in Eén Blik op Mobiel ([`pokedex-binder.component.html`](../../src/app/features/pokedex-binder/pokedex-binder.component.html), [`.scss`](../../src/app/features/pokedex-binder/pokedex-binder.component.scss)):**
   - Zet op mobiel (`< 768 px`) de *Generatie*-pills om naar een compacte `<select>`-dropdown direct naast de formaatkiezer `3×3 (9)` (en comprimeer/balanceer de Controls-hoogte), zodat alle 9 pockets van een 3×3 pagina in één blik zonder verticaal scrollen boven de bottom nav zichtbaar blijven. (Op desktop blijven de 10 generatie-pills op 1 strakke rij behouden.)
 
 ---
@@ -47,12 +47,12 @@
 
 ### Consistentie-scan: Soortgelijke plekken in de app
 *Andere schermen/onderdelen die naadloos op deze slankere mobiele flows aansluiten:*
-- [ ] **Set Voortgang → "+ Kaart uit set toevoegen" ([`set-progress.component.html`](../../src/app/features/set-progress/set-progress.component.html)):** Momenteel opent klikken op een set in `/meer/sets` alleen jouw *bestaande* kaarten in Collectie. Voeg op elke setkaart (en optioneel in Collectie bij actief setfilter) een secundaire knop toe die `/toevoegen` direct opent in *Alle Sets*-modus met die specifieke set al ingeladen!
-- [ ] **Kaartdetail mobiele quick-actions ([`card-detail.component.html`](../../src/app/features/collection/card-detail.component.html)):** Maak de Hero-kaart op mobiel compacter (of plaats een compacte `− 1× +` & *Te ruil*-schakelaar hoog in beeld) zodat de meest voorkomende mutatie direct bereikbaar is zonder eerst voorbij het grote artwork en de Cardmarket-knop te scrollen.
+- [x] **Set Voortgang → "+ Kaart uit set toevoegen" ([`set-progress.component.html`](../../src/app/features/set-progress/set-progress.component.html)):** Momenteel opent klikken op een set in `/meer/sets` alleen jouw *bestaande* kaarten in Collectie. Voeg op elke setkaart (en optioneel in Collectie bij actief setfilter) een secundaire knop toe die `/toevoegen` direct opent in *Alle Sets*-modus met die specifieke set al ingeladen!
+- [x] **Kaartdetail mobiele quick-actions ([`card-detail.component.html`](../../src/app/features/collection/card-detail.component.html)):** Maak de Hero-kaart op mobiel compacter (of plaats een compacte `− 1× +` & *Te ruil*-schakelaar hoog in beeld) zodat de meest voorkomende mutatie direct bereikbaar is zonder eerst voorbij het grote artwork en de Cardmarket-knop te scrollen.
 
 ### Aanbevolen om direct mee te nemen (V1 Quick Wins)
-- [ ] **Herbruikbare Filter Bottom Sheet-patronen:** Gebruik dezelfde `ModalScrollLockService` + `pbSheetDismiss` + veilige onderactie *Toepassen (X resultaten)* als alle andere bottom sheets in de app, zodat filteren op mobiel exact vertrouwd aanvoelt.
-- [ ] **Slimme accordeon-state onthouden op Quick Add:** Klap *"Meer opties"* alleen automatisch open als er via een duplicaat/prefill specifieke afwijkende waarden actief zijn (of gebruiker dat aanlaat in Pack Opening Mode).
+- [x] **Herbruikbare Filter Bottom Sheet-patronen:** Gebruik dezelfde `ModalScrollLockService` + `pbSheetDismiss` + veilige onderactie *Toepassen (X resultaten)* als alle andere bottom sheets in de app, zodat filteren op mobiel exact vertrouwd aanvoelt.
+- [x] **Slimme accordeon-state onthouden op Quick Add:** Klap *"Meer opties"* alleen automatisch open als er via een duplicaat/prefill specifieke afwijkende waarden actief zijn (of gebruiker dat aanlaat in Pack Opening Mode).
 
 ### Logische vervolgstappen (V2 / Later)
 - [ ] **Virtual scrolling / paginering in Collectie boven 400+ kaarten** (soepel renderen op Android bij grote Master Sets).

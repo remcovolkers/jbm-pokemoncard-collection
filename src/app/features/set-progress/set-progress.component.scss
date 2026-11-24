@@ -117,8 +117,6 @@
 }
 
 .set-item {
-  @include pressable;
-  @include focus-ring;
   width: 100%;
   text-align: left;
   display: flex;
@@ -133,6 +131,17 @@
     &:hover {
       border-color: rgba($color-secondary, 0.55);
     }
+  }
+
+  &__main {
+    @include pressable;
+    @include focus-ring;
+    width: 100%;
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 0;
   }
 
   &__top {
@@ -198,18 +207,39 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: $space-sm;
+    gap: 0.5rem;
     flex-wrap: wrap;
     font-size: 0.7rem;
     color: $color-on-surface-muted;
   }
 
+  &__actions {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    flex-wrap: wrap;
+  }
+
+  &__add-btn {
+    min-height: 36px;
+    padding: 0.3rem 0.65rem;
+    font-size: 0.74rem;
+
+    .material-symbols-outlined {
+      font-size: 16px;
+    }
+  }
+
   &__cta {
+    @include touch-target(36px);
+    @include focus-ring;
     display: inline-flex;
     align-items: center;
     gap: 2px;
+    padding: 0 0.25rem;
     color: $color-primary;
     font-weight: 600;
+    font-size: 0.74rem;
 
     .material-symbols-outlined {
       font-size: 16px;

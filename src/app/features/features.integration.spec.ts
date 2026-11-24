@@ -236,7 +236,24 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
 
       comp.resetFilters();
       expect(comp.hasActiveFilters()).toBe(false);
+      expect(comp.activeSheetFilterCount()).toBe(0);
       expect(comp.filteredCards().length).toBe(total);
+
+      // Verberg ×1 badge op unieke kaarten, toon ×N wel op dubbele kaarten
+      fixture.detectChanges();
+      const qtyBadges = Array.from(
+        (fixture.nativeElement as HTMLElement).querySelectorAll('.overlay-pill--qty')
+      ).map((el) => el.textContent?.trim());
+      expect(qtyBadges.length).toBeGreaterThan(0);
+      expect(qtyBadges.every((txt) => txt !== '×1')).toBe(true);
+
+      // Mobiele Filter Bottom Sheet opent, telt actieve filters en sluit weer
+      comp.openFilterSheet();
+      comp.onlyForTrade.set(true);
+      expect(comp.isFilterSheetOpen()).toBe(true);
+      expect(comp.activeSheetFilterCount()).toBe(1);
+      comp.closeFilterSheet();
+      expect(comp.isFilterSheetOpen()).toBe(false);
     });
 
     it('ondersteunt alle 5 sorteermodi inclusief numerieke kaartnummer-sortering', () => {
@@ -763,6 +780,10 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
 
       comp.query.set('151');
       expect(comp.filteredSets().length).toBe(1);
+      comp.addCardFromSet(comp.filteredSets()[0]);
+      expect(store.requestedQuickAddSearch()).toEqual({ mode: 'sets', query: '151' });
+      expect(navSpy).toHaveBeenCalledWith('/toevoegen');
+
       comp.openSetInCollection(comp.filteredSets()[0]);
       expect(store.requestedSetFilter()).toBe('151');
       expect(navSpy).toHaveBeenCalledWith('/collectie');
@@ -960,6 +981,24 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
 
       comp.onSetCardFilterChange('125');
       expect(comp.filteredSetCards().length).toBe(1);
+
+      // Demo-modus toont Snel testen en berekent recente setcodes; Live-modus verbergt demo-chips en toont Recente sets
+      const store = TestBed.inject(CollectionStore);
+      expect(comp.recentSetCodes().length).toBeGreaterThan(0);
+      comp.inputMode.set('code');
+      fixture.detectChanges();
+      expect(el.textContent).toContain('Snel testen');
+
+      store.updateConfig({ demoMode: false });
+      comp.storedRecentSetCodes.set(['MEW', 'EVS']);
+      comp.toggleMoreOptions();
+      fixture.detectChanges();
+      expect(comp.showMoreOptions()).toBe(true);
+      expect(el.querySelector('.qa-more-panel')).not.toBeNull();
+      expect(comp.moreOptionsSummary()).toContain('Raw');
+      expect(el.textContent).not.toContain('Snel testen');
+      expect(el.textContent).toContain('Recente sets');
+      expect(comp.recentSetCodes()).toEqual(['MEW', 'EVS']);
     });
   });
 

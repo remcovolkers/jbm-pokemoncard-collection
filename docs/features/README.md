@@ -19,4 +19,4 @@ In deze map worden grote nieuwe features eerst uitgewerkt als **Feature Brief** 
 | :--- | :--- | :--- | :--- |
 | 2026-11-24 | [Horizontaal Swipen bij Vorige / Volgende-navigatie](./2026-11-24-swipe-navigatie-vorige-volgende.md) | **Gebouwd** | WebView OTA |
 | 2026-11-24 | [UX Slag A — Rustige Shell, Slimme Detail-dock, Klikbaar Dashboard & Beheerschermen](./2026-11-24-ux-slag-a-shell-dashboard-beheer.md) | **Gebouwd** | WebView OTA |
-| 2026-11-24 | [UX Slag B — Slankere Mobiele Quick Add, Collectie Filter-Sheet & Pokédex 3×3 Fit](./2026-11-24-ux-slag-b-mobiele-focus-quick-add-collectie-binder.md) | **Concept** | WebView OTA |
+| 2026-11-24 | [UX Slag B — Slankere Mobiele Quick Add, Collectie Filter-Sheet & Pokédex 3×3 Fit](./2026-11-24-ux-slag-b-mobiele-focus-quick-add-collectie-binder.md) | **Gebouwd** | WebView OTA |

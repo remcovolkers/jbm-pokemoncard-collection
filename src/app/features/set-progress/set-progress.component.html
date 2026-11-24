@@ -82,44 +82,64 @@
   } @else {
     <div class="sets-list">
       @for (set of filteredSets(); track set.setName) {
-        <button
-          type="button"
+        <article
           class="pb-card set-item"
           [class.set-item--empty]="set.ownedUnique === 0"
-          (click)="openSetInCollection(set)"
         >
-          <div class="set-item__top">
-            <div class="set-item__left">
-              <div class="set-item__code mono">
-                {{ set.setCode || set.setName.slice(0, 3).toUpperCase() }}
+          <button
+            type="button"
+            class="set-item__main"
+            (click)="openSetInCollection(set)"
+          >
+            <div class="set-item__top">
+              <div class="set-item__left">
+                <div class="set-item__code mono">
+                  {{ set.setCode || set.setName.slice(0, 3).toUpperCase() }}
+                </div>
+                <div class="set-item__titles">
+                  <h3>{{ set.setName }}</h3>
+                  <span class="mono">{{ set.series || 'Pokémon TCG' }}</span>
+                </div>
               </div>
-              <div class="set-item__titles">
-                <h3>{{ set.setName }}</h3>
-                <span class="mono">{{ set.series || 'Pokémon TCG' }}</span>
+              <div class="set-item__right">
+                <strong class="mono set-item__pct">{{ formatPercent(set.progressPercent, false) }}</strong>
+                <span class="mono set-item__rem">Nog {{ set.remaining }} nodig</span>
               </div>
             </div>
-            <div class="set-item__right">
-              <strong class="mono set-item__pct">{{ formatPercent(set.progressPercent, false) }}</strong>
-              <span class="mono set-item__rem">Nog {{ set.remaining }} nodig</span>
-            </div>
-          </div>
 
-          <div class="pb-progress pb-progress--lg">
-            <div
-              class="pb-progress__bar"
-              [class.pb-progress__bar--amber]="set.progressPercent < 50"
-              [style.width.%]="set.progressPercent"
-            ></div>
-          </div>
+            <div class="pb-progress pb-progress--lg">
+              <div
+                class="pb-progress__bar"
+                [class.pb-progress__bar--amber]="set.progressPercent < 50"
+                [style.width.%]="set.progressPercent"
+              ></div>
+            </div>
+          </button>
 
           <div class="set-item__foot mono">
-            <span>{{ set.ownedUnique }} / {{ set.totalCards }} unieke kaarten</span>
-            <span class="set-item__cta">
-              {{ formatEur(set.totalSetValue) }} · Bekijk in Collectie
-              <span class="material-symbols-outlined">chevron_right</span>
+            <span class="set-item__summary">
+              {{ set.ownedUnique }}/{{ set.totalCards }} · {{ formatEur(set.totalSetValue) }}
             </span>
+            <div class="set-item__actions">
+              <button
+                type="button"
+                class="pb-btn pb-btn--secondary set-item__add-btn"
+                (click)="addCardFromSet(set, $event)"
+              >
+                <span class="material-symbols-outlined">add_circle</span>
+                <span>Kaart toevoegen</span>
+              </button>
+              <button
+                type="button"
+                class="set-item__cta"
+                (click)="openSetInCollection(set)"
+              >
+                <span>Collectie</span>
+                <span class="material-symbols-outlined">chevron_right</span>
+              </button>
+            </div>
           </div>
-        </button>
+        </article>
       }
     </div>
   }

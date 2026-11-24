@@ -78,7 +78,7 @@ export class CollectionStore {
   readonly requestedSetFilter = signal<string | null>(null);
   readonly requestedPokedexFilter = signal<'all' | 'missing' | 'in_collection' | 'in_binder' | 'upgrade' | null>(null);
   readonly requestedPokedexGen = signal<number | null>(null);
-  readonly requestedQuickAddSearch = signal<{ mode: 'code' | 'name'; query: string } | null>(null);
+  readonly requestedQuickAddSearch = signal<{ mode: 'code' | 'name' | 'sets'; query: string } | null>(null);
 
   // Derived Computed Signals
   readonly collection = computed(() => this.snapshot().collection);

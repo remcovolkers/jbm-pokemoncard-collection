@@ -22,6 +22,8 @@ import { CollectionStore } from '../../core/state/collection.store';
 import { CardArtworkComponent } from '../../shared/card-artwork/card-artwork.component';
 import { PbBinderSwipeDirective } from '../../shared/directives/binder-swipe.directive';
 
+const RECENT_SET_CODES_KEY = 'pokebinder_recent_set_codes_v1';
+
 const SERIES_SORT_PRIORITY: Record<string, number> = {
   me: 10,
   sv: 20,
@@ -76,7 +78,9 @@ export class QuickAddComponent implements OnInit, OnDestroy {
     const requested = this.store.requestedQuickAddSearch();
     if (requested) {
       this.store.requestedQuickAddSearch.set(null);
-      if (requested.mode === 'name') {
+      if (requested.mode === 'sets') {
+        void this.openSetByQuery(requested.query);
+      } else if (requested.mode === 'name') {
         this.inputMode.set('name');
         this.nameQuery.set(requested.query);
         void this.searchByName(requested.query);
@@ -255,6 +259,7 @@ export class QuickAddComponent implements OnInit, OnDestroy {
   readonly forTrade = signal(false);
   readonly notes = signal('');
   readonly isSaving = signal(false);
+  readonly showMoreOptions = signal(false);
 
   // Handmatige override wanneer kaart niet in TCGdex gevonden wordt of offline
   readonly manualName = signal('');
@@ -262,6 +267,36 @@ export class QuickAddComponent implements OnInit, OnDestroy {
   readonly manualNumber = signal('');
 
   readonly packMode = computed(() => this.store.packDefaults().enabled);
+
+  readonly storedRecentSetCodes = signal<string[]>(this.loadRecentSetCodes());
+  readonly recentSetCodes = computed(() => {
+    const list: string[] = [];
+    const pushCode = (raw: string) => {
+      const clean = raw.trim().toUpperCase();
+      if (clean && !list.includes(clean)) list.push(clean);
+    };
+    for (const c of this.storedRecentSetCodes()) pushCode(c);
+    for (const card of this.store.collection()) {
+      if (list.length >= 3) break;
+      pushCode(getDisplaySetCode(card.cardId, card.setName));
+    }
+    return list.slice(0, 3);
+  });
+
+  readonly moreOptionsSummary = computed(() => {
+    const parts: string[] = [];
+    const gradingLabel =
+      this.grading() === 'Raw'
+        ? 'Raw'
+        : `${this.grading()}${this.grade().trim() ? ' ' + this.grade().trim() : ''}`;
+    parts.push(gradingLabel);
+    parts.push(this.language());
+    if (this.acquisitionMethod()) parts.push(this.acquisitionMethod());
+    if (Number(this.purchasePrice()) > 0) parts.push(formatEur(Number(this.purchasePrice())));
+    parts.push(this.forTrade() ? 'Te ruil' : 'Niet te ruil');
+    if (this.notes().trim()) parts.push('Notitie');
+    return parts.join(' · ');
+  });
 
   // Duplicaatdetectie op exact Kaart-ID
   readonly existingMatch = computed(() => {
@@ -358,6 +393,23 @@ export class QuickAddComponent implements OnInit, OnDestroy {
 
   toggleAcquisitionMethod(method: string): void {
     this.acquisitionMethod.update((prev) => (prev === method ? '' : method));
+  }
+
+  toggleMoreOptions(): void {
+    this.showMoreOptions.update((open) => !open);
+  }
+
+  applyRecentSetCode(code: string): void {
+    this.inputMode.set('code');
+    this.codeQuery.set(`${code} `);
+    this.previewCard.set(null);
+    this.lookupError.set(null);
+    if (typeof document !== 'undefined') {
+      setTimeout(() => {
+        const input = document.getElementById('qa-code-input') as HTMLInputElement | null;
+        input?.focus();
+      }, 0);
+    }
   }
 
   onPurchasePriceChange(value: unknown): void {
@@ -556,6 +608,22 @@ export class QuickAddComponent implements OnInit, OnDestroy {
     el?.scrollIntoView?.({ block: 'nearest' });
   }
 
+  async openSetByQuery(query: string): Promise<void> {
+    await this.openSetsCatalog();
+    const needle = query.trim().toLowerCase();
+    if (!needle) return;
+    const sets = this.allSets();
+    const match =
+      sets.find((s) => s.name.toLowerCase() === needle || s.id.toLowerCase() === needle) ??
+      sets.find((s) => (s.code ?? '').toLowerCase() === needle) ??
+      sets.find((s) => s.name.toLowerCase().includes(needle));
+    if (match) {
+      await this.selectCatalogSet(match.id);
+    } else {
+      this.setSearchQuery.set(query);
+    }
+  }
+
   async openSetsCatalog(): Promise<void> {
     this.inputMode.set('sets');
     this.lookupError.set(null);
@@ -665,6 +733,7 @@ export class QuickAddComponent implements OnInit, OnDestroy {
     const existing = this.existingMatch();
     if (!existing) return;
     void this.haptics.success();
+    this.recordRecentSetCode(getDisplaySetCode(existing.cardId, existing.setName));
     await this.store.incrementExistingCard(existing, this.quantity());
     this.prepareNextCard(this.packMode());
   }
@@ -684,6 +753,12 @@ export class QuickAddComponent implements OnInit, OnDestroy {
 
     this.isSaving.set(true);
     try {
+      const usedSetCode =
+        parsed?.inputSetCode || (card ? getDisplaySetCode(card.id, card.setName) : '');
+      if (usedSetCode) {
+        this.recordRecentSetCode(usedSetCode);
+      }
+
       const nextPackMode = enablePackMode ? true : this.packMode();
       // Onthoud voorkeuren voor Pack Opening Mode
       this.store.updatePackDefaults({
@@ -776,5 +851,31 @@ export class QuickAddComponent implements OnInit, OnDestroy {
 
   shortCondName(cond: string): string {
     return cond.replace(/\s*\([A-Z]+\)/, '');
+  }
+
+  private recordRecentSetCode(rawCode: string): void {
+    const code = rawCode.trim().toUpperCase();
+    if (!code) return;
+    const next = [code, ...this.storedRecentSetCodes().filter((c) => c !== code)].slice(0, 5);
+    this.storedRecentSetCodes.set(next);
+    try {
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(RECENT_SET_CODES_KEY, JSON.stringify(next));
+      }
+    } catch {
+      // negeer opslagfout
+    }
+  }
+
+  private loadRecentSetCodes(): string[] {
+    try {
+      if (typeof window === 'undefined') return [];
+      const raw = window.localStorage.getItem(RECENT_SET_CODES_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : [];
+    } catch {
+      return [];
+    }
   }
 }

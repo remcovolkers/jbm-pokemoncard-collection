@@ -115,6 +115,39 @@
             </div>
           }
 
+          <!-- Snelle mobiele quick-actions zonder voorbij artwork te scrollen -->
+          <div class="hero-quick-bar" aria-label="Snelle kaartacties">
+            <div class="hero-quick-bar__stepper">
+              <button
+                type="button"
+                class="hero-quick-bar__btn"
+                aria-label="Snel aantal verminderen"
+                (click)="adjustDraftQty(-1)"
+              >
+                <span class="material-symbols-outlined">remove</span>
+              </button>
+              <span class="mono hero-quick-bar__qty">{{ draft.quantity }}×</span>
+              <button
+                type="button"
+                class="hero-quick-bar__btn hero-quick-bar__btn--primary"
+                aria-label="Snel aantal vermeerderen"
+                (click)="adjustDraftQty(1)"
+              >
+                <span class="material-symbols-outlined">add</span>
+              </button>
+            </div>
+
+            <button
+              type="button"
+              class="pb-pill pb-pill--interactive hero-quick-bar__trade"
+              [class.is-active-emerald]="draft.forTrade"
+              (click)="patchDraft({ forTrade: !draft.forTrade })"
+            >
+              <span class="material-symbols-outlined">swap_horiz</span>
+              <span>{{ draft.forTrade ? 'Te ruil: AAN' : 'Te ruil' }}</span>
+            </button>
+          </div>
+
           <a
             class="pb-btn pb-btn--surface pb-btn--full"
             [href]="activeCardmarketUrl()"

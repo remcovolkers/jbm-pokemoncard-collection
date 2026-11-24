@@ -268,6 +268,15 @@ describe('Mobiele UI, Gebaren, Routing & Toetsenbord Suite', () => {
         feedback.openComposer('Collectie');
         return { fixture, isOpen: () => feedback.isComposerOpen() };
       });
+
+      // 5. Collectie filter bottom sheet
+      await assertSwipeDismissBehavior(() => {
+        const fixture = TestBed.createComponent(CollectionComponent);
+        const comp = fixture.componentInstance;
+        fixture.detectChanges();
+        comp.openFilterSheet();
+        return { fixture, isOpen: () => comp.isFilterSheetOpen() };
+      });
     });
   });
 

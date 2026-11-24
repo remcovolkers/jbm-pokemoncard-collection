@@ -131,6 +131,11 @@ test('Collectie -> Kaartdetail -> Lightbox -> Vorige/Volgende -> Dirty-state & H
   await expect(countPill).toBeVisible();
   await expect(countPill).toContainText('€');
 
+  // Unieke kaarten verbergen ×1 badge; dubbele kaarten tonen wel ×2/×3
+  const qtyTexts = await page.locator('.card-slab .overlay-pill--qty').allInnerTexts();
+  expect(qtyTexts.length).toBeGreaterThan(0);
+  expect(qtyTexts.every((t) => t.trim() !== '×1')).toBe(true);
+
   await page.locator('.card-slab').first().click();
   await page.waitForURL(/\/collectie\/kaart\/\d+\//);
   await page.locator('.hero-card__art-btn').waitFor({ state: 'visible' });
@@ -188,17 +193,51 @@ test('Collectie -> Kaartdetail -> Lightbox -> Vorige/Volgende -> Dirty-state & H
   await expect(page.locator('.detail-dock')).toHaveCount(0);
 });
 
-test('Dashboard klikbare Gen 4 tegel en KPI drill-downs navigeren direct juist door', async ({ page }) => {
+test('Dashboard klikbare Gen 4 tegel en KPI drill-downs navigeren direct juist door', async ({ page }, testInfo) => {
   await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
   await expect(page.locator('.sync-strip')).toHaveCount(0);
 
   await page.locator('.gen-chip:has-text("Gen 4")').click();
   await page.waitForURL(/\/pokedex/);
-  await expect(page.locator('.gen-pills button:has-text("Gen 4")')).toHaveClass(/is-active/);
+  if (testInfo.project.name === 'mobile') {
+    await expect(page.locator('.dex-mobile-selects__gen')).toHaveValue('4');
+  } else {
+    await expect(page.locator('.gen-pills button:has-text("Gen 4")')).toHaveClass(/is-active/);
+  }
 
   await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
   await page.locator('.kpi-tile--link:has-text("Gerealiseerde winst")').click();
   await page.waitForURL(/\/meer\/ruil-verkoop/);
+});
+
+test('mobiele Pokédex 3x3 binder past volledig in één schermhoogte boven bottom-nav', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile', 'Mobiele 3x3 single-screen fit alleen op 390x844');
+
+  await page.goto('/pokedex', { waitUntil: 'domcontentloaded' });
+  await page.locator('.binder-sheet .pocket').nth(8).waitFor({ state: 'visible' });
+
+  // Eventuele update-banner sluiten zodat we de normale dagelijkse binderweergave meten
+  const bannerClose = page.locator('.update-banner__close');
+  if (await bannerClose.isVisible().catch(() => false)) {
+    await bannerClose.click();
+  }
+
+  const metrics = await page.evaluate(() => {
+    const pockets = document.querySelectorAll('.binder-sheet .pocket');
+    const lastPocket = pockets.item(8)?.getBoundingClientRect();
+    const bottomNav = document.querySelector('.bottom-nav')?.getBoundingClientRect();
+    return {
+      pocketCount: pockets.length,
+      lastPocketBottom: lastPocket ? lastPocket.y + lastPocket.height : 0,
+      bottomNavTop: bottomNav ? bottomNav.y : window.innerHeight,
+    };
+  });
+
+  expect(metrics.pocketCount).toBe(9);
+  expect(
+    metrics.lastPocketBottom,
+    `9e Pokédex vakje onderkant (${metrics.lastPocketBottom}) valt achter bottom-nav (${metrics.bottomNavTop})`
+  ).toBeLessThanOrEqual(metrics.bottomNavTop + 2);
 });
 
 test('Pokédex Binder -> ontbrekende Pokémon doorzetten naar Quick Add', async ({ page }) => {

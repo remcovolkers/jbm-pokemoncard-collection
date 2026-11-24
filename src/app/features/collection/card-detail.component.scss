@@ -229,6 +229,60 @@
   }
 }
 
+.hero-quick-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.45rem 0.55rem;
+  border-radius: $radius-md;
+  background-color: $color-surface-low;
+  border: 1px solid rgba($color-outline-variant, 0.5);
+
+  @include mq-md {
+    display: none;
+  }
+
+  &__stepper {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  &__btn {
+    @include pressable;
+    @include focus-ring;
+    width: 36px;
+    height: 36px;
+    border-radius: $radius-sm;
+    background-color: $color-surface-highest;
+    color: $color-on-surface;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    .material-symbols-outlined {
+      font-size: 18px;
+    }
+
+    &--primary {
+      background-color: $color-primary-container;
+      color: #ffffff;
+    }
+  }
+
+  &__qty {
+    min-width: 28px;
+    text-align: center;
+    font-size: 0.85rem;
+    font-weight: 700;
+  }
+
+  &__trade {
+    min-height: 36px;
+  }
+}
+
 .mini-stat {
   padding: 0.5rem 0.65rem;
   border-radius: $radius-sm;

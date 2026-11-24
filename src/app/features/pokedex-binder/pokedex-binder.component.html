@@ -57,7 +57,37 @@
       </div>
     </div>
 
-    <!-- Rij 2: Generatie Pills (volledige breedte, nooit achter dropdown verborgen) -->
+    <!-- Rij 2a (Mobiel < 768px): compacte dropdowns voor Generatie + Formaat zodat 3x3 op 1 scherm past -->
+    <div class="dex-mobile-selects">
+      <select
+        class="format-select dex-mobile-selects__gen"
+        aria-label="Filter op generatie"
+        [ngModel]="selectedGen()"
+        (ngModelChange)="selectGeneration(+$event)"
+      >
+        <option [value]="0">Alle ({{ store.pokedexStats().inBinder }}/{{ store.pokedexStats().total }})</option>
+        @for (gen of generations; track gen.id) {
+          <option [value]="gen.id">
+            {{ gen.shortLabel }} ({{ generationCounts().get(gen.id)?.owned ?? 0 }}/{{ generationCounts().get(gen.id)?.total ?? 0 }})
+          </option>
+        }
+      </select>
+
+      <select
+        class="format-select mono dex-mobile-selects__layout"
+        aria-label="Binder indeling"
+        [ngModel]="slotsPerPage()"
+        (ngModelChange)="changeSlotsPerPage($event)"
+      >
+        <option [value]="4">2×2 (4)</option>
+        <option [value]="9">3×3 (9)</option>
+        <option [value]="12">4×3 (12)</option>
+        <option [value]="16">4×4 (16)</option>
+        <option [value]="20">5×4 (20)</option>
+      </select>
+    </div>
+
+    <!-- Rij 2b (Desktop >= 768px): Generatie Pills op volle breedte -->
     <div class="gen-pills" role="tablist" aria-label="Generatiefilter">
       <button
         type="button"
@@ -150,6 +180,7 @@
       <!-- Visuele Binder Pagina (Obsidian Leather Sleeve Metaphor) -->
       <section
         class="binder-sheet"
+        [class.is-3x3]="gridCols() === 3"
         [class.is-wide]="gridCols() === 5"
         pbBinderSwipe
         [swipeEnabled]="totalPages() > 1"

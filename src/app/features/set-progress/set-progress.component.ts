@@ -61,6 +61,15 @@ export class SetProgressComponent {
     void this.router.navigateByUrl('/collectie');
   }
 
+  addCardFromSet(set: SetProgress, event?: Event): void {
+    event?.stopPropagation();
+    this.store.requestedQuickAddSearch.set({
+      mode: 'sets',
+      query: set.setName || set.setCode || '',
+    });
+    void this.router.navigateByUrl('/toevoegen');
+  }
+
   @HostListener('document:keydown', ['$event'])
   onGlobalKeydown(event: KeyboardEvent): void {
     if (event.key !== '/' || event.ctrlKey || event.metaKey || event.altKey) return;

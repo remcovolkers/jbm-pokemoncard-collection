@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, HostListener, OnInit, computed, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, HostListener, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { getDisplaySetCode } from '../../core/domain/card-id.utils';
@@ -6,14 +6,16 @@ import { calculateCardMetrics, formatEur, formatPercent, roundCurrency } from '.
 import { CollectionCard } from '../../core/domain/models';
 import { HapticsService } from '../../core/platform/haptics.service';
 import { isEditableEventTarget } from '../../core/platform/keyboard.utils';
+import { ModalScrollLockService } from '../../core/platform/modal-scroll-lock.service';
 import { CollectionStore } from '../../core/state/collection.store';
 import { CardArtworkComponent } from '../../shared/card-artwork/card-artwork.component';
+import { PbSheetDismissDirective } from '../../shared/directives/sheet-dismiss.directive';
 import { CollectionViewStateService, filterAndSortCollection } from './collection-view-state.service';
 
 @Component({
   selector: 'app-collection',
   standalone: true,
-  imports: [FormsModule, RouterLink, CardArtworkComponent],
+  imports: [FormsModule, RouterLink, CardArtworkComponent, PbSheetDismissDirective],
   templateUrl: './collection.component.html',
   styleUrl: './collection.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -23,6 +25,13 @@ export class CollectionComponent implements OnInit {
   private readonly viewState = inject(CollectionViewStateService);
   private readonly router = inject(Router);
   private readonly haptics = inject(HapticsService);
+  private readonly scrollLock = inject(ModalScrollLockService);
+
+  readonly isFilterSheetOpen = signal(false);
+
+  constructor() {
+    this.scrollLock.bind(() => this.isFilterSheetOpen(), () => this.closeFilterSheet());
+  }
 
   readonly formatEur = formatEur;
   readonly formatPercent = formatPercent;
@@ -89,6 +98,30 @@ export class CollectionComponent implements OnInit {
       this.selectedRarity() !== 'ALL' ||
       this.onlyForTrade()
   );
+
+  readonly activeSheetFilterCount = computed(
+    () =>
+      (this.selectedSet() !== 'ALL' ? 1 : 0) +
+      (this.selectedLocation() !== 'ALL' ? 1 : 0) +
+      (this.selectedRarity() !== 'ALL' ? 1 : 0) +
+      (this.onlyForTrade() ? 1 : 0)
+  );
+
+  openFilterSheet(): void {
+    void this.haptics.light();
+    this.isFilterSheetOpen.set(true);
+  }
+
+  closeFilterSheet(): void {
+    this.isFilterSheetOpen.set(false);
+  }
+
+  @HostListener('document:keydown.escape')
+  onEscapeKey(): void {
+    if (this.isFilterSheetOpen()) {
+      this.closeFilterSheet();
+    }
+  }
 
   ngOnInit(): void {
     const requestedSet = this.store.requestedSetFilter();

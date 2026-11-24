@@ -1,13 +1,14 @@
 <div class="qa-page">
-  <!-- Subheader -->
+  <!-- Consistente Desktop Subheader (net als Kaartdetail) -->
   <div class="qa-header">
+    <button type="button" class="pb-btn pb-btn--secondary" (click)="closePage()">
+      <span class="material-symbols-outlined">arrow_back</span>
+      <span>Terug naar collectie</span>
+    </button>
     <div class="qa-header__left">
       <span class="pb-dot pb-dot--primary pb-dot--pulse"></span>
       <h1>Kaart Toevoegen</h1>
     </div>
-    <button type="button" class="pb-btn pb-btn--icon" aria-label="Sluiten" (click)="closePage()">
-      <span class="material-symbols-outlined">close</span>
-    </button>
   </div>
 
   <!-- Segmented Mode Bar + Pack Opening Mode -->
@@ -118,14 +119,25 @@
           </button>
         </div>
 
-        <div class="example-chips">
-          <span class="example-chips__label">Snel testen:</span>
-          @for (ex of quickExamples; track ex) {
-            <button type="button" class="example-chip mono" (click)="applyExample(ex)">
-              {{ ex }}
-            </button>
-          }
-        </div>
+        @if (store.config().demoMode) {
+          <div class="example-chips">
+            <span class="example-chips__label">Snel testen:</span>
+            @for (ex of quickExamples; track ex) {
+              <button type="button" class="example-chip mono" (click)="applyExample(ex)">
+                {{ ex }}
+              </button>
+            }
+          </div>
+        } @else if (recentSetCodes().length > 0) {
+          <div class="example-chips">
+            <span class="example-chips__label">Recente sets:</span>
+            @for (code of recentSetCodes(); track code) {
+              <button type="button" class="example-chip mono" (click)="applyRecentSetCode(code)">
+                {{ code }}
+              </button>
+            }
+          </div>
+        }
       </div>
     } @else if (inputMode() === 'name') {
       <!-- Invoermodus 2: Zoeken op Pokémon-naam -->
@@ -542,9 +554,12 @@
         </div>
       </section>
     } @else {
-      <!-- Handmatige fallback invoer (ook bruikbaar als je offline bent) -->
+      <!-- Subtiele handmatige invoer (alleen nodig bij offline of speciale promo) -->
       <details class="manual-box">
-        <summary>Handmatig invoeren (bijv. offline of speciale promo)</summary>
+        <summary>
+          <span class="material-symbols-outlined">edit_note</span>
+          <span>Geen match gevonden? Handmatig invoeren</span>
+        </summary>
         <div class="manual-box__grid">
           <div class="pb-field">
             <label class="pb-label" for="m-name">Kaartnaam</label>
@@ -605,7 +620,7 @@
       </div>
     }
 
-    <!-- Touch-Friendly Attributen Stack -->
+    <!-- Touch-Friendly Kernvelden + Inklapbare "Meer opties" Accordeon -->
     <div class="attrs-stack">
       <!-- 1. Kaartvariant -->
       <div class="pb-field">
@@ -645,35 +660,9 @@
         </div>
       </div>
 
-      <!-- 3. Grading Slab Status -->
+      <!-- 3. Opslaglocatie & Aantal -->
       <div class="pb-field">
-        <span class="pb-label">3. Grading Slab Status</span>
-        <div class="pills-wrap">
-          @for (g of store.settings().gradings; track g) {
-            <button
-              type="button"
-              class="pb-pill pb-pill--interactive"
-              [class.is-active]="grading() === g"
-              (click)="grading.set(g)"
-            >
-              {{ g === 'Raw' ? 'Raw (Ongradeerd)' : g }}
-            </button>
-          }
-        </div>
-        @if (grading() !== 'Raw') {
-          <input
-            type="text"
-            class="pb-input mono grade-input"
-            placeholder="Grade cijfer (bijv. 10, 9.5, 9)"
-            [ngModel]="grade()"
-            (ngModelChange)="grade.set($event)"
-          />
-        }
-      </div>
-
-      <!-- 4. Opslaglocatie & Map Detail -->
-      <div class="pb-field">
-        <span class="pb-label">4. Opslaglocatie &amp; Binder</span>
+        <span class="pb-label">3. Opslaglocatie &amp; Aantal</span>
         <div class="pills-wrap">
           @for (loc of store.settings().storageLocations; track loc) {
             <button
@@ -686,99 +675,159 @@
             </button>
           }
         </div>
-        <input
-          type="text"
-          class="pb-input"
-          placeholder="Map / Deck detail (bijv. VaultX Pagina 4)"
-          [ngModel]="binderDetail()"
-          (ngModelChange)="binderDetail.set($event)"
-        />
-      </div>
-
-      <!-- 5. Herkomst / Pull Method (optioneel) -->
-      <div class="pb-field">
-        <div class="input-label-row">
-          <span class="pb-label">5. Herkomst / Pull Method (optioneel)</span>
-          <span class="field-hint">Optioneel — klik nogmaals om te wissen</span>
-        </div>
-        <div class="pills-wrap">
-          @for (method of acquisitionMethods(); track method) {
-            <button
-              type="button"
-              class="pb-pill pb-pill--interactive"
-              [class.is-active]="acquisitionMethod() === method"
-              (click)="toggleAcquisitionMethod(method)"
-            >
-              {{ method }}
-            </button>
-          }
-        </div>
-      </div>
-
-      <!-- 6. Aantal, Aankoopprijs & Taal -->
-      <div class="triple-grid">
-        <div class="pb-field">
-          <span class="pb-label">Aantal</span>
-          <div class="stepper-box">
-            <button type="button" class="stepper-box__btn" (click)="adjustQty(-1)">−</button>
-            <span class="mono stepper-box__val">{{ quantity() }}</span>
-            <button type="button" class="stepper-box__btn" (click)="adjustQty(1)">+</button>
+        <div class="loc-qty-row">
+          <input
+            type="text"
+            class="pb-input"
+            placeholder="Map / Deck detail (bijv. VaultX Pagina 4)"
+            aria-label="Map of deck detail"
+            [ngModel]="binderDetail()"
+            (ngModelChange)="binderDetail.set($event)"
+          />
+          <div class="stepper-box" aria-label="Aantal exemplaren">
+            <button type="button" class="stepper-box__btn" aria-label="Aantal verminderen" (click)="adjustQty(-1)">−</button>
+            <span class="mono stepper-box__val">{{ quantity() }}×</span>
+            <button type="button" class="stepper-box__btn" aria-label="Aantal vermeerderen" (click)="adjustQty(1)">+</button>
           </div>
         </div>
-
-        <div class="pb-field">
-          <label class="pb-label" for="qa-price">Aankoopprijs (€)</label>
-          <input
-            id="qa-price"
-            type="number"
-            step="0.01"
-            min="0"
-            class="pb-input mono"
-            placeholder="0.00"
-            [ngModel]="purchasePrice()"
-            (ngModelChange)="onPurchasePriceChange($event)"
-            (blur)="normalizePurchasePriceInput($event)"
-          />
-          @if (previewCard(); as card) {
-            @if (card.marketPriceEur > 0 && purchasePrice() !== card.marketPriceEur) {
-              <button type="button" class="price-optin-btn mono" (click)="applyMarketPriceAsPurchase()">
-                Marktprijs ({{ formatEur(card.marketPriceEur) }}) invullen als aankoopprijs
-              </button>
-            }
-          }
-        </div>
-
-        <div class="pb-field">
-          <label class="pb-label" for="qa-lang">Taal</label>
-          <select
-            id="qa-lang"
-            class="pb-select"
-            [ngModel]="language()"
-            (ngModelChange)="language.set($event)"
-          >
-            @for (lang of store.settings().languages; track lang) {
-              <option [value]="lang">{{ lang }}</option>
-            }
-          </select>
-        </div>
       </div>
 
-      <!-- Te ruil schakelaar -->
-      <div class="trade-row">
-        <span>Direct markeren als <strong>Te ruil / verkoop</strong></span>
+      <!-- Inklapbare Progressive Disclosure Accordeon: Meer opties -->
+      <div class="qa-more-card">
         <button
           type="button"
-          role="switch"
-          class="pb-switch"
-          [class.is-checked]="forTrade()"
-          [attr.aria-checked]="forTrade()"
-          (click)="forTrade.set(!forTrade())"
+          class="qa-more-toggle"
+          [attr.aria-expanded]="showMoreOptions()"
+          (click)="toggleMoreOptions()"
         >
-          <span class="pb-switch__thumb"></span>
+          <div class="qa-more-toggle__text">
+            <strong>Meer opties</strong>
+            <span class="mono qa-more-toggle__summary">{{ moreOptionsSummary() }}</span>
+          </div>
+          <span class="material-symbols-outlined qa-more-toggle__chev" [class.is-open]="showMoreOptions()">
+            expand_more
+          </span>
         </button>
+
+        @if (showMoreOptions()) {
+          <div class="qa-more-panel">
+            <!-- Grading Slab Status -->
+            <div class="pb-field">
+              <span class="pb-label">Grading Slab Status</span>
+              <div class="pills-wrap">
+                @for (g of store.settings().gradings; track g) {
+                  <button
+                    type="button"
+                    class="pb-pill pb-pill--interactive"
+                    [class.is-active]="grading() === g"
+                    (click)="grading.set(g)"
+                  >
+                    {{ g === 'Raw' ? 'Raw (Ongradeerd)' : g }}
+                  </button>
+                }
+              </div>
+              @if (grading() !== 'Raw') {
+                <input
+                  type="text"
+                  class="pb-input mono grade-input"
+                  placeholder="Grade cijfer (bijv. 10, 9.5, 9)"
+                  [ngModel]="grade()"
+                  (ngModelChange)="grade.set($event)"
+                />
+              }
+            </div>
+
+            <!-- Herkomst / Pull Method (optioneel) -->
+            <div class="pb-field">
+              <div class="input-label-row">
+                <span class="pb-label">Herkomst / Pull Method (optioneel)</span>
+                <span class="field-hint">Klik nogmaals om te wissen</span>
+              </div>
+              <div class="pills-wrap">
+                @for (method of acquisitionMethods(); track method) {
+                  <button
+                    type="button"
+                    class="pb-pill pb-pill--interactive"
+                    [class.is-active]="acquisitionMethod() === method"
+                    (click)="toggleAcquisitionMethod(method)"
+                  >
+                    {{ method }}
+                  </button>
+                }
+              </div>
+            </div>
+
+            <!-- Aankoopprijs & Taal -->
+            <div class="more-price-lang-grid">
+              <div class="pb-field">
+                <label class="pb-label" for="qa-price">Aankoopprijs (€)</label>
+                <input
+                  id="qa-price"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  class="pb-input mono"
+                  placeholder="0.00"
+                  [ngModel]="purchasePrice()"
+                  (ngModelChange)="onPurchasePriceChange($event)"
+                  (blur)="normalizePurchasePriceInput($event)"
+                />
+                @if (previewCard(); as card) {
+                  @if (card.marketPriceEur > 0 && purchasePrice() !== card.marketPriceEur) {
+                    <button type="button" class="price-optin-btn mono" (click)="applyMarketPriceAsPurchase()">
+                      Marktprijs ({{ formatEur(card.marketPriceEur) }}) invullen
+                    </button>
+                  }
+                }
+              </div>
+
+              <div class="pb-field">
+                <label class="pb-label" for="qa-lang">Taal</label>
+                <select
+                  id="qa-lang"
+                  class="pb-select"
+                  [ngModel]="language()"
+                  (ngModelChange)="language.set($event)"
+                >
+                  @for (lang of store.settings().languages; track lang) {
+                    <option [value]="lang">{{ lang }}</option>
+                  }
+                </select>
+              </div>
+            </div>
+
+            <!-- Te ruil schakelaar -->
+            <div class="trade-row">
+              <span>Direct markeren als <strong>Te ruil / verkoop</strong></span>
+              <button
+                type="button"
+                role="switch"
+                class="pb-switch"
+                [class.is-checked]="forTrade()"
+                [attr.aria-checked]="forTrade()"
+                (click)="forTrade.set(!forTrade())"
+              >
+                <span class="pb-switch__thumb"></span>
+              </button>
+            </div>
+
+            <!-- Notities -->
+            <div class="pb-field">
+              <label class="pb-label" for="qa-notes">Notities (optioneel)</label>
+              <input
+                id="qa-notes"
+                type="text"
+                class="pb-input"
+                placeholder="Sleeve, centering of opmerking…"
+                [ngModel]="notes()"
+                (ngModelChange)="notes.set($event)"
+              />
+            </div>
+          </div>
+        }
       </div>
 
-      <!-- 6. National Pokédex Automated Linking Banner -->
+      <!-- National Pokédex Automated Linking Banner -->
       @if (matchedPokedexEntry(); as dex) {
         <div class="dex-link-banner">
           <div class="dex-link-banner__icon">
@@ -793,28 +842,42 @@
     </div>
   </div>
 
-  <!-- Zwevende Actiebalk Onderaan -->
+  <!-- Slimme Zwevende Actiebalk Onderaan -->
   <div class="qa-dock">
-    <div class="qa-dock__inner">
-      <button
-        type="button"
-        class="pb-btn pb-btn--primary pb-btn--full"
-        [disabled]="isSaving() || (!previewCard() && !manualName().trim())"
-        (click)="saveCard(true)"
-      >
-        <span class="material-symbols-outlined is-filled">bookmark_add</span>
-        <span>Opslaan &amp; Nog een kaart</span>
-      </button>
+    <div class="qa-dock__inner" [class.is-pack-mode]="packMode()">
+      @if (packMode()) {
+        <button
+          type="button"
+          class="pb-btn pb-btn--primary pb-btn--full"
+          [disabled]="isSaving() || (!previewCard() && !manualName().trim())"
+          (click)="saveCard(true)"
+        >
+          <span class="material-symbols-outlined is-filled">bolt</span>
+          <span>Opslaan &amp; Volgende kaart</span>
+        </button>
+      } @else {
+        <button
+          type="button"
+          class="pb-btn pb-btn--primary pb-btn--full"
+          [disabled]="isSaving() || (!previewCard() && !manualName().trim())"
+          (click)="saveCard(false)"
+        >
+          <span class="material-symbols-outlined">save</span>
+          <span>Opslaan</span>
+        </button>
 
-      <button
-        type="button"
-        class="pb-btn pb-btn--secondary pb-btn--full"
-        [disabled]="isSaving() || (!previewCard() && !manualName().trim())"
-        (click)="saveCard(false)"
-      >
-        <span class="material-symbols-outlined">inventory_2</span>
-        <span>Opslaan &amp; Naar Collectie</span>
-      </button>
+        <button
+          type="button"
+          class="pb-btn pb-btn--secondary qa-dock__more"
+          [disabled]="isSaving() || (!previewCard() && !manualName().trim())"
+          aria-label="Opslaan en nog een kaart toevoegen"
+          title="Opslaan en nog een kaart toevoegen"
+          (click)="saveCard(true)"
+        >
+          <span class="material-symbols-outlined">add</span>
+          <span>Nog één</span>
+        </button>
+      }
     </div>
   </div>
 </div>

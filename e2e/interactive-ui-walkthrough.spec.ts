@@ -95,8 +95,9 @@ test('volledige scroll-doorloop op alle scrollbare schermen zonder overflow of J
   expect(errors.consoleErrors, `Onverwachte console.errors: ${errors.consoleErrors.join(' | ')}`).toEqual([]);
 });
 
-test('Collectie: zoeken, lijstweergave wisselen, wissen en filter resetten', async ({ page }) => {
+test('Collectie: zoeken, lijstweergave wisselen, wissen en filter resetten', async ({ page }, testInfo) => {
   const errors = attachErrorCollectors(page);
+  const isMobile = testInfo.project.name === 'mobile';
 
   await page.goto('/collectie', { waitUntil: 'domcontentloaded' });
   const searchInput = page.locator('#col-search-input');
@@ -116,11 +117,24 @@ test('Collectie: zoeken, lijstweergave wisselen, wissen en filter resetten', asy
   await page.locator('.search-wrap__clear').click();
   await expect(searchInput).toHaveValue('');
 
-  await page.locator('button:has-text("Te ruil / verkoop")').click();
-  const resetBtn = page.locator('.filter-reset');
-  await expect(resetBtn).toBeVisible();
-  await resetBtn.click();
-  await expect(resetBtn).toBeHidden();
+  if (isMobile) {
+    await page.locator('.mobile-filter-btn').click();
+    await expect(page.locator('.col-filter-sheet')).toBeVisible();
+    await page.locator('button[aria-label="Alleen te ruil of verkoop tonen"]').click();
+    await page.locator('.col-filter-sheet__footer .pb-btn--primary').click();
+    await expect(page.locator('.col-filter-sheet')).toBeHidden();
+
+    const resetMobile = page.locator('.filter-reset--mobile');
+    await expect(resetMobile).toBeVisible();
+    await resetMobile.click();
+    await expect(resetMobile).toBeHidden();
+  } else {
+    await page.locator('.filters-bar__desktop button:has-text("Te ruil / verkoop")').click();
+    const resetBtn = page.locator('.filters-bar__desktop .filter-reset');
+    await expect(resetBtn).toBeVisible();
+    await resetBtn.click();
+    await expect(resetBtn).toBeHidden();
+  }
 
   expect(errors.pageErrors).toEqual([]);
   expect(errors.consoleErrors).toEqual([]);
@@ -151,12 +165,20 @@ test('Kaart Toevoegen: alle 3 modi, set-picker zoeken & handmatig formulier invu
   await expect(page.locator('.set-picker__option').first()).toBeVisible();
   await page.keyboard.press('Escape');
 
-  // Tab 1: Code / ID -> Pack Opening Mode schakelen + handmatig formulier invullen
+  // Tab 1: Code / ID -> Pack Opening Mode + Meer opties accordeon + handmatig formulier
   await page.locator('button[role="tab"]:has-text("Code / ID")').click();
+  await expect(page.locator('.qa-dock .pb-btn--primary')).toContainText('Opslaan');
+
   const packSwitch = page.locator('.pack-card button[role="switch"]');
   await expect(packSwitch).toBeVisible();
   await packSwitch.click();
+  await expect(page.locator('.qa-dock .pb-btn--primary')).toContainText('Opslaan & Volgende kaart');
   await packSwitch.click();
+
+  await page.locator('.qa-more-toggle').click();
+  await expect(page.locator('#qa-price')).toBeVisible();
+  await page.locator('.qa-more-toggle').click();
+  await expect(page.locator('.qa-more-panel')).toHaveCount(0);
 
   const manualSummary = page.locator('details.manual-box summary');
   await manualSummary.click();
