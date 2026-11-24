@@ -1,6 +1,6 @@
 ---
 name: visual-qa
-description: Run real-browser mobile and desktop visual QA on PokéBinder using Playwright and Chrome DevTools before releasing UI changes.
+description: Run headless mobile and desktop visual QA on PokéBinder using isolated Playwright Chromium before releasing UI changes (without taking over personal Chrome).
 ---
 
 # PokéBinder Visual QA Runbook
@@ -20,10 +20,10 @@ Gebruik deze procedure na elke wijziging aan UI, styling, layout, navigatie of i
    *(Los draaien kan ook met `npm run test:e2e:walkthrough` of `npm run test:visual`.)*
 2. Inspecteer de gegenereerde viewport-screenshots in `e2e/screenshots/mobile/` en `e2e/screenshots/desktop/` met `read_file` op opvallende defecten (witruimte, afgeknipte tekst, overlappende knoppen, verkeerd uitgelijnde docks, zwak contrast of visuele ruis).
 
-## 2. Eerlijke UI/UX Critic (`ui-ux-reviewer`) & Chrome DevTools MCP
+## 2. Eerlijke UI/UX Critic (`ui-ux-reviewer`) & Headless Diepte-inspectie
 
 - Schakel waar nodig de custom agent [`ui-ux-reviewer`](../../agents/ui-ux-reviewer.md) in (of voer diens checklist zelf uit) om met de blik van een kritische Senior UX Developer feedback op **knopplaatsing, CTA-hiërarchie, progressive disclosure, dubbele controls, technisch jargon, mobiel vs. desktop schermruimte en best practices** op te leveren met een helder **`GO` / `NO-GO`**-oordeel.
-- Wanneer een scherm extra live CSS/DOM-onderzoek nodig heeft, gebruik je de `chrome_devtools` MCP-tools (`new_page`, `resize_page`, `take_snapshot`, `take_screenshot`, `get_css_styles`, `evaluate_script`, `list_console_messages`) op `http://127.0.0.1:4200`.
+- Wanneer een scherm, modal of bottom sheet extra CSS/DOM-onderzoek, `scrollTop`-controle of extra screenshots vereist, voer dat dan volledig geïsoleerd uit met **headless Playwright Chromium** op `http://127.0.0.1:4200` (en bekijk eventuele extra screenshots met `read_file`). Gebruik de `browser`-subagent / **Chrome DevTools MCP** uitsluitend op expliciet verzoek van de gebruiker (of wanneer een echte ingelogde Google-sessie strikt nodig is), zodat de persoonlijke Chrome-browser nooit ongevraagd wordt overgenomen.
 - Vergeet niet op Windows `127.0.0.1:4200` te gebruiken als `localhost` naar IPv6 `::1` zou wijzen.
 
 ## 3. Verplicht Pre-Push UX Rapportformaat

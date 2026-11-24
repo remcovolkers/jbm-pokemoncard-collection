@@ -29,7 +29,8 @@ Dit draait automatisch `ng serve` op `http://127.0.0.1:4200` (demo-modus werkt d
 
 ### 2. Visuele & interactieve diepte-inspectie
 - Bekijk de relevante screenshots in `e2e/screenshots/mobile/` en `e2e/screenshots/desktop/` daadwerkelijk met `read_file` (let op visuele balans, hiërarchie, afgeknipte tekst, overlappende badges/FABs, lege rijen en kleurcontrast).
-- Bij nieuwe/aangepaste schermen of interacties: inspecteer de app daarnaast interactief live op `http://127.0.0.1:4200` via **Chrome DevTools MCP** (of de `browser`-subagent) — scroll, vul inputs in, test `Tab`/`/`/`Escape`/`←`/`→`, open bottom sheets op mobiel en check `console` + layout-metrics.
+- Bij nieuwe/aangepaste schermen, modals of interacties: inspecteer de app daarnaast volledig geïsoleerd in **headless Playwright Chromium** op `http://127.0.0.1:4200` (voeg zo nodig interactieve Playwright-checks en screenshots van geopende modals/bottom sheets/nieuwe UI-staten toe en bekijk die met `read_file`) — scroll, vul inputs in, test `Tab`/`/`/`Escape`/`←`/`→`, check `console`, `scrollTop` en touch-target/layout-metrics headless.
+- Gebruik **Chrome DevTools MCP** of de `browser`-subagent **nooit automatisch** (dit neemt de eigen Chrome-browser van de gebruiker over); schakel die alleen in als de gebruiker er expliciet om vraagt.
 
 ### 3. Ergonomische & Best-Practice Audit Checklist
 Beoordeel elk gewijzigd scherm en aangrenzende flows op:
