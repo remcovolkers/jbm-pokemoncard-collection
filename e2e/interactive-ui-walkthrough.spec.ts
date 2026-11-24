@@ -400,7 +400,7 @@ test('Kaartdetail: doorscrollen, prijs bewerken en Herstellen', async ({ page })
 test('Modals & Bottom Sheets invullen zonder overflow: Verlanglijst, Ruil & Verkoop en Feedback', async ({ page }) => {
   const errors = attachErrorCollectors(page);
 
-  // 1. Verlanglijst 3D Showcase openen, 360° draaien/omdraaien naar achterkant & sluiten + formuliermodal
+  // 1. Verlanglijst fullscreen 3D Showcase openen (katana-reveal, klik+drag voor muis & duim, achterkant flip) + formuliermodal
   await page.goto('/meer/verlanglijst', { waitUntil: 'domcontentloaded' });
   const firstShowcaseArt = page.locator('.wl-card__art--showcase').first();
   await expect(firstShowcaseArt).toBeVisible();
@@ -408,26 +408,27 @@ test('Modals & Bottom Sheets invullen zonder overflow: Verlanglijst, Ruil & Verk
 
   const showcaseDialog = page.locator('.pb-showcase');
   await expect(showcaseDialog).toBeVisible();
+  await expect(page.locator('button:has-text("Auto-Showcase")')).toHaveCount(0);
+
   const stage = page.locator('.pb-showcase__stage');
   const stageBox = await stage.boundingBox();
   expect(stageBox).not.toBeNull();
 
-  // Sleep horizontaal over het 3D-podium om de kaart vrij rond te draaien
-  const startX = stageBox!.x + stageBox!.width * 0.3;
+  // Klik & sleep op de kaart (identiek voor muis en duim) en controleer dat de draaihoek blijft staan na loslaten
+  const startX = stageBox!.x + stageBox!.width * 0.35;
   const startY = stageBox!.y + stageBox!.height * 0.5;
   await page.mouse.move(startX, startY);
   await page.mouse.down();
   await page.mouse.move(startX + 120, startY - 18, { steps: 5 });
   await page.mouse.up();
+  await page.mouse.move(10, 10);
 
   const transformAfterDrag = await page.locator('.card3d').evaluate((el) => (el as HTMLElement).style.transform);
   expect(transformAfterDrag).not.toContain('rotateY(0.00deg)');
 
-  // Omdraaien naar Pokémon TCG achterkant & Auto-Showcase togglen
+  // Omdraaien naar Pokémon TCG achterkant
   await page.locator('.pb-showcase__ctrl-btn:has-text("Achterkant")').click();
   await expect(page.locator('.pb-showcase__ctrl-btn:has-text("Voorkant")')).toBeVisible();
-  await page.locator('.pb-showcase__ctrl-btn:has-text("Auto-Showcase")').click();
-  await expect(page.locator('.pb-showcase__ctrl-btn:has-text("Auto-Showcase")')).toHaveClass(/is-active/);
 
   const showcaseOverflow = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
   expect(showcaseOverflow, 'Horizontale overflow met 3D Showcase open').toBe(true);

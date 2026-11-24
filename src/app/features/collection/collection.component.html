@@ -248,6 +248,18 @@
                     >
                       <span class="material-symbols-outlined">cloud_upload</span>
                     </span>
+                  } @else if (isShowcaseEligible(card)) {
+                    <button
+                      type="button"
+                      class="card-slab__showcase-btn"
+                      [attr.aria-label]="card.name + ' in 3D Showcase bekijken'"
+                      title="Open 3D Showcase"
+                      (click)="$event.stopPropagation(); openShowcase(card)"
+                      (keydown.enter)="$event.stopPropagation(); openShowcase(card)"
+                      (keydown.space)="$event.preventDefault(); $event.stopPropagation(); openShowcase(card)"
+                    >
+                      <span class="material-symbols-outlined">3d_rotation</span>
+                    </button>
                   }
                 </div>
               </pb-card-artwork>
@@ -466,4 +478,11 @@
       </div>
     </div>
   }
+
+  <!-- Fullscreen 3D Kaart Showcase vanuit Collectie -->
+  <pb-card-showcase
+    [open]="!!activeShowcaseCard()"
+    [item]="activeShowcaseVm()"
+    (closed)="closeShowcase()"
+  />
 </div>

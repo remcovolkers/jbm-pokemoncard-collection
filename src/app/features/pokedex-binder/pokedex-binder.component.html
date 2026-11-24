@@ -542,16 +542,10 @@
     </div>
   }
 
-  <!-- 3D Showcase voor Rare+ kaarten in de Pokédex Binder -->
+  <!-- 3D Showcase voor bijzondere kaarten in de Pokédex Binder -->
   <pb-card-showcase
     [open]="!!activeShowcaseCard()"
     [item]="activeShowcaseVm()"
-    [currentIndex]="activeShowcaseIndex()"
-    [totalCount]="showcaseSlotCards().length"
-    [canPrev]="activeShowcaseIndex() > 0"
-    [canNext]="activeShowcaseIndex() >= 0 && activeShowcaseIndex() < showcaseSlotCards().length - 1"
     (closed)="closeShowcase()"
-    (prev)="showcasePrev()"
-    (next)="showcaseNext()"
   />
 </div>

@@ -2318,16 +2318,22 @@ function mapTcgdexRarity_(rarity) {
   var raw = String(rarity || '').trim();
   if (!raw) return 'Rare';
   var r = raw.toLowerCase();
-  if (r.indexOf('special illustration') !== -1) return 'Special Illustration Rare';
-  if (r.indexOf('illustration') !== -1) return 'Illustration Rare';
-  if (r.indexOf('hyper') !== -1 || r.indexOf('secret') !== -1) return 'Hyper Rare';
-  if (r.indexOf('ultra') !== -1 || r.indexOf('full art') !== -1) return 'Ultra Rare';
-  if (r.indexOf('double') !== -1) return 'Double Rare';
+  if (r.indexOf('special illustration') !== -1 || r === 'three star' || r === 'two shiny') {
+    return 'Special Illustration Rare';
+  }
+  if (r.indexOf('illustration') !== -1 || r === 'one star' || r === 'one shiny') {
+    return 'Illustration Rare';
+  }
+  if (r.indexOf('hyper') !== -1 || r.indexOf('secret') !== -1 || r === 'crown') return 'Hyper Rare';
+  if (r.indexOf('ultra') !== -1 || r.indexOf('full art') !== -1 || r === 'two star' || r === 'classic collection') {
+    return 'Ultra Rare';
+  }
+  if (r.indexOf('double') !== -1 || r === 'four diamond') return 'Double Rare';
   if (r.indexOf('promo') !== -1) return 'Promo';
   if (r.indexOf('holo') !== -1) return 'Vintage Holo';
-  if (r.indexOf('uncommon') !== -1) return 'Uncommon';
-  if (r.indexOf('common') !== -1) return 'Common';
-  if (r.indexOf('rare') !== -1) return 'Rare';
+  if (r.indexOf('uncommon') !== -1 || r === 'two diamond') return 'Uncommon';
+  if (r.indexOf('common') !== -1 || r === 'one diamond') return 'Common';
+  if (r.indexOf('rare') !== -1 || r === 'three diamond') return 'Rare';
   return raw;
 }
 

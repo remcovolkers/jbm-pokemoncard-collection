@@ -323,22 +323,10 @@
     </div>
   }
 
-  <!-- 3D Showcase voor Rare+ kaarten in de Trade Binder -->
+  <!-- 3D Showcase voor bijzondere kaarten in de Trade Binder -->
   <pb-card-showcase
     [open]="!!activeShowcaseCard()"
     [item]="activeShowcaseVm()"
-    [currentIndex]="activeShowcaseIndex()"
-    [totalCount]="showcaseTradeCards().length"
-    [canPrev]="activeShowcaseIndex() > 0"
-    [canNext]="activeShowcaseIndex() >= 0 && activeShowcaseIndex() < showcaseTradeCards().length - 1"
-    primaryActionLabel="Log deal"
-    primaryActionIcon="add_business"
-    secondaryActionLabel="Kaartdetail"
-    secondaryActionIcon="tune"
     (closed)="closeShowcase()"
-    (prev)="showcasePrev()"
-    (next)="showcaseNext()"
-    (primaryAction)="openShowcaseTradeModal()"
-    (secondaryAction)="openShowcaseDetail()"
   />
 </div>

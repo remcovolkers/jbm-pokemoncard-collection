@@ -370,19 +370,10 @@
     </a>
   </div>
 
-  <!-- 3D Showcase voor Top Waardevolste Rare+ Kaarten -->
+  <!-- 3D Showcase voor Top Waardevolste Kaarten -->
   <pb-card-showcase
     [open]="!!activeShowcaseCard()"
     [item]="activeShowcaseVm()"
-    [currentIndex]="activeShowcaseIndex()"
-    [totalCount]="showcaseTopCards().length"
-    [canPrev]="activeShowcaseIndex() > 0"
-    [canNext]="activeShowcaseIndex() >= 0 && activeShowcaseIndex() < showcaseTopCards().length - 1"
-    secondaryActionLabel="Kaartdetail"
-    secondaryActionIcon="tune"
     (closed)="closeShowcase()"
-    (prev)="showcasePrev()"
-    (next)="showcaseNext()"
-    (secondaryAction)="openActiveShowcaseDetail()"
   />
 </div>

@@ -548,6 +548,32 @@
   }
 }
 
+.card-slab__showcase-btn {
+  @include pressable;
+  @include focus-ring;
+  pointer-events: auto;
+  position: relative;
+  width: 28px;
+  height: 28px;
+  border-radius: $radius-full;
+  background-color: rgba($color-surface-lowest, 0.92);
+  border: 1px solid rgba($color-tertiary, 0.72);
+  color: $color-tertiary;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: -8px;
+  }
+
+  .material-symbols-outlined {
+    font-size: 15px;
+  }
+}
+
 // Lijstweergave
 .cards-list {
   display: flex;

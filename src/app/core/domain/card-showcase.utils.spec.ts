@@ -31,7 +31,7 @@ const baseCard: CollectionCard = {
   purchasePrice: 120,
   marketPrice: 195,
   forTrade: false,
-  notes: 'https://www.cardmarket.com/en/Pokemon/Products/Singles/151/Charizard-ex-V3',
+  notes: '',
 };
 
 const baseWish: WishlistItem = {
@@ -49,29 +49,60 @@ const baseWish: WishlistItem = {
   found: false,
 };
 
-describe('card-showcase.utils ("Bijzondere kaart = bijzondere view")', () => {
-  it('sluit alle Commons en Uncommons strikt uit en laat Rares / Illustration Rares / SIR / Promo toe', () => {
+describe('card-showcase.utils ("Alle binder-waardige kaarten special treatment, alleen saaie aanvullers niet")', () => {
+  it('geeft One Star (★), Two/Three Star, Crown, Shiny, Illustration Rare, Rare en Full Art wél de Showcase en sluit standaard Commons/Uncommons uit', () => {
     expect(evaluateRarityShowcaseEligibility('Common')).toBe(false);
     expect(evaluateRarityShowcaseEligibility('Uncommon')).toBe(false);
+    expect(evaluateRarityShowcaseEligibility('One Diamond')).toBe(false);
+    expect(evaluateRarityShowcaseEligibility('Two Diamond')).toBe(false);
     expect(evaluateRarityShowcaseEligibility('Basic Energy')).toBe(false);
 
+    expect(evaluateRarityShowcaseEligibility('One Star')).toBe(true);
+    expect(evaluateRarityShowcaseEligibility('Two Star')).toBe(true);
+    expect(evaluateRarityShowcaseEligibility('Three Star')).toBe(true);
+    expect(evaluateRarityShowcaseEligibility('Crown')).toBe(true);
+    expect(evaluateRarityShowcaseEligibility('One Shiny')).toBe(true);
     expect(evaluateRarityShowcaseEligibility('Rare')).toBe(true);
     expect(evaluateRarityShowcaseEligibility('Double Rare')).toBe(true);
     expect(evaluateRarityShowcaseEligibility('Illustration Rare')).toBe(true);
     expect(evaluateRarityShowcaseEligibility('Special Illustration Rare')).toBe(true);
     expect(evaluateRarityShowcaseEligibility('Ultra Rare')).toBe(true);
     expect(evaluateRarityShowcaseEligibility('Hyper Rare')).toBe(true);
-    expect(evaluateRarityShowcaseEligibility('Vintage Holo')).toBe(true);
     expect(evaluateRarityShowcaseEligibility('Promo')).toBe(true);
 
-    // Zelfs een Reverse Holo Common of Uncommon blijft uitgesloten
+    // One Star Bulbasaur én Full Art Bulbasaur krijgen allebei de 3D Showcase met cosmos-holo
+    expect(
+      isCollectionCardShowcaseEligible({
+        ...baseCard,
+        name: 'Bulbasaur',
+        cardNumber: '227',
+        rarity: 'One Star',
+        variant: 'Normal',
+        grading: 'Raw',
+      })
+    ).toBe(true);
+    expect(resolveShowcaseHoloStyle('One Star', 'Normal', false)).toBe('cosmos');
+
+    expect(
+      isCollectionCardShowcaseEligible({
+        ...baseCard,
+        name: 'Bulbasaur',
+        cardNumber: '166/165',
+        rarity: 'Common',
+        variant: 'Full Art',
+        grading: 'Raw',
+      })
+    ).toBe(true);
+
+    // Standaard Common / Uncommon aanvullers blijven rustig zonder 3D Showcase
     expect(
       isCollectionCardShowcaseEligible({
         ...baseCard,
         name: 'Caterpie',
         cardNumber: '010/165',
         rarity: 'Common',
-        variant: 'Reverse Holo',
+        variant: 'Normal',
+        grading: 'Raw',
       })
     ).toBe(false);
     expect(
@@ -81,23 +112,12 @@ describe('card-showcase.utils ("Bijzondere kaart = bijzondere view")', () => {
         cardNumber: '011/165',
         rarity: 'Uncommon',
         variant: 'Reverse Holo',
+        grading: 'Raw',
       })
     ).toBe(false);
-
-    // Illustration Rare met Normal variant krijgt wél de 3D Showcase
-    expect(
-      isCollectionCardShowcaseEligible({
-        ...baseCard,
-        name: 'Bulbasaur',
-        cardNumber: '166/165',
-        rarity: 'Illustration Rare',
-        variant: 'Normal',
-      })
-    ).toBe(true);
   });
 
-  it('bepaalt Verlanglijst showcase-geschiktheid met catalogus-rarity én offline fallback', () => {
-    // Met bekende catalogus-rarity wint de echte zeldzaamheid altijd
+  it('bepaalt Verlanglijst showcase-geschiktheid met One Star / catalogus-rarity én offline fallback', () => {
     expect(
       isWishlistItemShowcaseEligible(
         {
@@ -115,36 +135,24 @@ describe('card-showcase.utils ("Bijzondere kaart = bijzondere view")', () => {
       isWishlistItemShowcaseEligible(
         {
           ...baseWish,
-          cardName: 'Dragonair',
-          cardNumber: '181/165',
+          cardName: 'Bulbasaur',
+          cardNumber: '227',
           desiredVariant: 'Normal',
           priority: 'Gemiddeld',
         },
-        'Illustration Rare'
+        'One Star'
       )
     ).toBe(true);
 
-    // Zonder bekende catalogus-rarity vallen secret cardnummers, Holo/Alt Art en Grail netjes binnen de showcase
     expect(isSecretOrGalleryCardNumber('202/165')).toBe(true);
     expect(isSecretOrGalleryCardNumber('GG44')).toBe(true);
     expect(isSecretOrGalleryCardNumber('016/165')).toBe(false);
-
-    expect(
-      isWishlistItemShowcaseEligible({
-        ...baseWish,
-        cardName: 'Caterpie',
-        cardNumber: '010/165',
-        desiredVariant: 'Normal',
-        priority: 'Laag',
-      })
-    ).toBe(false);
-
     expect(isWishlistItemShowcaseEligible(baseWish)).toBe(true);
   });
 
-  it('bouwt rijke ShowcaseViewModels met juiste holoStyle, Cardmarket URL en officiële achterkant', () => {
+  it('bouwt schone fullscreen ShowcaseViewModels met juiste holoStyle, Graded Slab en officiële achterkant', () => {
     expect(OFFICIAL_POKEMON_CARD_BACK_URL).toContain('tcg.pokemon.com');
-    expect(resolveShowcaseHoloStyle('Hyper Rare', 'Full Art', true)).toBe('gold');
+    expect(resolveShowcaseHoloStyle('Crown', 'Normal', false)).toBe('gold');
     expect(resolveShowcaseHoloStyle('Illustration Rare', 'Normal', false)).toBe('cosmos');
     expect(resolveShowcaseHoloStyle('Rare', 'Reverse Holo', false)).toBe('reverse');
     expect(resolveShowcaseHoloStyle('Rare', 'Normal', false)).toBe('gloss');
@@ -153,11 +161,8 @@ describe('card-showcase.utils ("Bijzondere kaart = bijzondere view")', () => {
     expect(colVm.isGrail).toBe(true);
     expect(colVm.grading).toBe('PSA');
     expect(colVm.grade).toBe('10');
-    expect(colVm.cardmarketUrl).toContain('Charizard-ex-V3');
 
-    const wishVm = buildShowcaseFromWishlist(baseWish, 'Ultra Rare');
-    expect(wishVm.targetBudget).toBe(165);
-    expect(wishVm.marketPrice).toBe(158);
-    expect(wishVm.cardmarketUrl).toContain('cardmarket.com');
+    const wishVm = buildShowcaseFromWishlist(baseWish, 'One Star');
+    expect(wishVm.holoStyle).toBe('gold');
   });
 });

@@ -3,19 +3,25 @@ import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { getDisplaySetCode } from '../../core/domain/card-id.utils';
 import { calculateCardMetrics, formatEur, formatPercent, roundCurrency } from '../../core/domain/card-math.utils';
+import {
+  ShowcaseCardViewModel,
+  buildShowcaseFromCollectionCard,
+  isCollectionCardShowcaseEligible,
+} from '../../core/domain/card-showcase.utils';
 import { CollectionCard } from '../../core/domain/models';
 import { HapticsService } from '../../core/platform/haptics.service';
 import { isEditableEventTarget } from '../../core/platform/keyboard.utils';
 import { ModalScrollLockService } from '../../core/platform/modal-scroll-lock.service';
 import { CollectionStore } from '../../core/state/collection.store';
 import { CardArtworkComponent } from '../../shared/card-artwork/card-artwork.component';
+import { CardShowcaseComponent } from '../../shared/card-showcase/card-showcase.component';
 import { PbSheetDismissDirective } from '../../shared/directives/sheet-dismiss.directive';
 import { CollectionViewStateService, filterAndSortCollection } from './collection-view-state.service';
 
 @Component({
   selector: 'app-collection',
   standalone: true,
-  imports: [FormsModule, RouterLink, CardArtworkComponent, PbSheetDismissDirective],
+  imports: [FormsModule, RouterLink, CardArtworkComponent, CardShowcaseComponent, PbSheetDismissDirective],
   templateUrl: './collection.component.html',
   styleUrl: './collection.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -28,6 +34,7 @@ export class CollectionComponent implements OnInit {
   private readonly scrollLock = inject(ModalScrollLockService);
 
   readonly isFilterSheetOpen = signal(false);
+  readonly showcaseCardKey = signal<string | null>(null);
 
   constructor() {
     this.scrollLock.bind(() => this.isFilterSheetOpen(), () => this.closeFilterSheet());
@@ -118,9 +125,38 @@ export class CollectionComponent implements OnInit {
 
   @HostListener('document:keydown.escape')
   onEscapeKey(): void {
+    if (this.activeShowcaseCard()) {
+      this.closeShowcase();
+      return;
+    }
     if (this.isFilterSheetOpen()) {
       this.closeFilterSheet();
     }
+  }
+
+  readonly activeShowcaseCard = computed<CollectionCard | null>(() => {
+    const key = this.showcaseCardKey();
+    if (!key) return null;
+    return this.store.collection().find((c) => `${c.rowIndex}:${c.cardId}` === key) ?? null;
+  });
+
+  readonly activeShowcaseVm = computed<ShowcaseCardViewModel | null>(() => {
+    const active = this.activeShowcaseCard();
+    return active ? buildShowcaseFromCollectionCard(active) : null;
+  });
+
+  isShowcaseEligible(card: CollectionCard): boolean {
+    return isCollectionCardShowcaseEligible(card);
+  }
+
+  openShowcase(card: CollectionCard): void {
+    if (!this.isShowcaseEligible(card)) return;
+    void this.haptics.light();
+    this.showcaseCardKey.set(`${card.rowIndex}:${card.cardId}`);
+  }
+
+  closeShowcase(): void {
+    this.showcaseCardKey.set(null);
   }
 
   ngOnInit(): void {
@@ -151,11 +187,16 @@ export class CollectionComponent implements OnInit {
   }
 
   isHoloCard(card: CollectionCard): boolean {
+    const r = (card.rarity ?? '').trim().toLowerCase();
     return (
-      card.rarity === 'Special Illustration Rare' ||
-      card.rarity === 'Illustration Rare' ||
-      card.rarity === 'Hyper Rare' ||
-      card.variant === 'Alt Art'
+      r === 'special illustration rare' ||
+      r === 'illustration rare' ||
+      r === 'hyper rare' ||
+      r.includes('star') ||
+      r.includes('shiny') ||
+      r === 'crown' ||
+      card.variant === 'Alt Art' ||
+      card.variant === 'Full Art'
     );
   }
 

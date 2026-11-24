@@ -524,28 +524,15 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
       detail.resetDraft();
       appFixture.detectChanges();
 
-      // High-res Lightbox blijft open tijdens bladeren met pijltoetsen of horizontale swipe
+      // Fullscreen 3D Showcase opent met eenmalige katana-sheen, draait om met Spatie en sluit geen Common-kaarten in
       detail.openLightbox();
       appFixture.detectChanges();
       expect(detail.isLightboxOpen()).toBe(true);
+      expect(
+        (appFixture.nativeElement as HTMLElement).querySelector('.card3d__katana-sheen.is-active')
+      ).not.toBeNull();
+      expect((appFixture.nativeElement as HTMLElement).querySelector('.pb-showcase__panel')).toBeNull();
 
-      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight' }));
-      appFixture.detectChanges();
-      await appFixture.whenStable();
-      expect(router.url).toContain(`/collectie/kaart/${expectedNext!.rowIndex}/${expectedNext!.cardId}`);
-      expect(detail.isLightboxOpen()).toBe(true);
-
-      const showcasePanelEl = (appFixture.nativeElement as HTMLElement).querySelector(
-        '.pb-showcase__panel'
-      ) as HTMLElement;
-      expect(showcasePanelEl).not.toBeNull();
-      dispatchHorizontalTouch(showcasePanelEl, 140, 270);
-      appFixture.detectChanges();
-      await appFixture.whenStable();
-      expect(router.url).toContain(`/collectie/kaart/${first.rowIndex}/${first.cardId}`);
-      expect(detail.isLightboxOpen()).toBe(true);
-
-      // Spatie draait de 3D-kaart om naar 180° (achterkant) en Common-kaarten openen geen 3D Showcase
       document.dispatchEvent(new KeyboardEvent('keydown', { key: ' ' }));
       appFixture.detectChanges();
       const card3dEl = (appFixture.nativeElement as HTMLElement).querySelector('.card3d') as HTMLElement;
@@ -553,7 +540,7 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
 
       detail.closeLightbox();
 
-      const commonCard = store.collection().find((c) => c.rarity === 'Common');
+      const commonCard = store.collection().find((c) => c.rarity === 'Common' && c.variant === 'Normal');
       if (commonCard) {
         await router.navigate(['/collectie/kaart', commonCard.rowIndex, commonCard.cardId]);
         appFixture.detectChanges();
@@ -989,19 +976,14 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
       fixture.detectChanges();
 
       expect(comp.activeShowcaseWish()?.cardName).toBe(grailWish.cardName);
+      const backdropEl = (fixture.nativeElement as HTMLElement).querySelector('.pb-showcase-backdrop');
       const showcaseEl = (fixture.nativeElement as HTMLElement).querySelector('.pb-showcase');
       expect(showcaseEl).not.toBeNull();
-      expect(showcaseEl?.textContent).toContain(grailWish.cardName);
+      expect(backdropEl?.getAttribute('aria-label')).toContain(grailWish.cardName);
+      expect(showcaseEl?.querySelector('.card3d__katana-sheen.is-active')).not.toBeNull();
       expect(showcaseEl?.querySelector('.card3d__back-img')?.getAttribute('src')).toContain(
         'tcg.pokemon.com'
       );
-
-      if (comp.showcaseItems().length > 1) {
-        comp.showcaseNext();
-        expect(comp.activeShowcaseIndex()).toBe(1);
-        comp.showcasePrev();
-        expect(comp.activeShowcaseIndex()).toBe(0);
-      }
 
       comp.closeShowcase();
       expect(comp.activeShowcaseWish()).toBeNull();

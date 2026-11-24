@@ -7,43 +7,22 @@
     [attr.aria-label]="vm.name + ' 3D Showcase'"
     (click)="close()"
   >
-    <div class="pb-showcase" (click)="$event.stopPropagation()">
-      <!-- Top Header -->
-      <header class="pb-showcase__head">
-        <div class="pb-showcase__titles">
-          <div class="pb-showcase__eyebrow">
-            @if (vm.priority) {
-              <span
-                class="pb-pill"
-                [class.pb-pill--tertiary]="vm.isGrail"
-                [class.pb-pill--primary]="!vm.isGrail && vm.priority === 'Hoog'"
-                [class.pb-pill--neutral]="!vm.isGrail && vm.priority !== 'Hoog'"
-              >
-                {{ vm.isGrail ? '★ Grail Showcase' : vm.priority }}
-              </span>
-            } @else if (vm.rarity) {
-              <span class="pb-pill" [class.pb-pill--tertiary]="vm.isGrail" [class.pb-pill--primary]="!vm.isGrail">
-                {{ vm.rarity }}
-              </span>
-            }
-            <span class="mono pb-showcase__set">
-              {{ vm.setName }}{{ vm.setCode ? ' (' + vm.setCode + ')' : '' }}{{ vm.cardNumber ? ' · #' + vm.cardNumber : '' }}
-            </span>
-          </div>
-          <h2 class="pb-showcase__name">{{ vm.name }}</h2>
-        </div>
+    <!-- Subtiele zwevende sluitknop rechtsboven -->
+    <button
+      type="button"
+      class="pb-showcase__close"
+      aria-label="Vergroting sluiten"
+      (click)="$event.stopPropagation(); close()"
+    >
+      <span class="material-symbols-outlined">close</span>
+    </button>
 
-        <button
-          type="button"
-          class="pb-btn pb-btn--icon pb-showcase__close"
-          aria-label="Vergroting sluiten"
-          (click)="close()"
-        >
-          <span class="material-symbols-outlined">close</span>
-        </button>
-      </header>
-
-      <!-- 3D Interactive Stage -->
+    <!-- Volledig schermvullend 3D-podium -->
+    <div
+      class="pb-showcase"
+      (click)="$event.stopPropagation()"
+      (dragstart)="$event.preventDefault()"
+    >
       <div
         class="pb-showcase__stage"
         [class.is-dragging]="isDragging()"
@@ -51,119 +30,124 @@
         (pointermove)="onStagePointerMove($event)"
         (pointerup)="onStagePointerUp($event)"
         (pointercancel)="onStagePointerUp($event)"
-        (mouseleave)="onStageMouseLeave()"
         (dblclick)="resetAngle()"
       >
-        <div class="pb-showcase__aura" [attr.data-holo]="vm.holoStyle" aria-hidden="true"></div>
-
         <div
-          class="card3d"
-          [class.card3d--dragging]="isDragging()"
-          [class.card3d--slab]="isGradedSlab()"
+          class="pb-showcase__aura"
+          [class.is-unsheathing]="isUnsheathing()"
           [attr.data-holo]="vm.holoStyle"
-          [style.transform]="cardTransform()"
-          [style.--glare-x.%]="glareX()"
-          [style.--glare-y.%]="glareY()"
-          [style.--holo-pos.%]="holoShift()"
-          [style.--holo-opacity]="holoOpacity()"
-        >
-          <!-- Voorkant -->
-          <div class="card3d__face card3d__face--front">
-            @if (isGradedSlab()) {
-              <div class="card3d__slab-header">
-                <div class="card3d__slab-meta">
-                  <span class="mono card3d__slab-brand">{{ vm.grading }}</span>
-                  <span class="card3d__slab-card">{{ vm.name }} · #{{ vm.cardNumber }}</span>
-                </div>
-                <strong class="mono card3d__slab-grade">{{ vm.grade || 'MINT' }}</strong>
-              </div>
-            }
+          aria-hidden="true"
+        ></div>
 
-            <div class="card3d__art-wrap">
-              @if (vm.cardId || vm.imageUrl) {
-                <pb-card-artwork [cardId]="vm.cardId" [src]="vm.imageUrl" [alt]="vm.name" />
-              } @else {
-                <div class="card3d__mystery-front">
-                  <span class="material-symbols-outlined card3d__mystery-icon">auto_awesome</span>
-                  <strong class="card3d__mystery-title">{{ vm.name }}</strong>
-                  <span class="mono card3d__mystery-sub">{{ vm.setName }}</span>
-                  <span class="pb-pill pb-pill--tertiary">{{ vm.variant }}</span>
+        <div class="card3d-rig" [class.is-unsheathing]="isUnsheathing()">
+          <div
+            class="card3d"
+            [class.card3d--dragging]="isDragging()"
+            [class.card3d--slab]="isGradedSlab()"
+            [attr.data-holo]="vm.holoStyle"
+            [style.transform]="cardTransform()"
+            [style.--glare-x.%]="glareX()"
+            [style.--glare-y.%]="glareY()"
+            [style.--holo-pos.%]="holoShift()"
+            [style.--holo-opacity]="holoOpacity()"
+          >
+            <!-- Voorkant -->
+            <div class="card3d__face card3d__face--front">
+              @if (isGradedSlab()) {
+                <div class="card3d__slab-header">
+                  <div class="card3d__slab-meta">
+                    <span class="mono card3d__slab-brand">{{ vm.grading }}</span>
+                    <span class="card3d__slab-card">{{ vm.name }}{{ vm.cardNumber ? ' · #' + vm.cardNumber : '' }}</span>
+                  </div>
+                  <strong class="mono card3d__slab-grade">{{ vm.grade || 'MINT' }}</strong>
                 </div>
               }
-              <div class="card3d__holo" aria-hidden="true"></div>
-              <div class="card3d__glare" aria-hidden="true"></div>
-              <div class="card3d__rim" aria-hidden="true"></div>
+
+              <div class="card3d__art-wrap">
+                @if (vm.cardId || vm.imageUrl) {
+                  <pb-card-artwork [cardId]="vm.cardId" [src]="vm.imageUrl" [alt]="vm.name" />
+                } @else {
+                  <div class="card3d__mystery-front">
+                    <span class="material-symbols-outlined card3d__mystery-icon">auto_awesome</span>
+                    <strong class="card3d__mystery-title">{{ vm.name }}</strong>
+                    <span class="mono card3d__mystery-sub">{{ vm.setName }}</span>
+                    <span class="pb-pill pb-pill--tertiary">{{ vm.variant }}</span>
+                  </div>
+                }
+                <div class="card3d__holo" aria-hidden="true"></div>
+                <div class="card3d__glare" aria-hidden="true"></div>
+                <div
+                  class="card3d__katana-sheen"
+                  [class.is-active]="isUnsheathing()"
+                  aria-hidden="true"
+                ></div>
+                <div
+                  class="card3d__rim"
+                  [class.is-unsheathing]="isUnsheathing()"
+                  aria-hidden="true"
+                ></div>
+              </div>
             </div>
-          </div>
 
-          <!-- Achterkant (Officiële Pokémon TCG Card Back + offline SVG fallback) -->
-          <div class="card3d__face card3d__face--back">
-            @if (isGradedSlab()) {
-              <div class="card3d__slab-header card3d__slab-header--back">
-                <span class="mono">CERTIFIED AUTHENTIC · {{ vm.grading }} {{ vm.grade }}</span>
-              </div>
-            }
-
-            <div class="card3d__back-art">
-              @if (!cardBackFailed()) {
-                <img
-                  class="card3d__back-img"
-                  [src]="officialCardBackUrl"
-                  alt="Pokémon TCG kaart achterkant"
-                  decoding="async"
-                  (error)="cardBackFailed.set(true)"
-                />
-              } @else {
-                <svg
-                  class="card3d__back-svg"
-                  viewBox="0 0 250 350"
-                  role="img"
-                  aria-label="Pokémon TCG kaart achterkant"
-                >
-                  <defs>
-                    <radialGradient id="pbBackVortex" cx="50%" cy="50%" r="60%">
-                      <stop offset="0%" stop-color="#3b82f6" />
-                      <stop offset="48%" stop-color="#1d4ed8" />
-                      <stop offset="100%" stop-color="#0f1f4b" />
-                    </radialGradient>
-                  </defs>
-                  <rect width="250" height="350" rx="14" fill="#1b3b82" />
-                  <rect x="11" y="11" width="228" height="328" rx="9" fill="url(#pbBackVortex)" stroke="#60a5fa" stroke-opacity="0.35" stroke-width="2" />
-                  <ellipse cx="125" cy="175" rx="88" ry="118" fill="none" stroke="#93c5fd" stroke-opacity="0.24" stroke-width="6" transform="rotate(-18 125 175)" />
-                  <ellipse cx="125" cy="175" rx="64" ry="86" fill="none" stroke="#bfdbfe" stroke-opacity="0.28" stroke-width="4" transform="rotate(22 125 175)" />
-                  <circle cx="125" cy="175" r="46" fill="#0b132b" stroke="#e2e8f0" stroke-width="4" />
-                  <path d="M 81 175 A 44 44 0 0 1 169 175 Z" fill="#ef4444" />
-                  <path d="M 81 175 A 44 44 0 0 0 169 175 Z" fill="#f8fafc" />
-                  <rect x="80" y="171" width="90" height="8" fill="#0b132b" />
-                  <circle cx="125" cy="175" r="14" fill="#f8fafc" stroke="#0b132b" stroke-width="5" />
-                </svg>
+            <!-- Achterkant (Officiële Pokémon TCG Card Back + offline SVG fallback) -->
+            <div class="card3d__face card3d__face--back">
+              @if (isGradedSlab()) {
+                <div class="card3d__slab-header card3d__slab-header--back">
+                  <span class="mono">CERTIFIED AUTHENTIC · {{ vm.grading }} {{ vm.grade }}</span>
+                </div>
               }
-              <div class="card3d__glare" aria-hidden="true"></div>
-              <div class="card3d__rim" aria-hidden="true"></div>
+
+              <div class="card3d__back-art">
+                @if (!cardBackFailed()) {
+                  <img
+                    class="card3d__back-img"
+                    [src]="officialCardBackUrl"
+                    alt="Pokémon TCG kaart achterkant"
+                    decoding="async"
+                    draggable="false"
+                    (error)="cardBackFailed.set(true)"
+                  />
+                } @else {
+                  <svg
+                    class="card3d__back-svg"
+                    viewBox="0 0 250 350"
+                    role="img"
+                    aria-label="Pokémon TCG kaart achterkant"
+                  >
+                    <defs>
+                      <radialGradient id="pbBackVortex" cx="50%" cy="50%" r="60%">
+                        <stop offset="0%" stop-color="#3b82f6" />
+                        <stop offset="48%" stop-color="#1d4ed8" />
+                        <stop offset="100%" stop-color="#0f1f4b" />
+                      </radialGradient>
+                    </defs>
+                    <rect width="250" height="350" rx="14" fill="#1b3b82" />
+                    <rect x="11" y="11" width="228" height="328" rx="9" fill="url(#pbBackVortex)" stroke="#60a5fa" stroke-opacity="0.35" stroke-width="2" />
+                    <ellipse cx="125" cy="175" rx="88" ry="118" fill="none" stroke="#93c5fd" stroke-opacity="0.24" stroke-width="6" transform="rotate(-18 125 175)" />
+                    <ellipse cx="125" cy="175" rx="64" ry="86" fill="none" stroke="#bfdbfe" stroke-opacity="0.28" stroke-width="4" transform="rotate(22 125 175)" />
+                    <circle cx="125" cy="175" r="46" fill="#0b132b" stroke="#e2e8f0" stroke-width="4" />
+                    <path d="M 81 175 A 44 44 0 0 1 169 175 Z" fill="#ef4444" />
+                    <path d="M 81 175 A 44 44 0 0 0 169 175 Z" fill="#f8fafc" />
+                    <rect x="80" y="171" width="90" height="8" fill="#0b132b" />
+                    <circle cx="125" cy="175" r="14" fill="#f8fafc" stroke="#0b132b" stroke-width="5" />
+                  </svg>
+                }
+                <div class="card3d__glare" aria-hidden="true"></div>
+                <div class="card3d__rim" aria-hidden="true"></div>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- 3D Draai-controls -->
+      <!-- Minimale zwevende bedieningspills onder de grote kaart -->
       <div class="pb-showcase__controls" role="group" aria-label="3D kaartbediening">
         <button type="button" class="pb-showcase__ctrl-btn" (click)="flipCard()">
           <span class="material-symbols-outlined">360</span>
           <span>{{ isShowingBack() ? 'Voorkant' : 'Achterkant' }}</span>
         </button>
 
-        <button
-          type="button"
-          class="pb-showcase__ctrl-btn"
-          [class.is-active]="autoSpin()"
-          [attr.aria-pressed]="autoSpin()"
-          (click)="toggleAutoSpin()"
-        >
-          <span class="material-symbols-outlined">auto_awesome</span>
-          <span>Auto-Showcase</span>
-        </button>
-
-        @if (isRotated() || autoSpin()) {
+        @if (isRotated()) {
           <button
             type="button"
             class="pb-showcase__ctrl-btn pb-showcase__ctrl-btn--subtle"
@@ -175,119 +159,6 @@
           </button>
         }
       </div>
-
-      <p class="pb-showcase__hint mono">
-        Sleep over de kaart om 360° rond te draaien · Dubbeltik om te resetten
-      </p>
-
-      <!-- Onderste Info & Actie-paneel -->
-      <section
-        class="pb-showcase__panel"
-        pbSwipeNav
-        [swipeEnabled]="totalCount() > 1"
-        [swipeCanPrev]="canPrev()"
-        [swipeCanNext]="canNext()"
-        (swipeNext)="triggerNext()"
-        (swipePrev)="triggerPrev()"
-      >
-        <div class="pb-showcase__specs">
-          <span class="pb-pill pb-pill--neutral mono">
-            {{ vm.variant }}{{ vm.condition ? ' · ' + vm.condition : '' }}
-          </span>
-          @if (isGradedSlab()) {
-            <span class="pb-pill pb-pill--primary mono">{{ vm.grading }} {{ vm.grade }}</span>
-          }
-
-          @if (vm.targetBudget !== undefined) {
-            @if (vm.found) {
-              <span class="pb-pill pb-pill--secondary">Gevonden</span>
-            } @else if (isWithinBudget()) {
-              <span class="pb-pill pb-pill--secondary">
-                Binnen budget ({{ formatEur(budgetDiff()) }} ruimte)
-              </span>
-            } @else if (vm.targetBudget > 0) {
-              <span class="pb-pill pb-pill--error">
-                Boven budget (+{{ formatEur(Math.abs(budgetDiff())) }})
-              </span>
-            }
-          }
-        </div>
-
-        <div class="pb-showcase__metrics">
-          <div class="pb-showcase__metric">
-            <span class="mono">{{ vm.targetBudget !== undefined ? 'Markttrend' : 'Cardmarket waarde' }}</span>
-            <strong class="mono">{{ formatEur(vm.marketPrice) }}</strong>
-          </div>
-
-          @if (vm.targetBudget !== undefined) {
-            <div class="pb-showcase__metric">
-              <span class="mono">Max Target</span>
-              <strong class="mono text-emerald">{{ formatEur(vm.targetBudget) }}</strong>
-            </div>
-          } @else if (vm.purchasePrice && vm.purchasePrice > 0) {
-            <div class="pb-showcase__metric">
-              <span class="mono">Aankoopprijs</span>
-              <strong class="mono">{{ formatEur(vm.purchasePrice) }}</strong>
-            </div>
-          }
-        </div>
-
-        @if (vm.notes) {
-          <p class="pb-showcase__notes">{{ vm.notes }}</p>
-        }
-
-        <div class="pb-showcase__actions">
-          <a
-            class="pb-btn pb-btn--surface"
-            [href]="vm.cardmarketUrl"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <span class="material-symbols-outlined">open_in_new</span>
-            <span>Cardmarket</span>
-          </a>
-
-          @if (secondaryActionLabel()) {
-            <button type="button" class="pb-btn pb-btn--secondary" (click)="secondaryAction.emit()">
-              <span class="material-symbols-outlined">{{ secondaryActionIcon() }}</span>
-              <span>{{ secondaryActionLabel() }}</span>
-            </button>
-          }
-
-          @if (primaryActionLabel()) {
-            <button type="button" class="pb-btn pb-btn--primary pb-showcase__primary-cta" (click)="primaryAction.emit()">
-              <span class="material-symbols-outlined">{{ primaryActionIcon() }}</span>
-              <span>{{ primaryActionLabel() }}</span>
-            </button>
-          }
-        </div>
-
-        @if (totalCount() > 1) {
-          <div class="pb-showcase__nav" role="group" aria-label="Blader door bijzondere kaarten">
-            <button
-              type="button"
-              class="pb-showcase__nav-btn"
-              [disabled]="!canPrev()"
-              aria-label="Vorige kaart in vergroting"
-              (click)="triggerPrev()"
-            >
-              <span class="material-symbols-outlined">chevron_left</span>
-              <span>Vorige</span>
-            </button>
-            <span class="mono pb-showcase__nav-count">{{ currentIndex() + 1 }} / {{ totalCount() }}</span>
-            <button
-              type="button"
-              class="pb-showcase__nav-btn"
-              [disabled]="!canNext()"
-              aria-label="Volgende kaart in vergroting"
-              (click)="triggerNext()"
-            >
-              <span>Volgende</span>
-              <span class="material-symbols-outlined">chevron_right</span>
-            </button>
-          </div>
-        }
-      </section>
     </div>
   </div>
 }

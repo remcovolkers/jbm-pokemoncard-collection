@@ -516,22 +516,10 @@
     </div>
   }
 
-  <!-- 3D Grail & Rare Kaart Showcase -->
+  <!-- Volledig schermvullende 3D Kaart Showcase -->
   <pb-card-showcase
     [open]="!!activeShowcaseWish()"
     [item]="activeShowcaseVm()"
-    [currentIndex]="activeShowcaseIndex()"
-    [totalCount]="showcaseItems().length"
-    [canPrev]="activeShowcaseIndex() > 0"
-    [canNext]="activeShowcaseIndex() >= 0 && activeShowcaseIndex() < showcaseItems().length - 1"
-    [primaryActionLabel]="activeShowcaseWish() && !activeShowcaseWish()!.found ? 'Gevonden → Toevoegen' : ''"
-    primaryActionIcon="add_circle"
-    secondaryActionLabel="Bewerk wens"
-    secondaryActionIcon="edit"
     (closed)="closeShowcase()"
-    (prev)="showcasePrev()"
-    (next)="showcaseNext()"
-    (primaryAction)="markFoundFromShowcase()"
-    (secondaryAction)="editFromShowcase()"
   />
 </div>

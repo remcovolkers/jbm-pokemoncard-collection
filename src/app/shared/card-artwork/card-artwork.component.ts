@@ -17,6 +17,7 @@ import {
           [alt]="alt()"
           loading="lazy"
           decoding="async"
+          draggable="false"
           (error)="onImgError()"
         />
       } @else {

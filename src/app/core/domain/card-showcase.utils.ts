@@ -1,4 +1,3 @@
-import { getDisplaySetCode, resolveCardmarketUrl } from './card-id.utils';
 import { CollectionCard, WishlistItem } from './models';
 
 export const OFFICIAL_POKEMON_CARD_BACK_URL =
@@ -11,28 +10,27 @@ export interface ShowcaseCardViewModel {
   cardId: string;
   name: string;
   setName: string;
-  setCode?: string;
   cardNumber: string;
   imageUrl?: string;
   rarity?: string;
   variant: string;
-  condition?: string;
   grading?: string;
   grade?: string;
-  priority?: string;
   isGrail: boolean;
   holoStyle: ShowcaseHoloStyle;
-  marketPrice: number;
-  targetBudget?: number;
-  purchasePrice?: number;
-  notes?: string;
-  found?: boolean;
-  cardmarketUrl: string;
 }
 
-const NON_SHOWCASE_RARITIES = new Set([
+/**
+ * Alleen de "saaie aanvullers" (standaard Commons / Uncommons / Basis-energie) krijgen géén 3D Showcase,
+ * tenzij ze een speciale uitvoering (Full Art, Alt Art, Holo, First Edition, Stamped/Promo) of Grading hebben.
+ * Alle andere zeldzaamheden (incl. Rare, Illustration Rare, One Star ★, Two/Three Star, Crown, Shiny, Promo, enz.)
+ * krijgen overal in de app de Special 3D Showcase!
+ */
+const BORING_FILLER_RARITIES = new Set([
   'common',
   'uncommon',
+  'one diamond',
+  'two diamond',
   'none',
   'basic energy',
   'energy',
@@ -46,28 +44,26 @@ const SPECIAL_VARIANTS = new Set([
   'stamped / promo',
 ]);
 
-const RARE_RARITY_PATTERN =
-  /\b(rare|holo|sir|sar|ir|hr|ultra|hyper|illustration|secret|promo|amazing|radiant|shining|shiny|ace\s*spec|legend|prime|break|vmax|vstar|gx|ex|gold\s*star)\b|lv\.?\s*x|[★☆]/i;
-
-const RARE_NAME_PATTERN =
-  /\b(ex|gx|v|vmax|vstar|prime|legend|break|sir|sar|ir|hr|holo|radiant|shining|shiny|promo|gold\s*star)\b|lv\.?\s*x|[★☆]/i;
+const SPECIAL_NAME_PATTERN =
+  /\b(ex|gx|v|vmax|vstar|prime|legend|break|sir|sar|ir|hr|holo|radiant|shining|shiny|promo|full\s*art|alt\s*art|gold\s*star)\b|lv\.?\s*x|[★☆]/i;
 
 /**
- * Beoordeelt op basis van een bekende `rarity`-string of een kaart een Rare+ (inclusief Illustration Rare, SIR, Promo, etc.) is.
- * Geeft `false` voor alle Commons en Uncommons, `true` voor Rares+, en `null` wanneer de zeldzaamheid onbekend/leeg is.
+ * Beoordeelt een bekende `rarity`-string:
+ * - `false` voor standaard aanvullers (`Common`, `Uncommon`, `One Diamond`, `Two Diamond`, `Energy`, `None`)
+ * - `true` voor álle bijzondere/binder-waardige zeldzaamheden (`Rare`, `Illustration Rare`, `One Star`, `Two Star`, `Three Star`, `Crown`, `One Shiny`, `Promo`, enz.)
+ * - `null` als `rarity` leeg/onbekend is
  */
 export function evaluateRarityShowcaseEligibility(
   rarity: string | null | undefined
 ): boolean | null {
   const clean = (rarity ?? '').trim().toLowerCase();
   if (!clean) return null;
-  if (NON_SHOWCASE_RARITIES.has(clean)) return false;
-  if (RARE_RARITY_PATTERN.test(clean)) return true;
-  return false;
+  if (BORING_FILLER_RARITIES.has(clean)) return false;
+  return true;
 }
 
 /**
- * Herkent Secret / Illustration Rare kaartnummers (bijv. "202/165" waarbij 202 > 165, of "GG44", "TG15", "SV107").
+ * Herkent Secret / Illustration Rare kaartnummers (bijv. "166/165", "202/165" waarbij nummer > set-totaal, of "GG44", "TG15", "SV107").
  */
 export function isSecretOrGalleryCardNumber(cardNumber: string | null | undefined): boolean {
   const clean = (cardNumber ?? '').trim();
@@ -86,40 +82,52 @@ export function isSecretOrGalleryCardNumber(cardNumber: string | null | undefine
 }
 
 /**
- * "Bijzondere kaart = bijzondere view":
- * Alleen Rare-kaarten (inclusief Illustration Rare, SIR, Double/Ultra/Hyper Rare, Vintage Holo, Promo)
- * krijgen door de hele app de 3D Showcase; Commons en Uncommons nooit.
+ * Bepaalt of een collectiekaart de fullscreen 3D Showcase krijgt:
+ * - Altijd JA bij speciale variant (Full Art, Alt Art, Holo, First Edition, Stamped / Promo), Graded Slab of Secret kaartnummer (> set-totaal).
+ * - Anders op basis van zeldzaamheid: alles behalve saaie Commons / Uncommons krijgt de Showcase (inclusief One Star ★, Illustration Rare, Rare, Promo, etc.).
  */
 export function isCollectionCardShowcaseEligible(
-  card: Pick<CollectionCard, 'rarity' | 'variant' | 'cardNumber' | 'name'> | null | undefined
+  card:
+    | Pick<CollectionCard, 'rarity' | 'variant' | 'cardNumber' | 'name'>
+    | (Pick<CollectionCard, 'rarity' | 'variant' | 'cardNumber' | 'name'> & { grading?: string })
+    | null
+    | undefined
 ): boolean {
   if (!card) return false;
+
+  const variantClean = (card.variant ?? '').trim().toLowerCase();
+  if (SPECIAL_VARIANTS.has(variantClean)) return true;
+
+  const gradingClean = ('grading' in card ? (card.grading ?? '') : '').trim();
+  if (gradingClean && gradingClean !== 'Raw') return true;
+
+  if (isSecretOrGalleryCardNumber(card.cardNumber)) return true;
+  if (SPECIAL_NAME_PATTERN.test(card.name ?? '')) return true;
+
   const byRarity = evaluateRarityShowcaseEligibility(card.rarity);
   if (byRarity !== null) return byRarity;
 
-  // Alleen als een handmatige rij geen ingevulde rarity heeft: val terug op variant/nummer/naam
-  if (isSecretOrGalleryCardNumber(card.cardNumber)) return true;
-  if (SPECIAL_VARIANTS.has((card.variant ?? '').trim().toLowerCase())) return true;
-  if (RARE_NAME_PATTERN.test(card.name ?? '')) return true;
   return false;
 }
 
 /**
- * Bepaalt of een Verlanglijst-kaart in aanmerking komt voor de 3D Showcase.
- * Gebruikt de exacte zeldzaamheid uit TCGdex/Collectie wanneer bekend, en anders slimme kaartkenmerken.
+ * Bepaalt of een Verlanglijst-kaart de fullscreen 3D Showcase krijgt.
  */
 export function isWishlistItemShowcaseEligible(
   item: WishlistItem | null | undefined,
   resolvedRarity?: string | null
 ): boolean {
   if (!item) return false;
+
+  const variantClean = (item.desiredVariant ?? '').trim().toLowerCase();
+  if (SPECIAL_VARIANTS.has(variantClean)) return true;
+  if ((item.priority ?? '').trim().toLowerCase() === 'grail') return true;
+  if (isSecretOrGalleryCardNumber(item.cardNumber)) return true;
+  if (SPECIAL_NAME_PATTERN.test(item.cardName ?? '')) return true;
+
   const byRarity = evaluateRarityShowcaseEligibility(resolvedRarity);
   if (byRarity !== null) return byRarity;
 
-  if (isSecretOrGalleryCardNumber(item.cardNumber)) return true;
-  if (SPECIAL_VARIANTS.has((item.desiredVariant ?? '').trim().toLowerCase())) return true;
-  if ((item.priority ?? '').trim().toLowerCase() === 'grail') return true;
-  if (RARE_NAME_PATTERN.test(item.cardName ?? '')) return true;
   return false;
 }
 
@@ -131,13 +139,23 @@ export function resolveShowcaseHoloStyle(
   const r = (rarity ?? '').trim().toLowerCase();
   const v = (variant ?? '').trim().toLowerCase();
 
-  if (r === 'hyper rare' || (isGrail && (v === 'alt art' || v === 'full art' || v === 'holo'))) {
+  if (
+    r === 'hyper rare' ||
+    r === 'crown' ||
+    r.includes('hyper') ||
+    (isGrail && (v === 'alt art' || v === 'full art' || v === 'holo'))
+  ) {
     return 'gold';
   }
   if (
     r === 'special illustration rare' ||
     r === 'illustration rare' ||
     r === 'ultra rare' ||
+    r.includes('star') ||
+    r.includes('shiny') ||
+    r.includes('illustration') ||
+    r === 'full art trainer' ||
+    r === 'classic collection' ||
     v === 'alt art' ||
     v === 'full art'
   ) {
@@ -152,6 +170,8 @@ export function resolveShowcaseHoloStyle(
     v === 'stamped / promo' ||
     r.includes('holo') ||
     r === 'double rare' ||
+    r === 'four diamond' ||
+    r === 'three diamond' ||
     r === 'promo'
   ) {
     return 'holo';
@@ -165,43 +185,29 @@ export function buildShowcaseFromWishlist(
 ): ShowcaseCardViewModel {
   const isGrail = (item.priority ?? '').trim().toLowerCase() === 'grail';
   const cleanRarity = (resolvedRarity ?? '').trim() || undefined;
-  const setCode = item.cardId ? getDisplaySetCode(item.cardId, item.setName) : undefined;
 
   return {
     key: `wish:${item.rowIndex}:${item.cardId || item.cardName}`,
     cardId: item.cardId ?? '',
     name: item.cardName,
     setName: item.setName,
-    setCode: setCode || undefined,
     cardNumber: item.cardNumber,
     imageUrl: item.imageUrl,
     rarity: cleanRarity,
     variant: item.desiredVariant || 'Normal',
-    condition: item.minCondition,
-    priority: item.priority,
     isGrail,
     holoStyle: resolveShowcaseHoloStyle(cleanRarity, item.desiredVariant, isGrail),
-    marketPrice: Number(item.marketPrice) || 0,
-    targetBudget: Number(item.maxBudget) || 0,
-    notes: item.notes || undefined,
-    found: item.found,
-    cardmarketUrl: resolveCardmarketUrl({
-      name: item.cardName,
-      setName: item.setName,
-      cardNumber: item.cardNumber,
-      notes: item.notes,
-    }),
   };
 }
 
-export function buildShowcaseFromCollectionCard(
-  card: CollectionCard,
-  cardmarketProductId?: number
-): ShowcaseCardViewModel {
+export function buildShowcaseFromCollectionCard(card: CollectionCard): ShowcaseCardViewModel {
   const r = (card.rarity ?? '').trim();
+  const rLower = r.toLowerCase();
   const isGrail =
-    r === 'Special Illustration Rare' ||
-    r === 'Hyper Rare' ||
+    rLower === 'special illustration rare' ||
+    rLower === 'hyper rare' ||
+    rLower === 'crown' ||
+    rLower === 'three star' ||
     (card.grading !== 'Raw' && card.grade === '10') ||
     (Number(card.marketPrice) || 0) >= 150;
 
@@ -210,25 +216,13 @@ export function buildShowcaseFromCollectionCard(
     cardId: card.cardId,
     name: card.name,
     setName: card.setName,
-    setCode: getDisplaySetCode(card.cardId, card.setName) || undefined,
     cardNumber: card.cardNumber,
     imageUrl: card.imageUrl,
     rarity: r || undefined,
     variant: card.variant || 'Normal',
-    condition: card.condition,
     grading: card.grading,
     grade: card.grade,
     isGrail,
     holoStyle: resolveShowcaseHoloStyle(r, card.variant, isGrail),
-    marketPrice: Number(card.marketPrice) || 0,
-    purchasePrice: Number(card.purchasePrice) || 0,
-    notes: card.notes || undefined,
-    cardmarketUrl: resolveCardmarketUrl({
-      name: card.name,
-      setName: card.setName,
-      cardNumber: card.cardNumber,
-      cardmarketProductId,
-      notes: card.notes,
-    }),
   };
 }

@@ -228,38 +228,10 @@ export class CardDetailComponent {
     isCollectionCardShowcaseEligible(this.editDraft())
   );
 
-  readonly showcaseCards = computed(() =>
-    this.orderedCards().filter((c) => isCollectionCardShowcaseEligible(c))
-  );
-
-  readonly showcaseIndex = computed(() => {
-    const current = this.activeCard();
-    if (!current) return -1;
-    const list = this.showcaseCards();
-    const exactIdx = list.findIndex(
-      (c) => c.rowIndex === current.rowIndex && c.cardId === current.cardId
-    );
-    if (exactIdx !== -1) return exactIdx;
-    return list.findIndex((c) => c.cardId === current.cardId);
-  });
-
-  readonly showcasePrevCard = computed<CollectionCard | null>(() => {
-    const idx = this.showcaseIndex();
-    if (idx <= 0) return null;
-    return this.showcaseCards()[idx - 1] ?? null;
-  });
-
-  readonly showcaseNextCard = computed<CollectionCard | null>(() => {
-    const idx = this.showcaseIndex();
-    const list = this.showcaseCards();
-    if (idx < 0 || idx >= list.length - 1) return null;
-    return list[idx + 1] ?? null;
-  });
-
   readonly activeShowcaseVm = computed(() => {
     const d = this.editDraft();
     if (!d || !this.isShowcaseEligible()) return null;
-    return buildShowcaseFromCollectionCard(d, this.activeCardmarketProductId());
+    return buildShowcaseFromCollectionCard(d);
   });
 
   openLightbox(): void {
@@ -401,11 +373,16 @@ export class CardDetailComponent {
   }
 
   isHoloCard(card: CollectionCard): boolean {
+    const r = (card.rarity ?? '').trim().toLowerCase();
     return (
-      card.rarity === 'Special Illustration Rare' ||
-      card.rarity === 'Illustration Rare' ||
-      card.rarity === 'Hyper Rare' ||
-      card.variant === 'Alt Art'
+      r === 'special illustration rare' ||
+      r === 'illustration rare' ||
+      r === 'hyper rare' ||
+      r.includes('star') ||
+      r.includes('shiny') ||
+      r === 'crown' ||
+      card.variant === 'Alt Art' ||
+      card.variant === 'Full Art'
     );
   }
 

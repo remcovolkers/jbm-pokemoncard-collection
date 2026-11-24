@@ -430,17 +430,11 @@
       </div>
     }
 
-    <!-- 3D Kaart Showcase Modal (uitsluitend voor Rare+ kaarten) -->
+    <!-- Volledig schermvullende 3D Kaart Showcase (uitsluitend voor bijzondere/Rare+ kaarten) -->
     <pb-card-showcase
       [open]="isLightboxOpen() && isShowcaseEligible()"
       [item]="activeShowcaseVm()"
-      [currentIndex]="showcaseIndex()"
-      [totalCount]="showcaseCards().length"
-      [canPrev]="!!showcasePrevCard()"
-      [canNext]="!!showcaseNextCard()"
       (closed)="closeLightbox()"
-      (prev)="goToAdjacentCard(showcasePrevCard(), true)"
-      (next)="goToAdjacentCard(showcaseNextCard(), true)"
     />
   } @else {
     <div class="pb-empty">

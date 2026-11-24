@@ -152,21 +152,12 @@ test('Collectie -> Kaartdetail -> Lightbox -> Vorige/Volgende -> Dirty-state & H
   }
   await expect(page.locator('.detail-dock')).toHaveCount(0);
 
-  // Lightbox openen, binnen vergroting bladeren zonder sluiten, en sluiten met Escape
+  // Fullscreen 3D Showcase openen (katana-reveal, géén rommelige info/vorige/volgende), en sluiten met Escape
   const firstUrl = page.url();
   await page.locator('.hero-card__art-btn').click();
   await expect(page.locator('.art-lightbox-backdrop')).toBeVisible();
-
-  const lightboxNextBtn = page.locator('button[aria-label="Volgende kaart in vergroting"]');
-  await expect(lightboxNextBtn).toBeVisible();
-  await lightboxNextBtn.click();
-  await page.waitForFunction((prev) => window.location.href !== prev, firstUrl);
-  await expect(page.locator('.art-lightbox-backdrop')).toBeVisible();
-
-  const lightboxPrevBtn = page.locator('button[aria-label="Vorige kaart in vergroting"]');
-  await lightboxPrevBtn.click();
-  await page.waitForFunction((expected) => window.location.href === expected, firstUrl);
-  await expect(page.locator('.art-lightbox-backdrop')).toBeVisible();
+  await expect(page.locator('.card3d')).toBeVisible();
+  await expect(page.locator('.pb-showcase__panel')).toHaveCount(0);
 
   await page.keyboard.press('Escape');
   await expect(page.locator('.art-lightbox-backdrop')).toBeHidden();
