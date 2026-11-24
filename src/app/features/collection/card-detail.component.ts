@@ -16,12 +16,13 @@ import { PlatformService } from '../../core/platform/platform.service';
 import { CARD_CATALOG_PORT } from '../../core/ports/card-catalog.port';
 import { CollectionStore } from '../../core/state/collection.store';
 import { CardArtworkComponent } from '../../shared/card-artwork/card-artwork.component';
+import { PbBinderSwipeDirective } from '../../shared/directives/binder-swipe.directive';
 import { CollectionViewStateService, filterAndSortCollection } from './collection-view-state.service';
 
 @Component({
   selector: 'app-card-detail',
   standalone: true,
-  imports: [FormsModule, RouterLink, CardArtworkComponent],
+  imports: [FormsModule, RouterLink, CardArtworkComponent, PbBinderSwipeDirective],
   templateUrl: './card-detail.component.html',
   styleUrl: './card-detail.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -110,6 +111,7 @@ export class CardDetailComponent {
   readonly isLightboxOpen = signal(false);
 
   private loadedCardKey: string | null = null;
+  private keepLightboxOnNextLoad = false;
 
   constructor() {
     this.scrollLock.bind(() => this.isLightboxOpen(), () => this.closeLightbox());
@@ -118,6 +120,7 @@ export class CardDetailComponent {
       const card = this.activeCard();
       if (!card) {
         this.loadedCardKey = null;
+        this.keepLightboxOnNextLoad = false;
         this.editDraft.set(null);
         this.activeCardmarketProductId.set(undefined);
         this.confirmDelete.set(false);
@@ -134,7 +137,10 @@ export class CardDetailComponent {
         purchasePrice: Math.max(0, Number(card.purchasePrice) || 0),
       });
       this.confirmDelete.set(false);
-      this.isLightboxOpen.set(false);
+      if (!this.keepLightboxOnNextLoad) {
+        this.isLightboxOpen.set(false);
+      }
+      this.keepLightboxOnNextLoad = false;
 
       const cachedId = this.catalog.getCachedCardmarketProductId?.(card.cardId);
       this.activeCardmarketProductId.set(cachedId);
@@ -210,8 +216,14 @@ export class CardDetailComponent {
     this.isLightboxOpen.set(false);
   }
 
-  goToAdjacentCard(card: CollectionCard | null): void {
+  goToAdjacentCard(card: CollectionCard | null, keepLightbox = this.isLightboxOpen()): void {
     if (!card) return;
+    if (this.hasUnsavedChanges()) {
+      void this.haptics.warning();
+      this.store.showToast('Sla je wijzigingen eerst op of tik op Herstellen.', 'warning');
+      return;
+    }
+    this.keepLightboxOnNextLoad = keepLightbox;
     void this.haptics.light();
     void this.router.navigate(['/collectie/kaart', card.rowIndex, card.cardId], { replaceUrl: true });
   }
@@ -242,18 +254,18 @@ export class CardDetailComponent {
 
   @HostListener('document:keydown', ['$event'])
   onKeydown(event: KeyboardEvent): void {
-    if (this.isLightboxOpen() || isEditableEventTarget(event.target)) return;
+    if (isEditableEventTarget(event.target)) return;
     if (event.key === 'ArrowLeft') {
       const prev = this.prevCard();
       if (prev) {
         event.preventDefault();
-        this.goToAdjacentCard(prev);
+        this.goToAdjacentCard(prev, this.isLightboxOpen());
       }
     } else if (event.key === 'ArrowRight') {
       const next = this.nextCard();
       if (next) {
         event.preventDefault();
-        this.goToAdjacentCard(next);
+        this.goToAdjacentCard(next, this.isLightboxOpen());
       }
     }
   }

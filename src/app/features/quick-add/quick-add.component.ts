@@ -14,11 +14,13 @@ import { NATIONAL_DEX_NAMES } from '../../core/domain/national-dex.data';
 import { doesCardMatchPokemon } from '../../core/domain/pokedex-matching.utils';
 import { CARD_CATALOG_PORT } from '../../core/ports/card-catalog.port';
 import { HapticsService } from '../../core/platform/haptics.service';
+import { isEditableEventTarget } from '../../core/platform/keyboard.utils';
 import { MobileViewportService } from '../../core/platform/mobile-viewport.service';
 import { ModalScrollLockService } from '../../core/platform/modal-scroll-lock.service';
 import { PlatformService } from '../../core/platform/platform.service';
 import { CollectionStore } from '../../core/state/collection.store';
 import { CardArtworkComponent } from '../../shared/card-artwork/card-artwork.component';
+import { PbBinderSwipeDirective } from '../../shared/directives/binder-swipe.directive';
 
 const SERIES_SORT_PRIORITY: Record<string, number> = {
   me: 10,
@@ -52,7 +54,7 @@ function getSeriesSortPriority(seriesId?: string): number {
 @Component({
   selector: 'app-quick-add',
   standalone: true,
-  imports: [FormsModule, CardArtworkComponent],
+  imports: [FormsModule, CardArtworkComponent, PbBinderSwipeDirective],
   templateUrl: './quick-add.component.html',
   styleUrl: './quick-add.component.scss',
 })
@@ -307,6 +309,22 @@ export class QuickAddComponent implements OnInit, OnDestroy {
       if (this.isSaving() || (!this.previewCard() && !this.manualName().trim())) return;
       event.preventDefault();
       void this.saveCard(true);
+      return;
+    }
+
+    if (
+      this.inputMode() === 'sets' &&
+      !this.isSetDropdownOpen() &&
+      this.catalogTotalPages() > 1 &&
+      !isEditableEventTarget(event.target)
+    ) {
+      if (event.key === 'ArrowLeft' && this.setCatalogPage() > 1) {
+        event.preventDefault();
+        this.prevSetCatalogPage();
+      } else if (event.key === 'ArrowRight' && this.setCatalogPage() < this.catalogTotalPages()) {
+        event.preventDefault();
+        this.nextSetCatalogPage();
+      }
     }
   }
 
@@ -581,6 +599,32 @@ export class QuickAddComponent implements OnInit, OnDestroy {
   onSetCardFilterChange(val: string): void {
     this.setCardFilter.set(val);
     this.setCatalogPage.set(1);
+  }
+
+  prevSetCatalogPage(): void {
+    const prev = Math.max(1, this.setCatalogPage() - 1);
+    if (prev === this.setCatalogPage()) return;
+    void this.haptics.light();
+    this.setCatalogPage.set(prev);
+    this.scrollSetCatalogTop();
+  }
+
+  nextSetCatalogPage(): void {
+    const next = Math.min(this.catalogTotalPages(), this.setCatalogPage() + 1);
+    if (next === this.setCatalogPage()) return;
+    void this.haptics.light();
+    this.setCatalogPage.set(next);
+    this.scrollSetCatalogTop();
+  }
+
+  private scrollSetCatalogTop(): void {
+    if (typeof document === 'undefined') return;
+    const header = this.hostEl.nativeElement.querySelector('.sets-browser__header') as HTMLElement | null;
+    try {
+      header?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
+    } catch {
+      // Negeer in omgevingen zonder scrollIntoView-opties
+    }
   }
 
   isCardOwned(cardId: string): boolean {

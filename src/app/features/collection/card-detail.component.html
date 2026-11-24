@@ -11,7 +11,7 @@
           type="button"
           class="detail-stepper__btn"
           [disabled]="!prevCard()"
-          (click)="goToAdjacentCard(prevCard())"
+          (click)="goToAdjacentCard(prevCard(), false)"
           aria-label="Vorige kaart"
         >
           <span class="material-symbols-outlined">chevron_left</span>
@@ -26,7 +26,7 @@
           type="button"
           class="detail-stepper__btn"
           [disabled]="!nextCard()"
-          (click)="goToAdjacentCard(nextCard())"
+          (click)="goToAdjacentCard(nextCard(), false)"
           aria-label="Volgende kaart"
         >
           <span>Volgende</span>
@@ -36,8 +36,20 @@
     }
   </div>
 
+  @if (orderedCards().length > 1 && currentCardIndex() >= 0) {
+    <p class="detail-swipe-hint mono">Veeg links/rechts over de kaart om te bladeren</p>
+  }
+
   @if (editDraft(); as draft) {
-    <div class="detail-layout">
+    <div
+      class="detail-layout"
+      pbSwipeNav
+      [swipeEnabled]="orderedCards().length > 1"
+      [swipeCanPrev]="!!prevCard()"
+      [swipeCanNext]="!!nextCard()"
+      (swipeNext)="goToAdjacentCard(nextCard(), false)"
+      (swipePrev)="goToAdjacentCard(prevCard(), false)"
+    >
       <!-- Showcase Hero Slab -->
       <aside class="detail-showcase">
         <section class="pb-card hero-card" [class.pb-card--holo]="isHoloCard(draft)">
@@ -389,7 +401,16 @@
         [attr.aria-label]="draft.name + ' groot bekijken'"
         (click)="closeLightbox()"
       >
-        <div class="art-lightbox" (click)="$event.stopPropagation()">
+        <div
+          class="art-lightbox"
+          pbSwipeNav
+          [swipeEnabled]="orderedCards().length > 1"
+          [swipeCanPrev]="!!prevCard()"
+          [swipeCanNext]="!!nextCard()"
+          (swipeNext)="goToAdjacentCard(nextCard(), true)"
+          (swipePrev)="goToAdjacentCard(prevCard(), true)"
+          (click)="$event.stopPropagation()"
+        >
           <div class="art-lightbox__head">
             <div>
               <strong>{{ draft.name }}</strong>
@@ -408,6 +429,34 @@
           <div class="art-lightbox__stage">
             <pb-card-artwork [cardId]="draft.cardId" [src]="draft.imageUrl" [alt]="draft.name" />
           </div>
+
+          @if (orderedCards().length > 1 && currentCardIndex() >= 0) {
+            <div class="art-lightbox__nav" role="group" aria-label="Blader door kaarten in vergroting">
+              <button
+                type="button"
+                class="detail-stepper__btn"
+                [disabled]="!prevCard()"
+                (click)="goToAdjacentCard(prevCard(), true)"
+                aria-label="Vorige kaart in vergroting"
+              >
+                <span class="material-symbols-outlined">chevron_left</span>
+                <span>Vorige</span>
+              </button>
+              <span class="mono detail-stepper__count">
+                {{ currentCardIndex() + 1 }} / {{ orderedCards().length }}
+              </span>
+              <button
+                type="button"
+                class="detail-stepper__btn"
+                [disabled]="!nextCard()"
+                (click)="goToAdjacentCard(nextCard(), true)"
+                aria-label="Volgende kaart in vergroting"
+              >
+                <span>Volgende</span>
+                <span class="material-symbols-outlined">chevron_right</span>
+              </button>
+            </div>
+          }
         </div>
       </div>
     }

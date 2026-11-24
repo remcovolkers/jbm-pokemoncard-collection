@@ -79,6 +79,17 @@
   }
 }
 
+.detail-swipe-hint {
+  text-align: center;
+  font-size: 0.68rem;
+  color: $color-on-surface-muted;
+  margin-top: -0.5rem;
+
+  @include mq-md {
+    display: none;
+  }
+}
+
 .detail-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -524,7 +535,16 @@
   }
 
   &__stage {
-    width: min(320px, 78vw);
+    width: min(300px, 74vw);
+    max-height: 62dvh;
     margin: 0 auto;
+  }
+
+  &__nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: $space-sm;
+    padding-top: 0.25rem;
   }
 }

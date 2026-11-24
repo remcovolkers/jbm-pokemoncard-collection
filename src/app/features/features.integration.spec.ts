@@ -447,6 +447,60 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
       appFixture.detectChanges();
       await appFixture.whenStable();
       expect(router.url).toContain(`/collectie/kaart/${first.rowIndex}/${first.cardId}`);
+
+      // Horizontale swipe op .detail-layout bladert naar volgende en vorige kaart
+      const dispatchHorizontalTouch = (el: HTMLElement, fromX: number, toX: number): void => {
+        const fire = (type: string, x: number | null) => {
+          const evt = new Event(type, { bubbles: true, cancelable: true });
+          Object.defineProperty(evt, 'touches', {
+            value: x === null ? [] : [{ clientX: x, clientY: 260 }],
+            configurable: true,
+          });
+          el.dispatchEvent(evt);
+        };
+        fire('touchstart', fromX);
+        fire('touchmove', toX);
+        fire('touchend', null);
+      };
+
+      const detailLayout = (appFixture.nativeElement as HTMLElement).querySelector('.detail-layout') as HTMLElement;
+      dispatchHorizontalTouch(detailLayout, 280, 160);
+      appFixture.detectChanges();
+      await appFixture.whenStable();
+      expect(router.url).toContain(`/collectie/kaart/${expectedNext!.rowIndex}/${expectedNext!.cardId}`);
+
+      dispatchHorizontalTouch(detailLayout, 150, 270);
+      appFixture.detectChanges();
+      await appFixture.whenStable();
+      expect(router.url).toContain(`/collectie/kaart/${first.rowIndex}/${first.cardId}`);
+
+      // Dirty-state bescherming blokkeert per ongeluk wegbladeren/swipen en waarschuwt via toast
+      detail.adjustDraftQty(1);
+      appFixture.detectChanges();
+      detail.goToAdjacentCard(expectedNext);
+      expect(router.url).toContain(`/collectie/kaart/${first.rowIndex}/${first.cardId}`);
+      expect(store.toasts().some((t) => t.tone === 'warning' && t.text.includes('Herstellen'))).toBe(true);
+      detail.resetDraft();
+      appFixture.detectChanges();
+
+      // High-res Lightbox blijft open tijdens bladeren met pijltoetsen of horizontale swipe
+      detail.openLightbox();
+      appFixture.detectChanges();
+      expect(detail.isLightboxOpen()).toBe(true);
+
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight' }));
+      appFixture.detectChanges();
+      await appFixture.whenStable();
+      expect(router.url).toContain(`/collectie/kaart/${expectedNext!.rowIndex}/${expectedNext!.cardId}`);
+      expect(detail.isLightboxOpen()).toBe(true);
+
+      const lightboxEl = (appFixture.nativeElement as HTMLElement).querySelector('.art-lightbox') as HTMLElement;
+      dispatchHorizontalTouch(lightboxEl, 140, 270);
+      appFixture.detectChanges();
+      await appFixture.whenStable();
+      expect(router.url).toContain(`/collectie/kaart/${first.rowIndex}/${first.cardId}`);
+      expect(detail.isLightboxOpen()).toBe(true);
+      detail.closeLightbox();
     });
 
     it('laat optionele herkomst en aankoopprijs instellen/wissen en toont € 0,00 zonder ROI op de detailpagina', async () => {

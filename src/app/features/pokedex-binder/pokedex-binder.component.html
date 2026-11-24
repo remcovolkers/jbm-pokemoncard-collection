@@ -152,6 +152,9 @@
         class="binder-sheet"
         [class.is-wide]="gridCols() === 5"
         pbBinderSwipe
+        [swipeEnabled]="totalPages() > 1"
+        [swipeCanPrev]="clampedPage() > 1"
+        [swipeCanNext]="clampedPage() < totalPages()"
         (swipeNext)="nextPage()"
         (swipePrev)="prevPage()"
       >

@@ -625,13 +625,83 @@ describe('Mobiele UI, Gebaren, Routing & Toetsenbord Suite', () => {
       dispatchTouch(binderSheet, 'touchstart', 300, 260);
       dispatchTouch(binderSheet, 'touchmove', 304, 150);
       dispatchTouch(binderSheet, 'touchend', 304, 150);
+      fixture.detectChanges();
       expect(comp.clampedPage()).toBe(2);
 
       // Horizontaal naar rechts vegen -> vorige pagina
       dispatchTouch(binderSheet, 'touchstart', 300, 140);
       dispatchTouch(binderSheet, 'touchmove', 302, 250);
       dispatchTouch(binderSheet, 'touchend', 302, 250);
+      fixture.detectChanges();
       expect(comp.clampedPage()).toBe(1);
+
+      // Android edge-swipe guard: veeg vanaf uiterste linker/rechter schermrand (<= 24px) wordt genegeerd
+      comp.nextPage();
+      fixture.detectChanges();
+      expect(comp.clampedPage()).toBe(2);
+      dispatchTouch(binderSheet, 'touchstart', 300, 10);
+      dispatchTouch(binderSheet, 'touchmove', 300, 150);
+      dispatchTouch(binderSheet, 'touchend', 300, 150);
+      fixture.detectChanges();
+      expect(comp.clampedPage()).toBe(2);
+
+      dispatchTouch(binderSheet, 'touchstart', 300, 380);
+      dispatchTouch(binderSheet, 'touchmove', 300, 240);
+      dispatchTouch(binderSheet, 'touchend', 300, 240);
+      fixture.detectChanges();
+      expect(comp.clampedPage()).toBe(2);
+
+      // Tablet / brede touchscreens (bijv. 1024px) ondersteunen ook aanraak-swipe
+      setViewportMetrics(1024, 900);
+      dispatchTouch(binderSheet, 'touchstart', 300, 300);
+      dispatchTouch(binderSheet, 'touchmove', 300, 420);
+      dispatchTouch(binderSheet, 'touchend', 300, 420);
+      fixture.detectChanges();
+      expect(comp.clampedPage()).toBe(1);
+    });
+
+    it('bladert in QuickAdd Alle Sets per pagina met horizontale swipe en ArrowLeft/ArrowRight', () => {
+      const fixture = TestBed.createComponent(QuickAddComponent);
+      const comp = fixture.componentInstance;
+      comp.inputMode.set('sets');
+      comp.activeSetDetail.set({
+        id: 'sv03.5',
+        name: '151',
+        seriesName: 'Scarlet & Violet',
+        officialCount: 165,
+        totalCount: 207,
+        cards: Array.from({ length: 65 }, (_, i) => ({
+          id: `sv03.5-${i + 1}`,
+          localId: String(i + 1),
+          name: `TestKaart ${i + 1}`,
+          imageUrl: MOCK_CARD.lowImageUrl,
+        })),
+      });
+      fixture.detectChanges();
+
+      const resultsEl = (fixture.nativeElement as HTMLElement).querySelector('.search-results') as HTMLElement;
+      expect(resultsEl).not.toBeNull();
+      expect(comp.catalogTotalPages()).toBeGreaterThan(1);
+      expect(comp.setCatalogPage()).toBe(1);
+
+      dispatchTouch(resultsEl, 'touchstart', 260, 280);
+      dispatchTouch(resultsEl, 'touchmove', 262, 160);
+      dispatchTouch(resultsEl, 'touchend', 262, 160);
+      fixture.detectChanges();
+      expect(comp.setCatalogPage()).toBe(2);
+
+      dispatchTouch(resultsEl, 'touchstart', 260, 150);
+      dispatchTouch(resultsEl, 'touchmove', 262, 270);
+      dispatchTouch(resultsEl, 'touchend', 262, 270);
+      fixture.detectChanges();
+      expect(comp.setCatalogPage()).toBe(1);
+
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight' }));
+      fixture.detectChanges();
+      expect(comp.setCatalogPage()).toBe(2);
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft' }));
+      fixture.detectChanges();
+      expect(comp.setCatalogPage()).toBe(1);
     });
 
     it('bladert in Pokédex Binder ook met ArrowLeft/ArrowRight en linkt ontbrekende Pokémon door naar QuickAdd', async () => {

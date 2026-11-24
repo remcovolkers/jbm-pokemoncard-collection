@@ -1,15 +1,21 @@
-import { Directive, ElementRef, OnDestroy, OnInit, inject, output } from '@angular/core';
+import { Directive, ElementRef, OnDestroy, OnInit, inject, input, output } from '@angular/core';
 
 /**
- * Horizontaal veeg-gebaar op mobiel voor de Pokédex Binder:
- * links vegen -> volgende pagina, rechts vegen -> vorige pagina.
+ * Horizontaal veeg-gebaar voor elke Vorige/Volgende-navigatie (o.a. Pokédex Binder,
+ * Kaartdetail, High-res Lightbox en Alle Sets-paginering):
+ * links vegen -> volgende, rechts vegen -> vorige.
  */
 @Directive({
-  selector: '[pbBinderSwipe]',
+  selector: '[pbBinderSwipe], [pbSwipeNav]',
   standalone: true,
 })
 export class PbBinderSwipeDirective implements OnInit, OnDestroy {
   private readonly host = inject(ElementRef<HTMLElement>);
+
+  readonly swipeEnabled = input<boolean>(true);
+  readonly swipeCanNext = input<boolean>(true);
+  readonly swipeCanPrev = input<boolean>(true);
+  readonly swipeEdgeGuardPx = input<number>(24);
 
   readonly swipeNext = output<void>();
   readonly swipePrev = output<void>();
@@ -19,21 +25,29 @@ export class PbBinderSwipeDirective implements OnInit, OnDestroy {
   private lastDx = 0;
   private tracking = false;
   private lockedHorizontal = false;
+  private appliedTransform = false;
   private resetTimer: ReturnType<typeof setTimeout> | null = null;
 
   private readonly onTouchStart = (event: TouchEvent): void => {
-    if (typeof window === 'undefined' || window.innerWidth >= 768) return;
-    if (event.touches.length !== 1) return;
+    if (!this.swipeEnabled() || event.touches.length !== 1) return;
 
     const target = event.target as HTMLElement | null;
-    if (target?.closest('input, select, textarea')) return;
+    if (target?.closest('input, select, textarea, [contenteditable="true"]')) return;
+    if (this.isInsideHorizontalScroller(target)) return;
 
     const touch = event.touches[0];
+    const guard = Math.max(0, this.swipeEdgeGuardPx());
+    const vw = typeof window !== 'undefined' ? window.innerWidth : 0;
+    if (guard > 0 && vw > guard * 2 && (touch.clientX <= guard || touch.clientX >= vw - guard)) {
+      return;
+    }
+
     this.startX = touch.clientX;
     this.startY = touch.clientY;
     this.lastDx = 0;
     this.tracking = true;
     this.lockedHorizontal = false;
+    this.appliedTransform = false;
   };
 
   private readonly onTouchMove = (event: TouchEvent): void => {
@@ -60,10 +74,16 @@ export class PbBinderSwipeDirective implements OnInit, OnDestroy {
       event.preventDefault();
     }
 
-    const damped = Math.max(-44, Math.min(44, dx * 0.22));
+    if (this.prefersReducedMotion()) return;
+
+    const blocked = (dx < 0 && !this.swipeCanNext()) || (dx > 0 && !this.swipeCanPrev());
+    const damped = blocked
+      ? Math.max(-16, Math.min(16, dx * 0.08))
+      : Math.max(-44, Math.min(44, dx * 0.22));
     const el = this.host.nativeElement;
     el.style.transition = 'none';
     el.style.transform = `translate3d(${damped}px, 0, 0)`;
+    this.appliedTransform = true;
   };
 
   private readonly onTouchEnd = (): void => {
@@ -71,13 +91,18 @@ export class PbBinderSwipeDirective implements OnInit, OnDestroy {
     this.tracking = false;
 
     const el = this.host.nativeElement;
-    el.style.transition = 'transform 160ms cubic-bezier(0.22, 1, 0.36, 1)';
-    el.style.transform = '';
+    if (this.appliedTransform) {
+      el.style.transition = this.prefersReducedMotion()
+        ? ''
+        : 'transform 160ms cubic-bezier(0.22, 1, 0.36, 1)';
+      el.style.transform = '';
 
-    if (this.resetTimer) clearTimeout(this.resetTimer);
-    this.resetTimer = setTimeout(() => {
-      el.style.transition = '';
-    }, 170);
+      if (this.resetTimer) clearTimeout(this.resetTimer);
+      this.resetTimer = setTimeout(() => {
+        el.style.transition = '';
+      }, 170);
+      this.appliedTransform = false;
+    }
 
     if (this.lockedHorizontal) {
       if (this.lastDx <= -56) {
@@ -89,6 +114,30 @@ export class PbBinderSwipeDirective implements OnInit, OnDestroy {
     this.lockedHorizontal = false;
     this.lastDx = 0;
   };
+
+  private isInsideHorizontalScroller(target: HTMLElement | null): boolean {
+    if (!target || typeof window === 'undefined') return false;
+    let node: HTMLElement | null = target;
+    while (node && node !== this.host.nativeElement) {
+      if (node.scrollWidth > node.clientWidth + 2) {
+        const overflowX = window.getComputedStyle(node).overflowX;
+        if (overflowX === 'auto' || overflowX === 'scroll') {
+          return true;
+        }
+      }
+      node = node.parentElement;
+    }
+    return false;
+  }
+
+  private prefersReducedMotion(): boolean {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
+    try {
+      return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    } catch {
+      return false;
+    }
+  }
 
   ngOnInit(): void {
     const el = this.host.nativeElement;

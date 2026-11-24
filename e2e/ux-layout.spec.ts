@@ -146,25 +146,43 @@ test('Collectie -> Kaartdetail -> Lightbox -> Vorige/Volgende -> Dirty-state & H
     await expect(page.locator('.topbar__profile-btn')).toBeHidden();
   }
 
-  // Lightbox openen en sluiten met Escape zonder van detailpagina weg te navigeren
+  // Lightbox openen, binnen vergroting bladeren zonder sluiten, en sluiten met Escape
+  const firstUrl = page.url();
   await page.locator('.hero-card__art-btn').click();
   await expect(page.locator('.art-lightbox-backdrop')).toBeVisible();
+
+  const lightboxNextBtn = page.locator('button[aria-label="Volgende kaart in vergroting"]');
+  await expect(lightboxNextBtn).toBeVisible();
+  await lightboxNextBtn.click();
+  await page.waitForFunction((prev) => window.location.href !== prev, firstUrl);
+  await expect(page.locator('.art-lightbox-backdrop')).toBeVisible();
+
+  const lightboxPrevBtn = page.locator('button[aria-label="Vorige kaart in vergroting"]');
+  await lightboxPrevBtn.click();
+  await page.waitForFunction((expected) => window.location.href === expected, firstUrl);
+  await expect(page.locator('.art-lightbox-backdrop')).toBeVisible();
+
   await page.keyboard.press('Escape');
   await expect(page.locator('.art-lightbox-backdrop')).toBeHidden();
   expect(page.url()).toMatch(/\/collectie\/kaart\/\d+\//);
 
   // Volgende kaart via stepper
-  const firstUrl = page.url();
   const nextBtn = page.locator('button[aria-label="Volgende kaart"]');
   await expect(nextBtn).toBeEnabled();
   await nextBtn.click();
   await page.waitForFunction((prev) => window.location.href !== prev, firstUrl);
-  expect(page.url()).toMatch(/\/collectie\/kaart\/\d+\//);
+  const secondUrl = page.url();
+  expect(secondUrl).toMatch(/\/collectie\/kaart\/\d+\//);
 
-  // Dirty-state & Herstellen
+  // Dirty-state blokkeert per ongeluk doorbladeren en Herstellen maakt hem weer schoon
   await page.locator('button[aria-label="Aantal vermeerderen"]').click();
   await expect(page.locator('.detail-unsaved-badge')).toBeVisible();
   await expect(page.locator('.detail-dock__reset')).toBeVisible();
+
+  await page.locator('button[aria-label="Volgende kaart"]').click();
+  expect(page.url()).toBe(secondUrl);
+  await expect(page.locator('.toast--warning')).toBeVisible();
+
   await page.locator('.detail-dock__reset').click();
   await expect(page.locator('.detail-unsaved-badge')).toBeHidden();
 });
