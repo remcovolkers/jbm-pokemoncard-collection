@@ -472,9 +472,7 @@
       position: sticky;
       bottom: 0;
       z-index: 6;
-      background: linear-gradient(180deg, rgba($color-surface-low, 0.88) 0%, $color-surface-low 24%);
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
+      background-color: $color-surface-low;
       border-top: 1px solid rgba($color-outline-variant, 0.45);
       padding: 0.65rem $margin-mobile calc(0.75rem + env(safe-area-inset-bottom, 0px));
       display: flex;

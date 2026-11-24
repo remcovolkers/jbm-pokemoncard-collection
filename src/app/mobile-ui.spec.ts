@@ -16,6 +16,7 @@ import { CARD_CATALOG_PORT, CardCatalogPort } from './core/ports/card-catalog.po
 import { COLLECTION_REPOSITORY } from './core/ports/collection-repository.port';
 import { CollectionStore } from './core/state/collection.store';
 import { FeedbackStore } from './core/state/feedback.store';
+import { CardDetailComponent } from './features/collection/card-detail.component';
 import { CollectionComponent } from './features/collection/collection.component';
 import { MoreHubComponent } from './features/more/more-hub.component';
 import { MoreShellComponent } from './features/more/more-shell.component';
@@ -153,6 +154,7 @@ describe('Mobiele UI, Gebaren, Routing & Toetsenbord Suite', () => {
       imports: [
         App,
         CollectionComponent,
+        CardDetailComponent,
         PokedexBinderComponent,
         WishlistComponent,
         TradesComponent,
@@ -231,17 +233,8 @@ describe('Mobiele UI, Gebaren, Routing & Toetsenbord Suite', () => {
       });
     }
 
-    it('ondersteunt swipe-to-dismiss en scrollveiligheid op alle 5 mobiele bottom sheets', async () => {
-      // 1. Collectie detail bottom sheet
-      await assertSwipeDismissBehavior(() => {
-        const fixture = TestBed.createComponent(CollectionComponent);
-        const comp = fixture.componentInstance;
-        fixture.detectChanges();
-        comp.openDetail(comp.filteredCards()[0]);
-        return { fixture, isOpen: () => comp.isDetailOpen() };
-      });
-
-      // 2. Pokédex Binder slot bottom sheet
+    it('ondersteunt swipe-to-dismiss en scrollveiligheid op alle 4 mobiele bottom sheets', async () => {
+      // 1. Pokédex Binder slot bottom sheet
       await assertSwipeDismissBehavior(() => {
         const fixture = TestBed.createComponent(PokedexBinderComponent);
         const comp = fixture.componentInstance;
@@ -250,7 +243,7 @@ describe('Mobiele UI, Gebaren, Routing & Toetsenbord Suite', () => {
         return { fixture, isOpen: () => comp.isSheetOpen() };
       });
 
-      // 3. Verlanglijst toevoegen bottom sheet
+      // 2. Verlanglijst toevoegen bottom sheet
       await assertSwipeDismissBehavior(() => {
         const fixture = TestBed.createComponent(WishlistComponent);
         const comp = fixture.componentInstance;
@@ -259,7 +252,7 @@ describe('Mobiele UI, Gebaren, Routing & Toetsenbord Suite', () => {
         return { fixture, isOpen: () => comp.showAddSheet() };
       });
 
-      // 4. Ruil & Verkoop transactie bottom sheet
+      // 3. Ruil & Verkoop transactie bottom sheet
       await assertSwipeDismissBehavior(() => {
         const fixture = TestBed.createComponent(TradesComponent);
         const comp = fixture.componentInstance;
@@ -268,7 +261,7 @@ describe('Mobiele UI, Gebaren, Routing & Toetsenbord Suite', () => {
         return { fixture, isOpen: () => comp.showLogSheet() };
       });
 
-      // 5. Feedback modal bottom sheet
+      // 4. Feedback modal bottom sheet
       await assertSwipeDismissBehavior(() => {
         const feedback = TestBed.inject(FeedbackStore);
         const fixture = TestBed.createComponent(FeedbackModalComponent);
@@ -302,6 +295,7 @@ describe('Mobiele UI, Gebaren, Routing & Toetsenbord Suite', () => {
 
       const el = fixture.nativeElement as HTMLElement;
       expect(el.querySelector('.more-tabs')).toBeNull();
+      expect(el.querySelector('.shell__main')?.classList.contains('is-more-hub')).toBe(true);
       expect(el.querySelectorAll('.hub-row').length).toBe(5);
       const text = el.textContent ?? '';
       expect(text).toContain('Set Voortgang');
@@ -309,6 +303,48 @@ describe('Mobiele UI, Gebaren, Routing & Toetsenbord Suite', () => {
       expect(text).toContain('Ruil & Verkoop');
       expect(text).toContain('Feedback Hub');
       expect(text).toContain('Instellingen & Sync');
+    });
+
+    it('opent een Collectie-kaart op een aparte Kaartdetail-pagina zonder bottom sheet en behoudt filters bij Terug', async () => {
+      const router = TestBed.inject(Router);
+      const platform = TestBed.inject(PlatformService);
+
+      const appFixture = TestBed.createComponent(App);
+      appFixture.detectChanges();
+
+      await router.navigateByUrl('/collectie', { replaceUrl: true });
+      appFixture.detectChanges();
+      await appFixture.whenStable();
+
+      const colComp = appFixture.debugElement.query(By.directive(CollectionComponent))
+        .componentInstance as CollectionComponent;
+      colComp.selectedSet.set('151');
+      colComp.searchQuery.set('Venusaur');
+      appFixture.detectChanges();
+
+      const cardSlab = (appFixture.nativeElement as HTMLElement).querySelector('.card-slab') as HTMLElement;
+      expect(cardSlab).not.toBeNull();
+      cardSlab.click();
+      appFixture.detectChanges();
+      await appFixture.whenStable();
+
+      expect(router.url).toMatch(/^\/collectie\/kaart\/\d+\/.+/);
+      const el = appFixture.nativeElement as HTMLElement;
+      expect(el.querySelector('.pb-sheet')).toBeNull();
+      expect(el.querySelector('.bottom-nav')).toBeNull();
+      expect(el.querySelector('.topbar__icon-btn')).not.toBeNull();
+      expect(el.querySelector('.detail-dock')).not.toBeNull();
+      expect(el.querySelector('.detail-layout')).not.toBeNull();
+
+      expect(platform.handleMobileBackButton()).toBe('popped_stack');
+      appFixture.detectChanges();
+      await appFixture.whenStable();
+
+      expect(router.url).toBe('/collectie');
+      const restoredCol = appFixture.debugElement.query(By.directive(CollectionComponent))
+        .componentInstance as CollectionComponent;
+      expect(restoredCol.selectedSet()).toBe('151');
+      expect(restoredCol.searchQuery()).toBe('Venusaur');
     });
 
     it('handelt Android Back-knop & topbar terugpijl voorspelbaar af over tabs, /meer/* detailpagina en /toevoegen', async () => {
@@ -446,19 +482,19 @@ describe('Mobiele UI, Gebaren, Routing & Toetsenbord Suite', () => {
       expect(document.documentElement.classList.contains('pb-keyboard-open')).toBe(false);
     });
 
-    it('scrolt een invoerveld onderin een bottom sheet omhoog wanneer het toetsenbord opent', async () => {
+    it('scrolt een invoerveld onderin een bottom sheet en Kaartdetail-pagina omhoog wanneer het toetsenbord opent', async () => {
       const viewport = TestBed.inject(MobileViewportService);
       viewport.initialize();
 
-      const fixture = TestBed.createComponent(CollectionComponent);
+      const fixture = TestBed.createComponent(WishlistComponent);
       const comp = fixture.componentInstance;
       fixture.detectChanges();
 
-      comp.openDetail(comp.filteredCards()[0]);
+      comp.openAddModal();
       fixture.detectChanges();
 
       const sheet = (fixture.nativeElement as HTMLElement).querySelector('.pb-sheet') as HTMLElement;
-      const notesInput = (fixture.nativeElement as HTMLElement).querySelector('#edit-notes') as HTMLInputElement;
+      const notesInput = (fixture.nativeElement as HTMLElement).querySelector('#wl-notes') as HTMLInputElement;
       sheet.scrollTop = 100;
 
       vi.spyOn(sheet, 'getBoundingClientRect').mockReturnValue({
@@ -489,6 +525,49 @@ describe('Mobiele UI, Gebaren, Routing & Toetsenbord Suite', () => {
       await new Promise((r) => setTimeout(r, 40));
 
       expect(sheet.scrollTop).toBeGreaterThan(200);
+      fixture.destroy();
+
+      // En op Kaartdetail-pagina scrolt #edit-notes binnen .shell__main
+      setViewportMetrics(390, 844);
+      const router = TestBed.inject(Router);
+      const store = TestBed.inject(CollectionStore);
+      const appFixture = TestBed.createComponent(App);
+      appFixture.detectChanges();
+      const firstCard = store.collection()[0];
+      await router.navigate(['/collectie/kaart', firstCard.rowIndex, firstCard.cardId]);
+      appFixture.detectChanges();
+      await appFixture.whenStable();
+
+      const mainEl = (appFixture.nativeElement as HTMLElement).querySelector('.shell__main') as HTMLElement;
+      const detailNotes = (appFixture.nativeElement as HTMLElement).querySelector('#edit-notes') as HTMLInputElement;
+      mainEl.scrollTop = 80;
+      vi.spyOn(mainEl, 'getBoundingClientRect').mockReturnValue({
+        top: 64,
+        bottom: 440,
+        left: 0,
+        right: 390,
+        width: 390,
+        height: 376,
+        x: 0,
+        y: 64,
+        toJSON: () => ({}),
+      });
+      vi.spyOn(detailNotes, 'getBoundingClientRect').mockReturnValue({
+        top: 540,
+        bottom: 586,
+        left: 16,
+        right: 374,
+        width: 358,
+        height: 46,
+        x: 16,
+        y: 540,
+        toJSON: () => ({}),
+      });
+
+      setViewportMetrics(390, 440);
+      detailNotes.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+      await new Promise((r) => setTimeout(r, 40));
+      expect(mainEl.scrollTop).toBeGreaterThan(180);
     });
   });
 
@@ -497,6 +576,7 @@ describe('Mobiele UI, Gebaren, Routing & Toetsenbord Suite', () => {
       const router = TestBed.inject(Router);
       const store = TestBed.inject(CollectionStore);
       expect(store.collection().length).toBeGreaterThan(0);
+      const firstCard = store.collection()[0];
 
       const appFixture = TestBed.createComponent(App);
       appFixture.detectChanges();
@@ -504,6 +584,7 @@ describe('Mobiele UI, Gebaren, Routing & Toetsenbord Suite', () => {
       const mobileRoutes: Array<{ path: string; expectedText: string }> = [
         { path: '/dashboard', expectedText: 'Totale Portfoliowaarde' },
         { path: '/collectie', expectedText: 'Collectie' },
+        { path: `/collectie/kaart/${firstCard.rowIndex}/${firstCard.cardId}`, expectedText: firstCard.name },
         { path: '/toevoegen', expectedText: 'Kaart Toevoegen' },
         { path: '/pokedex', expectedText: 'Pokédex' },
         { path: '/meer', expectedText: 'Instellingen & Sync' },

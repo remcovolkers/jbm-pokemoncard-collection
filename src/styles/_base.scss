@@ -48,11 +48,13 @@ body {
   }
 
   html.pb-keyboard-open .bottom-nav,
-  html.pb-keyboard-open .qa-dock {
+  html.pb-keyboard-open .qa-dock,
+  html.pb-keyboard-open .detail-dock {
     display: none !important;
   }
 
-  html.pb-keyboard-open .shell__main.is-quick-add {
+  html.pb-keyboard-open .shell__main.is-quick-add,
+  html.pb-keyboard-open .shell__main.is-detail-dock {
     padding-bottom: 1.5rem;
   }
 }

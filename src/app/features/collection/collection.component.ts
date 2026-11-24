@@ -1,76 +1,39 @@
-import { ChangeDetectionStrategy, Component, HostListener, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
-import {
-  extractCardmarketUrlFromNotes,
-  getDisplaySetCode,
-  parseCardIdInput,
-  resolveCardmarketUrl,
-} from '../../core/domain/card-id.utils';
-import {
-  calculateCardMetrics,
-  compareCardNumbers,
-  formatEur,
-  formatPercent,
-} from '../../core/domain/card-math.utils';
-import { CollectionCard, DEFAULT_DROPDOWN_SETTINGS } from '../../core/domain/models';
+import { Router, RouterLink } from '@angular/router';
+import { getDisplaySetCode, parseCardIdInput } from '../../core/domain/card-id.utils';
+import { calculateCardMetrics, compareCardNumbers, formatEur, formatPercent } from '../../core/domain/card-math.utils';
+import { CollectionCard } from '../../core/domain/models';
 import { HapticsService } from '../../core/platform/haptics.service';
-import { ModalScrollLockService } from '../../core/platform/modal-scroll-lock.service';
-import { CARD_CATALOG_PORT } from '../../core/ports/card-catalog.port';
 import { CollectionStore } from '../../core/state/collection.store';
 import { CardArtworkComponent } from '../../shared/card-artwork/card-artwork.component';
-import { PbSheetDismissDirective } from '../../shared/directives/sheet-dismiss.directive';
-
-type SortOption = 'value_desc' | 'value_asc' | 'number_asc' | 'name_asc' | 'qty_desc';
+import { CollectionViewStateService } from './collection-view-state.service';
 
 @Component({
   selector: 'app-collection',
   standalone: true,
-  imports: [FormsModule, RouterLink, CardArtworkComponent, PbSheetDismissDirective],
+  imports: [FormsModule, RouterLink, CardArtworkComponent],
   templateUrl: './collection.component.html',
   styleUrl: './collection.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class CollectionComponent implements OnInit {
   readonly store = inject(CollectionStore);
-  private readonly catalog = inject(CARD_CATALOG_PORT);
-  private readonly scrollLock = inject(ModalScrollLockService);
+  private readonly viewState = inject(CollectionViewStateService);
+  private readonly router = inject(Router);
   private readonly haptics = inject(HapticsService);
 
   readonly formatEur = formatEur;
   readonly formatPercent = formatPercent;
   readonly getDisplaySetCode = getDisplaySetCode;
 
-  readonly searchQuery = signal('');
-  readonly viewMode = signal<'grid' | 'list'>('grid');
-  readonly sortBy = signal<SortOption>('value_desc');
-  readonly selectedSet = signal<string>('ALL');
-  readonly selectedLocation = signal<string>('ALL');
-  readonly selectedRarity = signal<string>('ALL');
-  readonly onlyForTrade = signal<boolean>(false);
-
-  // Detail Bottom Sheet state
-  readonly activeCard = signal<CollectionCard | null>(null);
-  readonly editDraft = signal<CollectionCard | null>(null);
-  readonly isDetailOpen = computed(() => this.editDraft() !== null);
-  readonly activeCardmarketProductId = signal<number | undefined>(undefined);
-  readonly confirmDelete = signal(false);
-
-  constructor() {
-    this.scrollLock.bind(() => this.isDetailOpen(), () => this.closeDetail());
-  }
-
-  readonly activeCardmarketUrl = computed(() => {
-    const d = this.editDraft();
-    if (!d) return '';
-    return resolveCardmarketUrl({
-      name: d.name,
-      setName: d.setName,
-      cardNumber: d.cardNumber,
-      cardmarketProductId: this.activeCardmarketProductId(),
-      notes: d.notes,
-    });
-  });
+  readonly searchQuery = this.viewState.searchQuery;
+  readonly viewMode = this.viewState.viewMode;
+  readonly sortBy = this.viewState.sortBy;
+  readonly selectedSet = this.viewState.selectedSet;
+  readonly selectedLocation = this.viewState.selectedLocation;
+  readonly selectedRarity = this.viewState.selectedRarity;
+  readonly onlyForTrade = this.viewState.onlyForTrade;
 
   readonly availableSets = computed(() => {
     const sets = new Set(this.store.collection().map((c) => c.setName).filter(Boolean));
@@ -143,15 +106,6 @@ export class CollectionComponent implements OnInit {
       this.onlyForTrade()
   );
 
-  readonly activeDraftMetrics = computed(() => {
-    const draft = this.editDraft();
-    return draft ? calculateCardMetrics(draft) : null;
-  });
-
-  readonly acquisitionMethods = computed(
-    () => this.store.settings().acquisitionMethods ?? DEFAULT_DROPDOWN_SETTINGS.acquisitionMethods ?? []
-  );
-
   ngOnInit(): void {
     const requestedSet = this.store.requestedSetFilter();
     if (requestedSet) {
@@ -161,126 +115,12 @@ export class CollectionComponent implements OnInit {
   }
 
   resetFilters(): void {
-    this.searchQuery.set('');
-    this.selectedSet.set('ALL');
-    this.selectedLocation.set('ALL');
-    this.selectedRarity.set('ALL');
-    this.onlyForTrade.set(false);
+    this.viewState.resetFilters();
   }
 
   openDetail(card: CollectionCard): void {
-    this.activeCard.set(card);
-    this.editDraft.set({
-      ...card,
-      purchasePrice: Math.max(0, Number(card.purchasePrice) || 0),
-    });
-    this.confirmDelete.set(false);
-    const cachedId = this.catalog.getCachedCardmarketProductId?.(card.cardId);
-    this.activeCardmarketProductId.set(cachedId);
-
-    if (!cachedId && card.cardId && !extractCardmarketUrlFromNotes(card.notes)) {
-      void this.resolveProductIdForDetail(card.cardId);
-    }
-  }
-
-  private async resolveProductIdForDetail(cardId: string): Promise<void> {
-    try {
-      const found =
-        (await this.catalog.getCardByExactId(cardId)) ??
-        (await this.catalog.lookupByCardId(cardId));
-      if (found?.cardmarketProductId && this.activeCard()?.cardId === cardId) {
-        this.activeCardmarketProductId.set(found.cardmarketProductId);
-      }
-    } catch {
-      // Offline of onbekend ID: Singles-zoeklink blijft als fallback actief
-    }
-  }
-
-  closeDetail(): void {
-    this.activeCard.set(null);
-    this.editDraft.set(null);
-    this.activeCardmarketProductId.set(undefined);
-    this.confirmDelete.set(false);
-  }
-
-  @HostListener('document:keydown.escape')
-  onEscapeKey(): void {
-    if (this.activeCard()) {
-      this.closeDetail();
-    }
-  }
-
-  patchDraft(patch: Partial<CollectionCard>): void {
-    this.editDraft.update((prev) => (prev ? { ...prev, ...patch } : null));
-  }
-
-  toggleDraftAcquisitionMethod(method: string): void {
-    this.editDraft.update((prev) => {
-      if (!prev) return null;
-      return {
-        ...prev,
-        acquisitionMethod: prev.acquisitionMethod === method ? '' : method,
-      };
-    });
-  }
-
-  onDraftPurchasePriceChange(value: unknown): void {
-    const num = Number(value);
-    const nextPrice =
-      value === '' || value === null || value === undefined || !Number.isFinite(num)
-        ? 0
-        : Math.max(0, num);
-    this.patchDraft({ purchasePrice: nextPrice });
-  }
-
-  normalizeDraftPurchasePriceInput(event: Event): void {
-    const input = event.target as HTMLInputElement | null;
-    const draft = this.editDraft();
-    if (input && draft) {
-      input.value = String(draft.purchasePrice);
-    }
-  }
-
-  adjustDraftQty(delta: number): void {
     void this.haptics.light();
-    this.editDraft.update((prev) =>
-      prev ? { ...prev, quantity: Math.max(1, (prev.quantity || 1) + delta) } : null
-    );
-  }
-
-  async saveDraft(): Promise<void> {
-    const orig = this.activeCard();
-    const draft = this.editDraft();
-    if (!orig || !draft) return;
-
-    void this.haptics.success();
-    const cardName = draft.name;
-    const patch: Partial<CollectionCard> = {
-      quantity: draft.quantity,
-      variant: draft.variant,
-      condition: draft.condition,
-      grading: draft.grading,
-      grade: draft.grading === 'Raw' ? '' : draft.grade,
-      storageLocation: draft.storageLocation,
-      binderDetail: draft.binderDetail,
-      purchasePrice: Number(draft.purchasePrice) || 0,
-      marketPrice: Number(draft.marketPrice) || 0,
-      acquisitionMethod: (draft.acquisitionMethod ?? '').trim(),
-      forTrade: draft.forTrade,
-      notes: draft.notes,
-    };
-
-    this.closeDetail();
-    this.store.showToast(`${cardName} bijgewerkt.`, 'success');
-    await this.store.updateCard(orig.rowIndex, orig.cardId, patch);
-  }
-
-  async deleteActiveCard(): Promise<void> {
-    const card = this.activeCard();
-    if (!card) return;
-    void this.haptics.warning();
-    this.closeDetail();
-    await this.store.deleteCard(card);
+    void this.router.navigate(['/collectie/kaart', card.rowIndex, card.cardId]);
   }
 
   isHoloCard(card: CollectionCard): boolean {

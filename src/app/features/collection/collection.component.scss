@@ -286,12 +286,19 @@
 
 .card-slab {
   @include surface-slab;
-  @include pressable;
   padding: 0.55rem;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
   cursor: pointer;
+  transition:
+    border-color 140ms ease,
+    background-color 140ms ease;
+
+  &:active {
+    border-color: rgba($color-primary-container, 0.55);
+    background-color: $color-surface-high;
+  }
 
   @media (hover: hover) and (pointer: fine) {
     &:hover {
@@ -442,12 +449,19 @@
 }
 
 .list-row {
-  @include pressable;
   cursor: pointer;
   padding: 0.65rem;
   display: flex;
   align-items: center;
   gap: 0.85rem;
+  transition:
+    border-color 140ms ease,
+    background-color 140ms ease;
+
+  &:active {
+    border-color: rgba($color-primary-container, 0.55);
+    background-color: $color-surface-high;
+  }
 
   @media (hover: hover) and (pointer: fine) {
     &:hover {
@@ -512,315 +526,5 @@
         color: $color-error;
       }
     }
-  }
-}
-
-// Detail Bottom Sheet
-.sheet-title-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-  min-width: 0;
-}
-
-.sheet-badges {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  flex-wrap: wrap;
-}
-
-.sheet-rarity {
-  @include type-data-sm;
-  color: $color-secondary;
-}
-
-.sheet-title {
-  @include type-headline-lg;
-  @include truncate;
-}
-
-.sheet-set {
-  @include type-body-sm;
-  color: $color-on-surface-variant;
-}
-
-.sheet-hero {
-  display: flex;
-  gap: $space-md;
-  padding: 0.75rem;
-  border-radius: $radius-lg;
-  background-color: $color-surface-container;
-  border: 1px solid rgba($color-outline-variant, 0.55);
-  margin-bottom: $space-md;
-
-  &__art {
-    width: 92px;
-    flex-shrink: 0;
-  }
-
-  &__stats {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    gap: $space-sm;
-  }
-
-  &__price-line {
-    display: flex;
-    align-items: baseline;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-  }
-
-  &__price {
-    @include type-data-lg;
-    font-size: 1.35rem;
-    color: $color-secondary;
-    font-weight: 700;
-  }
-
-  &__roi {
-    @include type-data-sm;
-    color: $color-secondary;
-    font-weight: 700;
-
-    &.is-negative {
-      color: $color-error;
-    }
-  }
-
-  &__mini-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.5rem;
-  }
-}
-
-.sheet-stat-eyebrow {
-  @include type-data-sm;
-  font-size: 0.625rem;
-  text-transform: uppercase;
-  color: $color-on-surface-muted;
-}
-
-.mini-stat {
-  padding: 0.45rem 0.6rem;
-  border-radius: $radius-sm;
-  background-color: $color-surface-highest;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-
-  &--profit {
-    background-color: rgba($color-secondary, 0.14);
-
-    .mini-stat__label,
-    .mini-stat__val {
-      color: $color-secondary-fixed;
-    }
-
-    &.is-negative {
-      background-color: rgba($color-primary-container, 0.16);
-
-      .mini-stat__label,
-      .mini-stat__val {
-        color: $color-error;
-      }
-    }
-  }
-
-  &__label {
-    font-size: 0.62rem;
-    text-transform: uppercase;
-    color: $color-on-surface-muted;
-  }
-
-  &__val {
-    font-size: 0.8rem;
-    font-weight: 700;
-  }
-}
-
-.sheet-form {
-  display: flex;
-  flex-direction: column;
-  gap: $space-md;
-}
-
-.stepper-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: $space-sm;
-  padding: 0.75rem;
-  border-radius: $radius-md;
-  background-color: $color-surface-container;
-
-  &__title {
-    display: block;
-    font-size: 0.875rem;
-  }
-
-  &__sub {
-    @include type-body-sm;
-    color: $color-on-surface-muted;
-  }
-}
-
-.stepper {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-
-  &__btn {
-    @include pressable;
-    width: 40px;
-    height: 40px;
-    border-radius: $radius-md;
-    background-color: $color-surface-highest;
-    color: $color-on-surface;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    &--primary {
-      background-color: $color-primary-container;
-      color: #ffffff;
-    }
-  }
-
-  &__val {
-    font-size: 0.82rem;
-    font-weight: 700;
-    min-width: 82px;
-    text-align: center;
-  }
-}
-
-.pills-wrap {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.45rem;
-}
-
-.cond-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.35rem;
-
-  @include mq-sm {
-    grid-template-columns: repeat(7, minmax(0, 1fr));
-  }
-}
-
-.cond-btn {
-  @include pressable;
-  min-height: 42px;
-  border-radius: $radius-sm;
-  background-color: $color-surface-container;
-  border: 1px solid rgba($color-outline-variant, 0.55);
-  color: $color-on-surface-variant;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  &__code {
-    font-size: 0.75rem;
-    font-weight: 700;
-  }
-
-  &.is-active {
-    background-color: $color-secondary-container;
-    border-color: $color-secondary;
-    color: $color-on-secondary;
-  }
-}
-
-.two-col {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: $space-sm;
-}
-
-.switch-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: $space-sm;
-  padding: 0.75rem;
-  border-radius: $radius-md;
-  background-color: $color-surface-container;
-
-  &__left {
-    display: flex;
-    align-items: center;
-    gap: 0.65rem;
-  }
-
-  &__icon {
-    width: 34px;
-    height: 34px;
-    border-radius: $radius-sm;
-    background-color: rgba($color-secondary, 0.16);
-    color: $color-secondary;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-  }
-
-  &__title {
-    display: block;
-    font-size: 0.875rem;
-  }
-
-  &__sub {
-    @include type-body-sm;
-    color: $color-on-surface-muted;
-  }
-}
-
-.sheet-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-  padding-top: $space-xs;
-}
-
-.confirm-delete {
-  padding: 0.75rem;
-  border-radius: $radius-md;
-  background-color: rgba($color-error-container, 0.35);
-  border: 1px solid rgba($color-primary-container, 0.55);
-  display: flex;
-  flex-direction: column;
-  gap: 0.65rem;
-  @include type-body-sm;
-
-  &__btns {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: $space-sm;
-  }
-}
-
-.price-optin-btn {
-  @include pressable;
-  margin-top: 0.35rem;
-  padding: 0.3rem 0.55rem;
-  border-radius: $radius-sm;
-  background-color: rgba($color-secondary, 0.12);
-  border: 1px solid rgba($color-secondary, 0.32);
-  color: $color-secondary;
-  font-size: 0.68rem;
-  font-weight: 600;
-  text-align: left;
-  line-height: 1.3;
-
-  &:hover {
-    background-color: rgba($color-secondary, 0.22);
   }
 }

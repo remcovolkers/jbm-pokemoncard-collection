@@ -72,8 +72,7 @@ export class DashboardComponent {
   }
 
   openCardInCollection(card: CollectionCard): void {
-    this.store.requestedSetFilter.set(card.setName);
-    void this.router.navigateByUrl('/collectie');
+    void this.router.navigate(['/collectie/kaart', card.rowIndex, card.cardId]);
   }
 
   badgeLabel(card: CollectionCard): string {

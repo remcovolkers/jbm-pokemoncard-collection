@@ -340,8 +340,13 @@
   padding-top: 0;
   padding-bottom: 1.5rem;
 
-  &.is-quick-add {
+  &.is-quick-add,
+  &.is-detail-dock {
     padding-bottom: calc(5.75rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  &.is-more-hub {
+    padding-bottom: 0.35rem;
   }
 
   @include mq-md {
@@ -352,8 +357,13 @@
     padding-top: 0;
     padding-bottom: 5rem;
 
-    &.is-quick-add {
+    &.is-quick-add,
+    &.is-detail-dock {
       padding-bottom: 8rem;
+    }
+
+    &.is-more-hub {
+      padding-bottom: 5rem;
     }
   }
 }

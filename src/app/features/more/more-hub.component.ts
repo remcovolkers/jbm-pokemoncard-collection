@@ -138,7 +138,7 @@ import { FeedbackStore } from '../../core/state/feedback.store';
       </div>
 
       <!-- Snelle Actie -->
-      <button type="button" class="pb-btn pb-btn--secondary pb-btn--full" (click)="openFeedback()">
+      <button type="button" class="pb-btn pb-btn--secondary pb-btn--full hub-feedback-btn" (click)="openFeedback()">
         <span class="material-symbols-outlined">add_comment</span>
         <span>Direct feedback geven</span>
       </button>
@@ -160,8 +160,8 @@ import { FeedbackStore } from '../../core/state/feedback.store';
       .hub-menu {
         display: flex;
         flex-direction: column;
-        gap: $space-md;
-        padding: $space-md $margin-mobile $space-xl;
+        gap: 0.65rem;
+        padding: 0.65rem $margin-mobile 0.25rem;
         max-width: 960px;
         margin: 0 auto;
 
@@ -173,7 +173,7 @@ import { FeedbackStore } from '../../core/state/feedback.store';
         &__groups {
           display: grid;
           grid-template-columns: minmax(0, 1fr);
-          gap: $space-md;
+          gap: 0.65rem;
 
           @include mq-md {
             grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -188,8 +188,12 @@ import { FeedbackStore } from '../../core/state/feedback.store';
         align-items: center;
         justify-content: space-between;
         gap: $space-sm;
-        padding: 0.8rem 0.95rem;
+        padding: 0.55rem 0.85rem;
         background-color: $color-surface-low;
+
+        @include mq-md {
+          padding: 0.8rem 0.95rem;
+        }
 
         &__left {
           display: flex;
@@ -220,14 +224,29 @@ import { FeedbackStore } from '../../core/state/feedback.store';
 
         &__refresh {
           flex-shrink: 0;
+          width: 38px;
+          height: 38px;
+          min-width: 38px;
+          min-height: 38px;
+
+          @include mq-md {
+            width: 44px;
+            height: 44px;
+            min-width: 44px;
+            min-height: 44px;
+          }
         }
       }
 
       .hub-section {
         display: flex;
         flex-direction: column;
-        gap: 0.45rem;
+        gap: 0.3rem;
         min-width: 0;
+
+        @include mq-md {
+          gap: 0.45rem;
+        }
 
         &__title {
           @include type-data-sm;
@@ -247,14 +266,20 @@ import { FeedbackStore } from '../../core/state/feedback.store';
       }
 
       .hub-row {
-        @include touch-target(58px);
+        @include touch-target(50px);
         @include pressable;
         display: flex;
         align-items: center;
-        gap: 0.8rem;
-        padding: 0.75rem 0.9rem;
+        gap: 0.7rem;
+        padding: 0.5rem 0.85rem;
         text-align: left;
         border-bottom: 1px solid rgba($color-outline-variant, 0.4);
+
+        @include mq-md {
+          @include touch-target(58px);
+          gap: 0.8rem;
+          padding: 0.75rem 0.9rem;
+        }
 
         &:last-child {
           border-bottom: none;
@@ -267,13 +292,18 @@ import { FeedbackStore } from '../../core/state/feedback.store';
         }
 
         &__icon {
-          width: 38px;
-          height: 38px;
+          width: 34px;
+          height: 34px;
           border-radius: $radius-md;
           display: flex;
           align-items: center;
           justify-content: center;
           flex-shrink: 0;
+
+          @include mq-md {
+            width: 38px;
+            height: 38px;
+          }
 
           .material-symbols-outlined {
             font-size: 20px;
@@ -328,6 +358,11 @@ import { FeedbackStore } from '../../core/state/feedback.store';
         }
       }
 
+      .hub-feedback-btn {
+        min-height: 44px;
+        padding: 0.5rem 1rem;
+      }
+
       .hub-version {
         display: flex;
         align-items: center;
@@ -335,9 +370,14 @@ import { FeedbackStore } from '../../core/state/feedback.store';
         flex-wrap: wrap;
         gap: 0.25rem;
         text-align: center;
-        font-size: 0.7rem;
+        font-size: 0.68rem;
         color: $color-on-surface-muted;
-        padding-top: $space-xs;
+        padding-top: 0;
+
+        @include mq-md {
+          font-size: 0.7rem;
+          padding-top: $space-xs;
+        }
       }
     `,
   ],

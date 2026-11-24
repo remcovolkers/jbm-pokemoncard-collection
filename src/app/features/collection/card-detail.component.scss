@@ -1,0 +1,377 @@
+@use 'tokens' as *;
+@use 'mixins' as *;
+
+.detail-page {
+  display: flex;
+  flex-direction: column;
+  gap: $space-md;
+  padding: $space-md $margin-mobile $space-xl;
+  max-width: 1080px;
+  margin: 0 auto;
+
+  @include mq-md {
+    padding: $space-lg $margin-desktop $space-xl;
+    gap: $space-lg;
+  }
+}
+
+.detail-desktop-back {
+  display: none;
+
+  @include mq-md {
+    display: flex;
+    align-items: center;
+  }
+}
+
+.detail-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: $space-md;
+
+  @include mq-md {
+    grid-template-columns: 320px minmax(0, 1fr);
+    gap: $space-lg;
+    align-items: start;
+  }
+}
+
+.detail-showcase {
+  min-width: 0;
+
+  @include mq-md {
+    position: sticky;
+    top: $space-lg;
+  }
+}
+
+.hero-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+
+  &__badges {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    flex-wrap: wrap;
+  }
+
+  &__rarity {
+    @include type-data-sm;
+    color: $color-secondary;
+  }
+
+  &__title {
+    @include type-headline-lg;
+    line-height: 1.2;
+  }
+
+  &__set {
+    @include type-body-sm;
+    color: $color-on-surface-variant;
+    margin-top: -0.35rem;
+  }
+
+  &__art {
+    width: 170px;
+    margin: 0.25rem auto;
+
+    @include mq-md {
+      width: 240px;
+    }
+  }
+
+  &__pricing {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding-top: 0.25rem;
+  }
+
+  &__eyebrow {
+    @include type-data-sm;
+    font-size: 0.625rem;
+    text-transform: uppercase;
+    color: $color-on-surface-muted;
+  }
+
+  &__price-line {
+    display: flex;
+    align-items: baseline;
+    gap: 0.55rem;
+    flex-wrap: wrap;
+  }
+
+  &__price {
+    @include type-data-lg;
+    font-size: 1.5rem;
+    color: $color-secondary;
+    font-weight: 700;
+  }
+
+  &__roi {
+    @include type-data-sm;
+    color: $color-secondary;
+    font-weight: 700;
+
+    &.is-negative {
+      color: $color-error;
+    }
+  }
+
+  &__mini-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
+  }
+}
+
+.mini-stat {
+  padding: 0.5rem 0.65rem;
+  border-radius: $radius-sm;
+  background-color: $color-surface-highest;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+
+  &--profit {
+    background-color: rgba($color-secondary, 0.14);
+
+    .mini-stat__label,
+    .mini-stat__val {
+      color: $color-secondary-fixed;
+    }
+
+    &.is-negative {
+      background-color: rgba($color-primary-container, 0.16);
+
+      .mini-stat__label,
+      .mini-stat__val {
+        color: $color-error;
+      }
+    }
+  }
+
+  &__label {
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    color: $color-on-surface-muted;
+  }
+
+  &__val {
+    font-size: 0.84rem;
+    font-weight: 700;
+  }
+}
+
+.detail-editor {
+  display: flex;
+  flex-direction: column;
+  gap: $space-md;
+  min-width: 0;
+}
+
+.editor-card {
+  display: flex;
+  flex-direction: column;
+  gap: $space-md;
+
+  &__title {
+    @include type-headline-md;
+    font-size: 1rem;
+    color: $color-on-surface;
+  }
+
+  &--danger {
+    border-color: rgba($color-primary-container, 0.28);
+  }
+}
+
+.stepper-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $space-sm;
+  padding: 0.75rem;
+  border-radius: $radius-md;
+  background-color: $color-surface-low;
+
+  &__title {
+    display: block;
+    font-size: 0.875rem;
+  }
+
+  &__sub {
+    @include type-body-sm;
+    color: $color-on-surface-muted;
+  }
+}
+
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+
+  &__btn {
+    @include pressable;
+    width: 40px;
+    height: 40px;
+    border-radius: $radius-md;
+    background-color: $color-surface-highest;
+    color: $color-on-surface;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    &--primary {
+      background-color: $color-primary-container;
+      color: #ffffff;
+    }
+  }
+
+  &__val {
+    font-size: 0.82rem;
+    font-weight: 700;
+    min-width: 82px;
+    text-align: center;
+  }
+}
+
+.price-optin-btn {
+  @include pressable;
+  align-self: flex-start;
+  margin-top: 0.25rem;
+  padding: 0.3rem 0.6rem;
+  border-radius: $radius-sm;
+  background-color: rgba($color-secondary, 0.12);
+  border: 1px solid rgba($color-secondary, 0.32);
+  color: $color-secondary;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.pills-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.cond-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.35rem;
+
+  @include mq-sm {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+}
+
+.cond-btn {
+  @include pressable;
+  min-height: 42px;
+  border-radius: $radius-sm;
+  background-color: $color-surface-low;
+  border: 1px solid rgba($color-outline-variant, 0.55);
+  color: $color-on-surface-variant;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  &__code {
+    font-size: 0.75rem;
+    font-weight: 700;
+  }
+
+  &.is-active {
+    background-color: $color-secondary-container;
+    border-color: $color-secondary;
+    color: $color-on-secondary;
+  }
+}
+
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: $space-sm;
+}
+
+.switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $space-sm;
+  padding: 0.75rem;
+  border-radius: $radius-md;
+  background-color: $color-surface-low;
+
+  &__left {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+  }
+
+  &__icon {
+    width: 34px;
+    height: 34px;
+    border-radius: $radius-sm;
+    background-color: rgba($color-secondary, 0.16);
+    color: $color-secondary;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  &__title {
+    display: block;
+    font-size: 0.875rem;
+  }
+
+  &__sub {
+    @include type-body-sm;
+    color: $color-on-surface-muted;
+  }
+}
+
+.confirm-delete {
+  padding: 0.75rem;
+  border-radius: $radius-md;
+  background-color: rgba($color-error-container, 0.35);
+  border: 1px solid rgba($color-primary-container, 0.55);
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  @include type-body-sm;
+  color: $color-primary-fixed;
+
+  &__btns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: $space-sm;
+  }
+}
+
+.detail-dock {
+  @include surface-glass;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: $z-nav;
+  padding: 0.6rem $margin-mobile calc(0.6rem + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid rgba($color-outline-variant, 0.65);
+  box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.6);
+  touch-action: none;
+  overscroll-behavior: none;
+
+  @include mq-md {
+    left: $sidebar-width;
+    padding: 0.9rem $margin-desktop;
+  }
+
+  &__inner {
+    max-width: 1080px;
+    margin: 0 auto;
+  }
+}

@@ -53,11 +53,20 @@ export class App implements OnInit {
   );
 
   readonly isQuickAddRoute = computed(() => this.currentUrl().startsWith('/toevoegen'));
+  readonly isCardDetailRoute = computed(() => this.currentUrl().startsWith('/collectie/kaart/'));
   readonly isMoreSubRoute = computed(() => /^\/meer\/.+/.test(this.currentUrl()));
-  readonly showTopbarBack = computed(() => this.isQuickAddRoute() || this.isMoreSubRoute());
+  readonly isMoreHubRoute = computed(() => {
+    const clean = this.currentUrl().split('?')[0];
+    return clean === '/meer' || clean === '/meer/';
+  });
+  readonly hideBottomNav = computed(() => this.isQuickAddRoute() || this.isCardDetailRoute());
+  readonly showTopbarBack = computed(
+    () => this.isQuickAddRoute() || this.isMoreSubRoute() || this.isCardDetailRoute()
+  );
 
   readonly pageSubtitle = computed(() => {
     const url = this.currentUrl();
+    if (url.startsWith('/collectie/kaart/')) return 'Kaartdetail';
     if (url.startsWith('/collectie')) return 'Collectie';
     if (url.startsWith('/toevoegen')) return 'Kaart Toevoegen';
     if (url.startsWith('/pokedex')) return 'Pokédex Binder';

@@ -19,6 +19,12 @@ export const routes: Routes = [
       import('./features/collection/collection.component').then((m) => m.CollectionComponent),
   },
   {
+    path: 'collectie/kaart/:rowIndex/:cardId',
+    title: 'PokéBinder — Kaartdetail',
+    loadComponent: () =>
+      import('./features/collection/card-detail.component').then((m) => m.CardDetailComponent),
+  },
+  {
     path: 'toevoegen',
     title: 'PokéBinder — Kaart Toevoegen',
     loadComponent: () =>

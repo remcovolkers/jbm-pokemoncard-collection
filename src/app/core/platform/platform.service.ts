@@ -55,7 +55,11 @@ export class PlatformService {
   }
 
   isStackRoute(url: string): boolean {
-    return url.startsWith('/toevoegen') || /^\/meer\/.+/.test(url);
+    return (
+      url.startsWith('/toevoegen') ||
+      /^\/meer\/.+/.test(url) ||
+      url.startsWith('/collectie/kaart/')
+    );
   }
 
   goBackFromStack(): void {

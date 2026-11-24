@@ -1,0 +1,339 @@
+<div class="detail-page">
+  <div class="detail-desktop-back">
+    <button type="button" class="pb-btn pb-btn--secondary" (click)="goBack()">
+      <span class="material-symbols-outlined">arrow_back</span>
+      <span>Terug naar collectie</span>
+    </button>
+  </div>
+
+  @if (editDraft(); as draft) {
+    <div class="detail-layout">
+      <!-- Showcase Hero Slab -->
+      <aside class="detail-showcase">
+        <section class="pb-card hero-card" [class.pb-card--holo]="isHoloCard(draft)">
+          <div class="hero-card__badges">
+            <span class="pb-pill pb-pill--primary mono">
+              {{ getDisplaySetCode(draft.cardId, draft.setName) }} #{{ draft.cardNumber }}
+            </span>
+            @if (draft.rarity) {
+              <span class="mono hero-card__rarity">• {{ draft.rarity }}</span>
+            }
+            @if (draft.acquisitionMethod) {
+              <span class="pb-pill pb-pill--neutral">{{ draft.acquisitionMethod }}</span>
+            }
+          </div>
+
+          <h1 class="hero-card__title">{{ draft.name }}</h1>
+          <p class="hero-card__set">{{ draft.setName }} · ID: {{ draft.cardId }}</p>
+
+          <div class="hero-card__art">
+            <pb-card-artwork [cardId]="draft.cardId" [src]="draft.imageUrl" [alt]="draft.name" />
+          </div>
+
+          <div class="hero-card__pricing">
+            <span class="hero-card__eyebrow">Cardmarket Marktwaarde p/s</span>
+            <div class="hero-card__price-line">
+              <span class="mono hero-card__price">{{ formatEur(draft.marketPrice) }}</span>
+              @if (hasPurchasePrice(draft)) {
+                @if (activeDraftMetrics(); as m) {
+                  <span class="mono hero-card__roi" [class.is-negative]="m.roiPercent < 0">
+                    {{ formatPercent(m.roiPercent) }}
+                  </span>
+                }
+              }
+            </div>
+          </div>
+
+          @if (activeDraftMetrics(); as m) {
+            <div class="hero-card__mini-grid">
+              <div class="mini-stat">
+                <span class="mini-stat__label">Totale waarde</span>
+                <span class="mono mini-stat__val">{{ formatEur(m.totalValue) }}</span>
+              </div>
+              @if (hasPurchasePrice(draft)) {
+                <div class="mini-stat mini-stat--profit" [class.is-negative]="m.profitLoss < 0">
+                  <span class="mini-stat__label">Winst / Verlies</span>
+                  <span class="mono mini-stat__val">{{ formatEur(m.profitLoss, true) }}</span>
+                </div>
+              } @else {
+                <div class="mini-stat">
+                  <span class="mini-stat__label">Aankoopprijs</span>
+                  <span class="mono mini-stat__val">{{ formatEur(0) }}</span>
+                </div>
+              }
+            </div>
+          }
+
+          <a
+            class="pb-btn pb-btn--surface pb-btn--full"
+            [href]="activeCardmarketUrl()"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <span>Bekijk op Cardmarket</span>
+            <span class="material-symbols-outlined">open_in_new</span>
+          </a>
+        </section>
+      </aside>
+
+      <!-- Editor Secties -->
+      <div class="detail-editor">
+        <!-- 1. Aantal & Waarde -->
+        <section class="pb-card editor-card">
+          <h2 class="editor-card__title">Aantal &amp; Waarde</h2>
+
+          <div class="stepper-row">
+            <div>
+              <strong class="stepper-row__title">Aantal in bezit</strong>
+              <span class="stepper-row__sub">Directe update naar Google Sheets</span>
+            </div>
+            <div class="stepper">
+              <button
+                type="button"
+                class="stepper__btn"
+                aria-label="Aantal verminderen"
+                (click)="adjustDraftQty(-1)"
+              >
+                <span class="material-symbols-outlined">remove</span>
+              </button>
+              <span class="mono stepper__val">
+                {{ draft.quantity }} {{ draft.quantity === 1 ? 'exemplaar' : 'exemplaren' }}
+              </span>
+              <button
+                type="button"
+                class="stepper__btn stepper__btn--primary"
+                aria-label="Aantal vermeerderen"
+                (click)="adjustDraftQty(1)"
+              >
+                <span class="material-symbols-outlined">add</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="pb-field">
+            <label class="pb-label" for="edit-buy">Aankoopprijs p/s (€)</label>
+            <input
+              id="edit-buy"
+              type="number"
+              step="0.01"
+              min="0"
+              class="pb-input mono"
+              placeholder="0.00"
+              [ngModel]="draft.purchasePrice"
+              (ngModelChange)="onDraftPurchasePriceChange($event)"
+              (blur)="normalizeDraftPurchasePriceInput($event)"
+            />
+            @if (draft.marketPrice > 0 && draft.purchasePrice !== draft.marketPrice) {
+              <button
+                type="button"
+                class="price-optin-btn mono"
+                (click)="patchDraft({ purchasePrice: draft.marketPrice })"
+              >
+                Marktprijs overnemen ({{ formatEur(draft.marketPrice) }})
+              </button>
+            }
+          </div>
+        </section>
+
+        <!-- 2. Kaartgegevens -->
+        <section class="pb-card editor-card">
+          <h2 class="editor-card__title">Kaartgegevens</h2>
+
+          <div class="pb-field">
+            <span class="pb-label">Kaartvariant</span>
+            <div class="pills-wrap">
+              @for (variant of store.settings().variants; track variant) {
+                <button
+                  type="button"
+                  class="pb-pill pb-pill--interactive"
+                  [class.is-active]="draft.variant === variant"
+                  (click)="patchDraft({ variant })"
+                >
+                  {{ variant }}
+                </button>
+              }
+            </div>
+          </div>
+
+          <div class="pb-field">
+            <span class="pb-label">Conditie (Cardmarket standaard)</span>
+            <div class="cond-grid">
+              @for (cond of store.settings().conditions; track cond) {
+                <button
+                  type="button"
+                  class="cond-btn"
+                  [class.is-active]="draft.condition === cond"
+                  (click)="patchDraft({ condition: cond })"
+                >
+                  <span class="mono cond-btn__code">{{ shortCondition(cond) }}</span>
+                </button>
+              }
+            </div>
+          </div>
+
+          <div class="two-col">
+            <div class="pb-field">
+              <label class="pb-label" for="edit-grading">Grading</label>
+              <select
+                id="edit-grading"
+                class="pb-select"
+                [ngModel]="draft.grading"
+                (ngModelChange)="patchDraft({ grading: $event })"
+              >
+                @for (g of store.settings().gradings; track g) {
+                  <option [value]="g">{{ g }}</option>
+                }
+              </select>
+            </div>
+
+            <div class="pb-field">
+              <label class="pb-label" for="edit-grade">Grade cijfer</label>
+              <input
+                id="edit-grade"
+                type="text"
+                class="pb-input mono"
+                [disabled]="draft.grading === 'Raw'"
+                placeholder="bijv. 10 of 9.5"
+                [ngModel]="draft.grade"
+                (ngModelChange)="patchDraft({ grade: $event })"
+              />
+            </div>
+          </div>
+        </section>
+
+        <!-- 3. Opslag & Handel -->
+        <section class="pb-card editor-card">
+          <h2 class="editor-card__title">Opslag &amp; Handel</h2>
+
+          <div class="pb-field">
+            <span class="pb-label">Fysieke opslaglocatie</span>
+            <div class="pills-wrap">
+              @for (loc of store.settings().storageLocations; track loc) {
+                <button
+                  type="button"
+                  class="pb-pill pb-pill--interactive"
+                  [class.is-active]="draft.storageLocation === loc"
+                  (click)="patchDraft({ storageLocation: loc })"
+                >
+                  {{ loc }}
+                </button>
+              }
+            </div>
+          </div>
+
+          <div class="pb-field">
+            <span class="pb-label">Herkomst (optioneel)</span>
+            <div class="pills-wrap">
+              @for (method of acquisitionMethods(); track method) {
+                <button
+                  type="button"
+                  class="pb-pill pb-pill--interactive"
+                  [class.is-active]="draft.acquisitionMethod === method"
+                  (click)="toggleDraftAcquisitionMethod(method)"
+                >
+                  {{ method }}
+                </button>
+              }
+            </div>
+          </div>
+
+          <div class="pb-field">
+            <label class="pb-label" for="edit-detail">Map / Deck detail</label>
+            <input
+              id="edit-detail"
+              type="text"
+              class="pb-input"
+              placeholder="bijv. VaultX Pagina 12"
+              [ngModel]="draft.binderDetail"
+              (ngModelChange)="patchDraft({ binderDetail: $event })"
+            />
+          </div>
+
+          <div class="pb-field">
+            <label class="pb-label" for="edit-notes">Cardmarket Link / Notities</label>
+            <input
+              id="edit-notes"
+              type="text"
+              class="pb-input"
+              placeholder="Notitie, sleeve type of Cardmarket URL…"
+              [ngModel]="draft.notes"
+              (ngModelChange)="patchDraft({ notes: $event })"
+            />
+          </div>
+
+          <div class="switch-row">
+            <div class="switch-row__left">
+              <div class="switch-row__icon">
+                <span class="material-symbols-outlined">storefront</span>
+              </div>
+              <div>
+                <strong class="switch-row__title">Aanbieden voor Ruil / Verkoop</strong>
+                <span class="switch-row__sub">Verschijnt direct in je Trade Binder overzicht</span>
+              </div>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              class="pb-switch"
+              [class.is-checked]="draft.forTrade"
+              [attr.aria-checked]="draft.forTrade"
+              (click)="patchDraft({ forTrade: !draft.forTrade })"
+            >
+              <span class="pb-switch__thumb"></span>
+            </button>
+          </div>
+        </section>
+
+        <!-- 4. Verwijderen -->
+        <section class="pb-card editor-card editor-card--danger">
+          @if (!confirmDelete()) {
+            <button
+              type="button"
+              class="pb-btn pb-btn--danger pb-btn--full"
+              (click)="confirmDelete.set(true)"
+            >
+              <span class="material-symbols-outlined">delete</span>
+              <span>Verwijder kaart uit collectie</span>
+            </button>
+          } @else {
+            <div class="confirm-delete">
+              <span>Weet je zeker dat je {{ draft.name }} wilt verwijderen?</span>
+              <div class="confirm-delete__btns">
+                <button type="button" class="pb-btn pb-btn--secondary" (click)="confirmDelete.set(false)">
+                  Annuleren
+                </button>
+                <button type="button" class="pb-btn pb-btn--danger" (click)="deleteActiveCard()">
+                  Definitief verwijderen
+                </button>
+              </div>
+            </div>
+          }
+        </section>
+      </div>
+    </div>
+
+    <!-- Sticky Bottom Action Dock -->
+    <div class="detail-dock">
+      <div class="detail-dock__inner">
+        <button type="button" class="pb-btn pb-btn--primary pb-btn--full" (click)="saveDraft()">
+          <span class="material-symbols-outlined">save</span>
+          <span>Wijzigingen opslaan</span>
+        </button>
+      </div>
+    </div>
+  } @else {
+    <div class="pb-empty">
+      <div class="pb-empty__icon">
+        <span class="material-symbols-outlined">style</span>
+      </div>
+      <h2 class="pb-empty__title">Kaart niet gevonden</h2>
+      <p class="pb-empty__text">
+        Deze kaart staat niet meer in je collectie of werd zojuist verwijderd.
+      </p>
+      <a routerLink="/collectie" [replaceUrl]="true" class="pb-btn pb-btn--primary">
+        <span class="material-symbols-outlined">arrow_back</span>
+        <span>Terug naar collectie</span>
+      </a>
+    </div>
+  }
+</div>

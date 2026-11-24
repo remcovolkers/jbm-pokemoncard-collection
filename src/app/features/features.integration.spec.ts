@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 import { provideRouter, Router } from '@angular/router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { routes } from '../app.routes';
@@ -11,6 +12,7 @@ import { FEEDBACK_HUB_ENDPOINT } from '../core/platform/feedback-hub-config';
 import { CollectionStore } from '../core/state/collection.store';
 import { FeedbackStore } from '../core/state/feedback.store';
 import { FeedbackModalComponent } from '../shared/feedback-modal/feedback-modal.component';
+import { CardDetailComponent } from './collection/card-detail.component';
 import { CollectionComponent } from './collection/collection.component';
 import { DashboardComponent } from './dashboard/dashboard.component';
 import { FeedbackHubComponent } from './feedback-hub/feedback-hub.component';
@@ -151,6 +153,7 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
         App,
         DashboardComponent,
         CollectionComponent,
+        CardDetailComponent,
         QuickAddComponent,
         PokedexBinderComponent,
         SetProgressComponent,
@@ -248,77 +251,19 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
       expect(byName[0].name.localeCompare(byName[1].name, 'nl')).toBeLessThanOrEqual(0);
     });
 
-    it('werkt aantallen bij, verwijdert kaarten en sluit Detail Sheet op Escape', async () => {
+    it('navigeert bij openDetail naar de aparte Kaartdetail-pagina /collectie/kaart/:rowIndex/:cardId', () => {
+      const router = TestBed.inject(Router);
+      const navSpy = vi.spyOn(router, 'navigate').mockResolvedValue(true);
       const fixture = TestBed.createComponent(CollectionComponent);
       const comp = fixture.componentInstance;
-      const store = TestBed.inject(CollectionStore);
       fixture.detectChanges();
 
       const venusaur = comp.filteredCards().find((c) => c.cardId === 'sv03.5-198')!;
-      const initialQty = venusaur.quantity;
-
       comp.openDetail(venusaur);
-      expect(comp.activeCard()?.cardId).toBe('sv03.5-198');
-      await new Promise((r) => setTimeout(r, 0));
-      expect(comp.activeCardmarketUrl()).toBe(
-        'https://www.cardmarket.com/en/Pokemon/Products?idProduct=733794'
-      );
-      comp.onEscapeKey();
-      expect(comp.activeCard()).toBeNull();
-
-      comp.openDetail(venusaur);
-      comp.adjustDraftQty(1);
-      await comp.saveDraft();
-      expect(comp.activeCard()).toBeNull();
-      expect(comp.editDraft()).toBeNull();
-      expect(store.collection().find((c) => c.cardId === 'sv03.5-198')?.quantity).toBe(initialQty + 1);
-
-      // Sluit ook direct voordat een trage remote sync (pending Promise) afgerond is
-      let resolvePendingUpdate!: () => void;
-      vi.spyOn(store, 'updateCard').mockImplementationOnce(
-        () => new Promise<void>((resolve) => { resolvePendingUpdate = resolve; })
-      );
-      comp.openDetail(store.collection().find((c) => c.cardId === 'sv03.5-198')!);
-      const pendingSave = comp.saveDraft();
-      expect(comp.activeCard()).toBeNull();
-      expect(comp.editDraft()).toBeNull();
-      resolvePendingUpdate();
-      await pendingSave;
-
-      // Verwijderen vanuit Detail Sheet
-      const toDelete = store.collection().find((c) => c.cardId === 'base1-44')!;
-      comp.openDetail(toDelete);
-      await comp.deleteActiveCard();
-      expect(store.collection().some((c) => c.cardId === 'base1-44')).toBe(false);
+      expect(navSpy).toHaveBeenCalledWith(['/collectie/kaart', venusaur.rowIndex, 'sv03.5-198']);
     });
 
-    it('laat optionele herkomst (pull method) en aankoopprijs instellen en wissen in Detail Sheet', async () => {
-      const fixture = TestBed.createComponent(CollectionComponent);
-      const comp = fixture.componentInstance;
-      const store = TestBed.inject(CollectionStore);
-      fixture.detectChanges();
-
-      const target = comp.filteredCards()[0];
-      comp.openDetail(target);
-      comp.toggleDraftAcquisitionMethod('Pack Pull');
-      comp.onDraftPurchasePriceChange('');
-      await comp.saveDraft();
-
-      const updated = store.collection().find((c) => c.cardId === target.cardId && c.rowIndex === target.rowIndex)!;
-      expect(updated.acquisitionMethod).toBe('Pack Pull');
-      expect(updated.purchasePrice).toBe(0);
-
-      // Nogmaals kiezen wist optionele herkomst netjes
-      comp.openDetail(updated);
-      comp.toggleDraftAcquisitionMethod('Pack Pull');
-      comp.onDraftPurchasePriceChange('14.5');
-      await comp.saveDraft();
-      const cleared = store.collection().find((c) => c.cardId === target.cardId && c.rowIndex === target.rowIndex)!;
-      expect(cleared.acquisitionMethod).toBe('');
-      expect(cleared.purchasePrice).toBe(14.5);
-    });
-
-    it('verbergt winst % bij kaarten met €0 aankoopprijs en toont € 0,00 in het detailmodaal', async () => {
+    it('verbergt winst % in grid en lijst bij kaarten met €0 aankoopprijs', () => {
       const fixture = TestBed.createComponent(CollectionComponent);
       const comp = fixture.componentInstance;
       const store = TestBed.inject(CollectionStore);
@@ -378,17 +323,126 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
       const paidRowEl = rows.find((r) => r.textContent?.includes('Gekochte Charizard'))!;
       expect(zeroRowEl.querySelector('.list-row__qty strong')).toBeNull();
       expect(paidRowEl.querySelector('.list-row__qty strong')?.textContent?.trim()).toBe('+50,0%');
+    });
+  });
 
-      // Detailmodaal op €0 kaart: toont € 0,00 i.p.v. 'Niet ingevuld' en geen Winst/Verlies of ROI
-      comp.openDetail(zeroCard);
-      fixture.detectChanges();
-      const sheet = el.querySelector('.pb-sheet')!;
-      expect(sheet.textContent).toContain('€\u00A00,00');
-      expect(sheet.textContent).not.toContain('Niet ingevuld');
-      expect(sheet.textContent).not.toContain('Winst / Verlies');
-      expect(sheet.querySelector('.sheet-hero__roi')).toBeNull();
-      comp.closeDetail();
-      fixture.detectChanges();
+  describe('CardDetailComponent', () => {
+    it('laadt Cardmarket URL, ondersteunt Escape terugnavigatie, werkt aantallen bij en verwijdert kaarten', async () => {
+      const router = TestBed.inject(Router);
+      const store = TestBed.inject(CollectionStore);
+      const appFixture = TestBed.createComponent(App);
+      appFixture.detectChanges();
+
+      await router.navigateByUrl('/collectie');
+      appFixture.detectChanges();
+
+      const venusaur = store.collection().find((c) => c.cardId === 'sv03.5-198')!;
+      const initialQty = venusaur.quantity;
+
+      await router.navigate(['/collectie/kaart', venusaur.rowIndex, venusaur.cardId]);
+      appFixture.detectChanges();
+      await appFixture.whenStable();
+
+      const detail = appFixture.debugElement.query(By.directive(CardDetailComponent))
+        .componentInstance as CardDetailComponent;
+      expect(detail.activeCard()?.cardId).toBe('sv03.5-198');
+      await new Promise((r) => setTimeout(r, 0));
+      expect(detail.activeCardmarketUrl()).toBe(
+        'https://www.cardmarket.com/en/Pokemon/Products?idProduct=733794'
+      );
+
+      // Escape keert direct terug naar /collectie
+      detail.onEscapeKey();
+      await appFixture.whenStable();
+      expect(router.url).toBe('/collectie');
+
+      // Aantal verhogen en opslaan (optimistisch terug naar /collectie vóór trage sync)
+      await router.navigate(['/collectie/kaart', venusaur.rowIndex, venusaur.cardId]);
+      appFixture.detectChanges();
+      await appFixture.whenStable();
+      const detail2 = appFixture.debugElement.query(By.directive(CardDetailComponent))
+        .componentInstance as CardDetailComponent;
+      detail2.adjustDraftQty(1);
+      await detail2.saveDraft();
+      await appFixture.whenStable();
+      expect(router.url).toBe('/collectie');
+      expect(store.collection().find((c) => c.cardId === 'sv03.5-198')?.quantity).toBe(initialQty + 1);
+
+      let resolvePendingUpdate!: () => void;
+      vi.spyOn(store, 'updateCard').mockImplementationOnce(
+        () => new Promise<void>((resolve) => { resolvePendingUpdate = resolve; })
+      );
+      const refreshedVenusaur = store.collection().find((c) => c.cardId === 'sv03.5-198')!;
+      await router.navigate(['/collectie/kaart', refreshedVenusaur.rowIndex, refreshedVenusaur.cardId]);
+      appFixture.detectChanges();
+      await appFixture.whenStable();
+      const detail3 = appFixture.debugElement.query(By.directive(CardDetailComponent))
+        .componentInstance as CardDetailComponent;
+      const pendingSave = detail3.saveDraft();
+      await appFixture.whenStable();
+      expect(router.url).toBe('/collectie');
+      resolvePendingUpdate();
+      await pendingSave;
+
+      // Verwijderen vanuit Detailpagina
+      const toDelete = store.collection().find((c) => c.cardId === 'base1-44')!;
+      await router.navigate(['/collectie/kaart', toDelete.rowIndex, toDelete.cardId]);
+      appFixture.detectChanges();
+      await appFixture.whenStable();
+      const detail4 = appFixture.debugElement.query(By.directive(CardDetailComponent))
+        .componentInstance as CardDetailComponent;
+      await detail4.deleteActiveCard();
+      await appFixture.whenStable();
+      expect(router.url).toBe('/collectie');
+      expect(store.collection().some((c) => c.cardId === 'base1-44')).toBe(false);
+    });
+
+    it('laat optionele herkomst en aankoopprijs instellen/wissen en toont € 0,00 zonder ROI op de detailpagina', async () => {
+      const router = TestBed.inject(Router);
+      const store = TestBed.inject(CollectionStore);
+      const appFixture = TestBed.createComponent(App);
+      appFixture.detectChanges();
+
+      const target = store.collection()[0];
+      await router.navigate(['/collectie/kaart', target.rowIndex, target.cardId]);
+      appFixture.detectChanges();
+      await appFixture.whenStable();
+
+      const detail = appFixture.debugElement.query(By.directive(CardDetailComponent))
+        .componentInstance as CardDetailComponent;
+      detail.toggleDraftAcquisitionMethod('Pack Pull');
+      detail.onDraftPurchasePriceChange('');
+      appFixture.detectChanges();
+
+      const detailText = (appFixture.nativeElement as HTMLElement).textContent ?? '';
+      expect(detailText).toContain('€\u00A00,00');
+      expect(detailText).not.toContain('Niet ingevuld');
+      expect(detailText).not.toContain('Winst / Verlies');
+      expect((appFixture.nativeElement as HTMLElement).querySelector('.hero-card__roi')).toBeNull();
+
+      await detail.saveDraft();
+      const updated = store.collection().find((c) => c.cardId === target.cardId && c.rowIndex === target.rowIndex)!;
+      expect(updated.acquisitionMethod).toBe('Pack Pull');
+      expect(updated.purchasePrice).toBe(0);
+
+      // Nogmaals kiezen wist optionele herkomst en zet numerieke aankoopprijs
+      await router.navigate(['/collectie/kaart', updated.rowIndex, updated.cardId]);
+      appFixture.detectChanges();
+      await appFixture.whenStable();
+      const detail2 = appFixture.debugElement.query(By.directive(CardDetailComponent))
+        .componentInstance as CardDetailComponent;
+      detail2.toggleDraftAcquisitionMethod('Pack Pull');
+      detail2.onDraftPurchasePriceChange('14.5');
+      await detail2.saveDraft();
+      const cleared = store.collection().find((c) => c.cardId === target.cardId && c.rowIndex === target.rowIndex)!;
+      expect(cleared.acquisitionMethod).toBe('');
+      expect(cleared.purchasePrice).toBe(14.5);
+
+      // Onbekende kaart-route toont veilige lege staat
+      await router.navigate(['/collectie/kaart', 99999, 'bestaat-niet']);
+      appFixture.detectChanges();
+      await appFixture.whenStable();
+      expect((appFixture.nativeElement as HTMLElement).textContent).toContain('Kaart niet gevonden');
     });
   });
 
@@ -933,22 +987,10 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
     });
 
     it('vergrendelt achtergrond-scroll via pb-modal-open zodra een modaal opent en geeft vrij bij sluiten of destroy', () => {
-      const store = TestBed.inject(CollectionStore);
       const feedback = TestBed.inject(FeedbackStore);
-
-      // 1. Collection detail modal
-      const colFix = TestBed.createComponent(CollectionComponent);
-      colFix.detectChanges();
       expect(document.documentElement.classList.contains('pb-modal-open')).toBe(false);
-      colFix.componentInstance.openDetail(store.collection()[0]);
-      colFix.detectChanges();
-      expect(document.documentElement.classList.contains('pb-modal-open')).toBe(true);
-      colFix.componentInstance.closeDetail();
-      colFix.detectChanges();
-      expect(document.documentElement.classList.contains('pb-modal-open')).toBe(false);
-      colFix.destroy();
 
-      // 2. Pokédex Binder sheet
+      // 1. Pokédex Binder sheet
       const dexFix = TestBed.createComponent(PokedexBinderComponent);
       dexFix.detectChanges();
       dexFix.componentInstance.openSlotSheet(dexFix.componentInstance.pageSlots()[0]);
@@ -959,7 +1001,7 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
       expect(document.documentElement.classList.contains('pb-modal-open')).toBe(false);
       dexFix.destroy();
 
-      // 3. Wishlist add modal
+      // 2. Wishlist add modal
       const wlFix = TestBed.createComponent(WishlistComponent);
       wlFix.detectChanges();
       wlFix.componentInstance.openAddModal();
@@ -970,7 +1012,7 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
       expect(document.documentElement.classList.contains('pb-modal-open')).toBe(false);
       wlFix.destroy();
 
-      // 4. Trades log modal (en cleanup bij destroy terwijl open)
+      // 3. Trades log modal (en cleanup bij destroy terwijl open)
       const trFix = TestBed.createComponent(TradesComponent);
       trFix.detectChanges();
       trFix.componentInstance.openNewTradeModal();
@@ -979,7 +1021,7 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
       trFix.destroy();
       expect(document.documentElement.classList.contains('pb-modal-open')).toBe(false);
 
-      // 5. Global FeedbackModal
+      // 4. Global FeedbackModal
       const fbModalFix = TestBed.createComponent(FeedbackModalComponent);
       fbModalFix.detectChanges();
       feedback.openComposer('Dashboard');

@@ -157,7 +157,12 @@
   </header>
 
   <!-- Hoofdinhoud -->
-  <main class="shell__main" [class.is-quick-add]="isQuickAddRoute()">
+  <main
+    class="shell__main"
+    [class.is-quick-add]="isQuickAddRoute()"
+    [class.is-detail-dock]="isCardDetailRoute()"
+    [class.is-more-hub]="isMoreHubRoute()"
+  >
     <div class="shell__content">
       <!-- Automatische In-App Update Banner (PWA & Android APK OTA / Nieuwe APK) -->
       @if (updates.showUpdateBanner()) {
@@ -256,8 +261,8 @@
     </div>
   </main>
 
-  <!-- Mobiele Bottom Navigation (< 768px, verborgen op Quick Add stack-pagina) -->
-  @if (!isQuickAddRoute()) {
+  <!-- Mobiele Bottom Navigation (< 768px, verborgen op stack-pagina's met vaste actieknop) -->
+  @if (!hideBottomNav()) {
     <nav class="bottom-nav" aria-label="Mobiele navigatie">
       <div class="bottom-nav__inner">
         <a
@@ -318,7 +323,7 @@
   <button
     type="button"
     class="desktop-feedback-fab"
-    [class.is-raised]="isQuickAddRoute()"
+    [class.is-raised]="isQuickAddRoute() || isCardDetailRoute()"
     aria-label="Feedback geven over deze pagina"
     (click)="openPageFeedback()"
   >
