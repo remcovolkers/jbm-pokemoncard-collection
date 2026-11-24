@@ -160,15 +160,34 @@
   } @else {
     <div class="wl-grid">
       @for (item of filteredItems(); track item.rowIndex + '-' + item.cardName) {
-        <article class="pb-card wl-card">
+        <article class="pb-card wl-card" [class.wl-card--rare]="isShowcaseEligible(item)">
           <div class="wl-card__top">
-            <div class="wl-card__art">
-              <pb-card-artwork [cardId]="item.cardId || ''" [src]="item.imageUrl" [alt]="item.cardName" [compact]="true">
-                @if (item.cardNumber) {
-                  <span class="wl-card__num mono">#{{ item.cardNumber.split('/')[0] }}</span>
-                }
-              </pb-card-artwork>
-            </div>
+            @if (isShowcaseEligible(item)) {
+              <button
+                type="button"
+                class="wl-card__art wl-card__art--showcase"
+                [attr.aria-label]="item.cardName + ' in 3D Showcase bekijken'"
+                title="Open 3D Showcase"
+                (click)="openShowcase(item)"
+              >
+                <pb-card-artwork [cardId]="item.cardId || ''" [src]="item.imageUrl" [alt]="item.cardName" [compact]="true">
+                  @if (item.cardNumber) {
+                    <span class="wl-card__num mono">#{{ item.cardNumber.split('/')[0] }}</span>
+                  }
+                  <span class="wl-card__3d-badge" aria-hidden="true">
+                    <span class="material-symbols-outlined">3d_rotation</span>
+                  </span>
+                </pb-card-artwork>
+              </button>
+            } @else {
+              <div class="wl-card__art">
+                <pb-card-artwork [cardId]="item.cardId || ''" [src]="item.imageUrl" [alt]="item.cardName" [compact]="true">
+                  @if (item.cardNumber) {
+                    <span class="wl-card__num mono">#{{ item.cardNumber.split('/')[0] }}</span>
+                  }
+                </pb-card-artwork>
+              </div>
+            }
 
             <div class="wl-card__info">
               <div class="wl-card__head-row">
@@ -206,7 +225,15 @@
                 </div>
               </div>
 
-              <h3 class="wl-card__name">{{ item.cardName }}</h3>
+              @if (isShowcaseEligible(item)) {
+                <h3 class="wl-card__name">
+                  <button type="button" class="wl-card__title-btn" (click)="openShowcase(item)">
+                    <span>{{ item.cardName }}</span>
+                  </button>
+                </h3>
+              } @else {
+                <h3 class="wl-card__name">{{ item.cardName }}</h3>
+              }
               <p class="wl-card__set">{{ item.setName }} {{ item.cardNumber ? '· ' + item.cardNumber : '' }}</p>
               @if (item.notes) {
                 <p class="wl-card__notes">{{ item.notes }}</p>
@@ -488,4 +515,23 @@
       </div>
     </div>
   }
+
+  <!-- 3D Grail & Rare Kaart Showcase -->
+  <pb-card-showcase
+    [open]="!!activeShowcaseWish()"
+    [item]="activeShowcaseVm()"
+    [currentIndex]="activeShowcaseIndex()"
+    [totalCount]="showcaseItems().length"
+    [canPrev]="activeShowcaseIndex() > 0"
+    [canNext]="activeShowcaseIndex() >= 0 && activeShowcaseIndex() < showcaseItems().length - 1"
+    [primaryActionLabel]="activeShowcaseWish() && !activeShowcaseWish()!.found ? 'Gevonden → Toevoegen' : ''"
+    primaryActionIcon="add_circle"
+    secondaryActionLabel="Bewerk wens"
+    secondaryActionIcon="edit"
+    (closed)="closeShowcase()"
+    (prev)="showcasePrev()"
+    (next)="showcaseNext()"
+    (primaryAction)="markFoundFromShowcase()"
+    (secondaryAction)="editFromShowcase()"
+  />
 </div>

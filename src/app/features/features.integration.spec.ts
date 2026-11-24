@@ -535,13 +535,32 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
       expect(router.url).toContain(`/collectie/kaart/${expectedNext!.rowIndex}/${expectedNext!.cardId}`);
       expect(detail.isLightboxOpen()).toBe(true);
 
-      const lightboxEl = (appFixture.nativeElement as HTMLElement).querySelector('.art-lightbox') as HTMLElement;
-      dispatchHorizontalTouch(lightboxEl, 140, 270);
+      const showcasePanelEl = (appFixture.nativeElement as HTMLElement).querySelector(
+        '.pb-showcase__panel'
+      ) as HTMLElement;
+      expect(showcasePanelEl).not.toBeNull();
+      dispatchHorizontalTouch(showcasePanelEl, 140, 270);
       appFixture.detectChanges();
       await appFixture.whenStable();
       expect(router.url).toContain(`/collectie/kaart/${first.rowIndex}/${first.cardId}`);
       expect(detail.isLightboxOpen()).toBe(true);
+
+      // Spatie draait de 3D-kaart om naar 180° (achterkant) en Common-kaarten openen geen 3D Showcase
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: ' ' }));
+      appFixture.detectChanges();
+      const card3dEl = (appFixture.nativeElement as HTMLElement).querySelector('.card3d') as HTMLElement;
+      expect(card3dEl.style.transform).toContain('rotateY(180.00deg)');
+
       detail.closeLightbox();
+
+      const commonCard = store.collection().find((c) => c.rarity === 'Common');
+      if (commonCard) {
+        await router.navigate(['/collectie/kaart', commonCard.rowIndex, commonCard.cardId]);
+        appFixture.detectChanges();
+        expect(detail.isShowcaseEligible()).toBe(false);
+        detail.openLightbox();
+        expect(detail.isLightboxOpen()).toBe(false);
+      }
     });
 
     it('laat optionele herkomst en aankoopprijs instellen/wissen en toont € 0,00 zonder ROI op de detailpagina', async () => {
@@ -943,6 +962,49 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
       comp.openAddModal();
       comp.onEscapeKey();
       expect(comp.showAddSheet()).toBe(false);
+
+      // 3D Kaart Showcase op Verlanglijst: Rare/Grail wél, Common/Uncommon níét ("Bijzondere kaart = bijzondere view")
+      comp.filter.set('open');
+      await store.addWishlistItem({
+        cardName: 'Caterpie',
+        setName: '151',
+        cardNumber: '010/165',
+        desiredVariant: 'Normal',
+        minCondition: 'Near Mint (NM)',
+        priority: 'Laag',
+        maxBudget: 1,
+        marketPrice: 0.2,
+        notes: '',
+      });
+      fixture.detectChanges();
+
+      const commonWish = comp.filteredItems().find((w) => w.cardName === 'Caterpie')!;
+      expect(comp.isShowcaseEligible(commonWish)).toBe(false);
+      comp.openShowcase(commonWish);
+      expect(comp.activeShowcaseWish()).toBeNull();
+
+      const grailWish = comp.showcaseItems()[0]!;
+      expect(comp.isShowcaseEligible(grailWish)).toBe(true);
+      comp.openShowcase(grailWish);
+      fixture.detectChanges();
+
+      expect(comp.activeShowcaseWish()?.cardName).toBe(grailWish.cardName);
+      const showcaseEl = (fixture.nativeElement as HTMLElement).querySelector('.pb-showcase');
+      expect(showcaseEl).not.toBeNull();
+      expect(showcaseEl?.textContent).toContain(grailWish.cardName);
+      expect(showcaseEl?.querySelector('.card3d__back-img')?.getAttribute('src')).toContain(
+        'tcg.pokemon.com'
+      );
+
+      if (comp.showcaseItems().length > 1) {
+        comp.showcaseNext();
+        expect(comp.activeShowcaseIndex()).toBe(1);
+        comp.showcasePrev();
+        expect(comp.activeShowcaseIndex()).toBe(0);
+      }
+
+      comp.closeShowcase();
+      expect(comp.activeShowcaseWish()).toBeNull();
     });
 
     it('prefillt Ruil & Verkoop vanuit Live Trade Binder en berekent netto resultaat live', async () => {

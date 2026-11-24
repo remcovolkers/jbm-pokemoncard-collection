@@ -48,4 +48,12 @@ test('leg visuele audit screenshots vast op alle kernroutes', async ({ page }, t
   await page.locator('.hero-card__art-btn').click();
   await page.locator('.art-lightbox-backdrop').waitFor({ state: 'visible' });
   await settleAndCapture(page, path.join(outDir, '04-kaartdetail-lightbox.png'));
+
+  // Verlanglijst 3D Grail Showcase vastleggen
+  await page.goto('/meer/verlanglijst', { waitUntil: 'domcontentloaded' });
+  const wishArt = page.locator('.wl-card__art--showcase').first();
+  await expect(wishArt).toBeVisible();
+  await wishArt.click();
+  await page.locator('.pb-showcase').waitFor({ state: 'visible' });
+  await settleAndCapture(page, path.join(outDir, '09b-verlanglijst-showcase.png'));
 });

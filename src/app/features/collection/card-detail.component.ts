@@ -8,21 +8,25 @@ import {
   resolveCardmarketUrl,
 } from '../../core/domain/card-id.utils';
 import { calculateCardMetrics, formatEur, formatPercent } from '../../core/domain/card-math.utils';
+import {
+  buildShowcaseFromCollectionCard,
+  isCollectionCardShowcaseEligible,
+} from '../../core/domain/card-showcase.utils';
 import { CollectionCard, DEFAULT_DROPDOWN_SETTINGS } from '../../core/domain/models';
 import { HapticsService } from '../../core/platform/haptics.service';
 import { isEditableEventTarget } from '../../core/platform/keyboard.utils';
-import { ModalScrollLockService } from '../../core/platform/modal-scroll-lock.service';
 import { PlatformService } from '../../core/platform/platform.service';
 import { CARD_CATALOG_PORT } from '../../core/ports/card-catalog.port';
 import { CollectionStore } from '../../core/state/collection.store';
 import { CardArtworkComponent } from '../../shared/card-artwork/card-artwork.component';
+import { CardShowcaseComponent } from '../../shared/card-showcase/card-showcase.component';
 import { PbBinderSwipeDirective } from '../../shared/directives/binder-swipe.directive';
 import { CollectionViewStateService, filterAndSortCollection } from './collection-view-state.service';
 
 @Component({
   selector: 'app-card-detail',
   standalone: true,
-  imports: [FormsModule, RouterLink, CardArtworkComponent, PbBinderSwipeDirective],
+  imports: [FormsModule, RouterLink, CardArtworkComponent, CardShowcaseComponent, PbBinderSwipeDirective],
   templateUrl: './card-detail.component.html',
   styleUrl: './card-detail.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -33,7 +37,6 @@ export class CardDetailComponent {
   readonly store = inject(CollectionStore);
   private readonly viewState = inject(CollectionViewStateService);
   private readonly catalog = inject(CARD_CATALOG_PORT);
-  private readonly scrollLock = inject(ModalScrollLockService);
   private readonly haptics = inject(HapticsService);
   private readonly platform = inject(PlatformService);
 
@@ -114,8 +117,6 @@ export class CardDetailComponent {
   private keepLightboxOnNextLoad = false;
 
   constructor() {
-    this.scrollLock.bind(() => this.isLightboxOpen(), () => this.closeLightbox());
-
     effect(() => {
       const card = this.activeCard();
       if (!card) {
@@ -153,7 +154,7 @@ export class CardDetailComponent {
         purchasePrice: Math.max(0, Number(card.purchasePrice) || 0),
       });
       this.confirmDelete.set(false);
-      if (!this.keepLightboxOnNextLoad) {
+      if (!this.keepLightboxOnNextLoad || !isCollectionCardShowcaseEligible(card)) {
         this.isLightboxOpen.set(false);
       }
       this.keepLightboxOnNextLoad = false;
@@ -223,7 +224,46 @@ export class CardDetailComponent {
     }
   }
 
+  readonly isShowcaseEligible = computed(() =>
+    isCollectionCardShowcaseEligible(this.editDraft())
+  );
+
+  readonly showcaseCards = computed(() =>
+    this.orderedCards().filter((c) => isCollectionCardShowcaseEligible(c))
+  );
+
+  readonly showcaseIndex = computed(() => {
+    const current = this.activeCard();
+    if (!current) return -1;
+    const list = this.showcaseCards();
+    const exactIdx = list.findIndex(
+      (c) => c.rowIndex === current.rowIndex && c.cardId === current.cardId
+    );
+    if (exactIdx !== -1) return exactIdx;
+    return list.findIndex((c) => c.cardId === current.cardId);
+  });
+
+  readonly showcasePrevCard = computed<CollectionCard | null>(() => {
+    const idx = this.showcaseIndex();
+    if (idx <= 0) return null;
+    return this.showcaseCards()[idx - 1] ?? null;
+  });
+
+  readonly showcaseNextCard = computed<CollectionCard | null>(() => {
+    const idx = this.showcaseIndex();
+    const list = this.showcaseCards();
+    if (idx < 0 || idx >= list.length - 1) return null;
+    return list[idx + 1] ?? null;
+  });
+
+  readonly activeShowcaseVm = computed(() => {
+    const d = this.editDraft();
+    if (!d || !this.isShowcaseEligible()) return null;
+    return buildShowcaseFromCollectionCard(d, this.activeCardmarketProductId());
+  });
+
   openLightbox(): void {
+    if (!this.isShowcaseEligible()) return;
     void this.haptics.light();
     this.isLightboxOpen.set(true);
   }
@@ -239,7 +279,7 @@ export class CardDetailComponent {
       this.store.showToast('Sla je wijzigingen eerst op of tik op Herstellen.', 'warning');
       return;
     }
-    this.keepLightboxOnNextLoad = keepLightbox;
+    this.keepLightboxOnNextLoad = keepLightbox && isCollectionCardShowcaseEligible(card);
     void this.haptics.light();
     void this.router.navigate(['/collectie/kaart', card.rowIndex, card.cardId], { replaceUrl: true });
   }
@@ -270,6 +310,7 @@ export class CardDetailComponent {
 
   @HostListener('document:keydown', ['$event'])
   onKeydown(event: KeyboardEvent): void {
+    if (this.isLightboxOpen()) return;
     if (isEditableEventTarget(event.target)) return;
     if (event.key === 'ArrowLeft') {
       const prev = this.prevCard();

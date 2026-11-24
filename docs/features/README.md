@@ -23,3 +23,4 @@ In deze map worden grote nieuwe features eerst uitgewerkt als **Feature Brief** 
 | 2026-11-24 | [Instant Lokaal Opslaan + Persistente Achtergrond-Sync & Snelle Sheets-Backend](./2026-11-24-instant-lokaal-opslaan-achtergrond-sync.md) | **Gebouwd** | WebView OTA |
 | 2026-11-24 | [Eigen Spreadsheet Template & Apps Script Updates (Instellingen)](./2026-11-24-eigen-spreadsheet-template-script-updates.md) | **Gebouwd** | WebView OTA (+ Apps Script) |
 | 2026-11-24 | [Snel Toevoegen — Multi-Select Batch Toevoegen & Rustig Scrollgedrag](./2026-11-24-snel-toevoegen-multi-select-en-scrollgedrag.md) | **Gebouwd** | WebView OTA |
+| 2026-11-24 | [3D Kaart Showcase & Verlanglijst Grail-View](./2026-11-24-3d-kaart-showcase-en-verlanglijst-view.md) | **Gebouwd** | WebView OTA |

@@ -75,13 +75,26 @@
               </p>
               <div class="trade-card__foot">
                 <span class="pb-pill pb-pill--neutral">{{ card.storageLocation }}</span>
-                <button
-                  type="button"
-                  class="pb-btn pb-btn--secondary trade-card__log-btn"
-                  (click)="$event.stopPropagation(); openNewTradeModal(card)"
-                >
-                  Log deal
-                </button>
+                <div class="trade-card__actions">
+                  @if (isShowcaseEligible(card)) {
+                    <button
+                      type="button"
+                      class="pb-btn pb-btn--surface trade-card__showcase-btn"
+                      [attr.aria-label]="card.name + ' in 3D Showcase bekijken'"
+                      title="Open 3D Showcase"
+                      (click)="$event.stopPropagation(); openShowcase(card)"
+                    >
+                      <span class="material-symbols-outlined">3d_rotation</span>
+                    </button>
+                  }
+                  <button
+                    type="button"
+                    class="pb-btn pb-btn--secondary trade-card__log-btn"
+                    (click)="$event.stopPropagation(); openNewTradeModal(card)"
+                  >
+                    Log deal
+                  </button>
+                </div>
               </div>
             </div>
           </article>
@@ -309,4 +322,23 @@
       </div>
     </div>
   }
+
+  <!-- 3D Showcase voor Rare+ kaarten in de Trade Binder -->
+  <pb-card-showcase
+    [open]="!!activeShowcaseCard()"
+    [item]="activeShowcaseVm()"
+    [currentIndex]="activeShowcaseIndex()"
+    [totalCount]="showcaseTradeCards().length"
+    [canPrev]="activeShowcaseIndex() > 0"
+    [canNext]="activeShowcaseIndex() >= 0 && activeShowcaseIndex() < showcaseTradeCards().length - 1"
+    primaryActionLabel="Log deal"
+    primaryActionIcon="add_business"
+    secondaryActionLabel="Kaartdetail"
+    secondaryActionIcon="tune"
+    (closed)="closeShowcase()"
+    (prev)="showcasePrev()"
+    (next)="showcaseNext()"
+    (primaryAction)="openShowcaseTradeModal()"
+    (secondaryAction)="openShowcaseDetail()"
+  />
 </div>

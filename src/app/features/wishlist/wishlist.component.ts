@@ -1,12 +1,18 @@
 import { ChangeDetectionStrategy, Component, HostListener, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { formatEur } from '../../core/domain/card-math.utils';
+import {
+  ShowcaseCardViewModel,
+  buildShowcaseFromWishlist,
+  isWishlistItemShowcaseEligible,
+} from '../../core/domain/card-showcase.utils';
 import { WishlistItem } from '../../core/domain/models';
 import { HapticsService } from '../../core/platform/haptics.service';
 import { ModalScrollLockService } from '../../core/platform/modal-scroll-lock.service';
 import { CARD_CATALOG_PORT } from '../../core/ports/card-catalog.port';
 import { CollectionStore } from '../../core/state/collection.store';
 import { CardArtworkComponent } from '../../shared/card-artwork/card-artwork.component';
+import { CardShowcaseComponent } from '../../shared/card-showcase/card-showcase.component';
 import { PbSheetDismissDirective } from '../../shared/directives/sheet-dismiss.directive';
 
 type WishlistFilter = 'open' | 'high' | 'in_budget' | 'found';
@@ -14,7 +20,7 @@ type WishlistFilter = 'open' | 'high' | 'in_budget' | 'found';
 @Component({
   selector: 'app-wishlist',
   standalone: true,
-  imports: [FormsModule, CardArtworkComponent, PbSheetDismissDirective],
+  imports: [FormsModule, CardArtworkComponent, CardShowcaseComponent, PbSheetDismissDirective],
   templateUrl: './wishlist.component.html',
   styleUrl: './wishlist.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -32,6 +38,9 @@ export class WishlistComponent {
   readonly showAddSheet = signal(false);
   readonly editingItem = signal<WishlistItem | null>(null);
   readonly confirmDeleteKey = signal<string | null>(null);
+  readonly showcaseWishKey = signal<string | null>(null);
+  readonly catalogRarities = signal<Record<string, string>>({});
+  private readonly resolvingRarityIds = new Set<string>();
 
   // Inline maandbudget bewerken
   readonly isEditingBudget = signal(false);
@@ -44,6 +53,7 @@ export class WishlistComponent {
       if (items.some((w) => !w.imageUrl || !w.cardId)) {
         void this.store.hydrateWishlistArtworkFromCatalog();
       }
+      void this.hydrateWishlistRarities(items);
     });
   }
 
@@ -122,6 +132,111 @@ export class WishlistComponent {
 
   wishKey(item: WishlistItem): string {
     return `${item.rowIndex}|${item.cardName}`;
+  }
+
+  getResolvedRarity(item: WishlistItem): string | undefined {
+    const cleanId = (item.cardId ?? '').trim().toLowerCase();
+    if (!cleanId) return undefined;
+    const fromCatalog = this.catalogRarities()[cleanId];
+    if (fromCatalog) return fromCatalog;
+    const fromCollection = this.store
+      .collection()
+      .find((c) => c.cardId.trim().toLowerCase() === cleanId);
+    return fromCollection?.rarity || undefined;
+  }
+
+  isShowcaseEligible(item: WishlistItem): boolean {
+    return isWishlistItemShowcaseEligible(item, this.getResolvedRarity(item));
+  }
+
+  readonly showcaseItems = computed(() =>
+    this.filteredItems().filter((w) => this.isShowcaseEligible(w))
+  );
+
+  readonly activeShowcaseWish = computed<WishlistItem | null>(() => {
+    const key = this.showcaseWishKey();
+    if (!key) return null;
+    return this.showcaseItems().find((w) => this.wishKey(w) === key) ?? null;
+  });
+
+  readonly activeShowcaseIndex = computed(() => {
+    const active = this.activeShowcaseWish();
+    if (!active) return -1;
+    return this.showcaseItems().findIndex((w) => this.wishKey(w) === this.wishKey(active));
+  });
+
+  readonly activeShowcaseVm = computed<ShowcaseCardViewModel | null>(() => {
+    const active = this.activeShowcaseWish();
+    if (!active) return null;
+    return buildShowcaseFromWishlist(active, this.getResolvedRarity(active));
+  });
+
+  openShowcase(item: WishlistItem): void {
+    if (!this.isShowcaseEligible(item)) return;
+    void this.haptics.light();
+    this.showcaseWishKey.set(this.wishKey(item));
+  }
+
+  closeShowcase(): void {
+    this.showcaseWishKey.set(null);
+  }
+
+  showcasePrev(): void {
+    const idx = this.activeShowcaseIndex();
+    if (idx <= 0) return;
+    const target = this.showcaseItems()[idx - 1];
+    if (target) this.showcaseWishKey.set(this.wishKey(target));
+  }
+
+  showcaseNext(): void {
+    const idx = this.activeShowcaseIndex();
+    const list = this.showcaseItems();
+    if (idx < 0 || idx >= list.length - 1) return;
+    const target = list[idx + 1];
+    if (target) this.showcaseWishKey.set(this.wishKey(target));
+  }
+
+  editFromShowcase(): void {
+    const active = this.activeShowcaseWish();
+    if (!active) return;
+    this.closeShowcase();
+    this.openEditModal(active);
+  }
+
+  async markFoundFromShowcase(): Promise<void> {
+    const active = this.activeShowcaseWish();
+    if (!active || active.found) return;
+    this.closeShowcase();
+    await this.markFoundAndAdd(active);
+  }
+
+  private async hydrateWishlistRarities(items: readonly WishlistItem[]): Promise<void> {
+    const known = this.catalogRarities();
+    const ownedMap = new Map<string, string>();
+    for (const c of this.store.collection()) {
+      if (c.cardId && c.rarity) {
+        ownedMap.set(c.cardId.trim().toLowerCase(), c.rarity);
+      }
+    }
+
+    for (const item of items) {
+      const id = (item.cardId ?? '').trim();
+      const lower = id.toLowerCase();
+      if (!id || known[lower] || ownedMap.has(lower) || this.resolvingRarityIds.has(lower)) {
+        continue;
+      }
+      this.resolvingRarityIds.add(lower);
+      try {
+        const card = await this.catalog.getCardByExactId(id);
+        if (card?.rarity) {
+          this.catalogRarities.update((prev) => ({ ...prev, [lower]: card.rarity }));
+        }
+      } catch {
+        // Offline of onbekende kaart: heuristiek in isWishlistItemShowcaseEligible vangt dit op
+      } finally {
+        this.resolvingRarityIds.delete(lower);
+      }
+    }
   }
 
   startBudgetEdit(): void {
@@ -265,6 +380,10 @@ export class WishlistComponent {
 
   @HostListener('document:keydown.escape')
   onEscapeKey(): void {
+    if (this.activeShowcaseWish()) {
+      this.closeShowcase();
+      return;
+    }
     if (this.showAddSheet()) {
       this.showAddSheet.set(false);
     }

@@ -186,8 +186,25 @@
     padding-top: 0.25rem;
   }
 
+  &__actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  &__showcase-btn {
+    min-width: 36px;
+    min-height: 36px;
+    padding: 0.25rem 0.45rem;
+    color: $color-tertiary;
+
+    .material-symbols-outlined {
+      font-size: 18px;
+    }
+  }
+
   &__log-btn {
-    min-height: 34px;
+    min-height: 36px;
     padding: 0.3rem 0.75rem;
     font-size: 0.78rem;
   }

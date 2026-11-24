@@ -868,6 +868,21 @@
     font-weight: 700;
   }
 
+  &__right {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-shrink: 0;
+  }
+
+  &__showcase-btn {
+    width: 38px;
+    height: 38px;
+    color: $color-tertiary;
+    background-color: $color-surface-low;
+    border: 1px solid rgba($color-tertiary, 0.5);
+  }
+
   &__radio {
     display: flex;
     flex-direction: column;

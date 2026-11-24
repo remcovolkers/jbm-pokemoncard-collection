@@ -257,6 +257,19 @@
                 >
                   {{ badgeLabel(card) }}
                 </span>
+                @if (isShowcaseEligible(card)) {
+                  <button
+                    type="button"
+                    class="top-card__showcase-btn"
+                    [attr.aria-label]="card.name + ' in 3D Showcase bekijken'"
+                    title="Open 3D Showcase"
+                    (click)="$event.stopPropagation(); openShowcase(card)"
+                    (keydown.enter)="$event.stopPropagation(); openShowcase(card)"
+                    (keydown.space)="$event.preventDefault(); $event.stopPropagation(); openShowcase(card)"
+                  >
+                    <span class="material-symbols-outlined">3d_rotation</span>
+                  </button>
+                }
               </pb-card-artwork>
             </div>
 
@@ -356,4 +369,20 @@
       <span>Google Sheets synchronisatie &amp; instellingen</span>
     </a>
   </div>
+
+  <!-- 3D Showcase voor Top Waardevolste Rare+ Kaarten -->
+  <pb-card-showcase
+    [open]="!!activeShowcaseCard()"
+    [item]="activeShowcaseVm()"
+    [currentIndex]="activeShowcaseIndex()"
+    [totalCount]="showcaseTopCards().length"
+    [canPrev]="activeShowcaseIndex() > 0"
+    [canNext]="activeShowcaseIndex() >= 0 && activeShowcaseIndex() < showcaseTopCards().length - 1"
+    secondaryActionLabel="Kaartdetail"
+    secondaryActionIcon="tune"
+    (closed)="closeShowcase()"
+    (prev)="showcasePrev()"
+    (next)="showcaseNext()"
+    (secondaryAction)="openActiveShowcaseDetail()"
+  />
 </div>

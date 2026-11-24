@@ -7,6 +7,11 @@ import {
   formatDexNumber,
   formatEur,
 } from '../../core/domain/card-math.utils';
+import {
+  ShowcaseCardViewModel,
+  buildShowcaseFromCollectionCard,
+  isCollectionCardShowcaseEligible,
+} from '../../core/domain/card-showcase.utils';
 import { BinderSlotsPerPage, CollectionCard, PokedexSlot } from '../../core/domain/models';
 import {
   GENERATIONS,
@@ -18,6 +23,7 @@ import { isEditableEventTarget } from '../../core/platform/keyboard.utils';
 import { ModalScrollLockService } from '../../core/platform/modal-scroll-lock.service';
 import { CollectionStore } from '../../core/state/collection.store';
 import { CardArtworkComponent } from '../../shared/card-artwork/card-artwork.component';
+import { CardShowcaseComponent } from '../../shared/card-showcase/card-showcase.component';
 import { PbBinderSwipeDirective } from '../../shared/directives/binder-swipe.directive';
 import { PbSheetDismissDirective } from '../../shared/directives/sheet-dismiss.directive';
 
@@ -26,7 +32,13 @@ type StatusFilter = 'all' | 'missing' | 'in_collection' | 'in_binder' | 'upgrade
 @Component({
   selector: 'app-pokedex-binder',
   standalone: true,
-  imports: [FormsModule, CardArtworkComponent, PbSheetDismissDirective, PbBinderSwipeDirective],
+  imports: [
+    FormsModule,
+    CardArtworkComponent,
+    CardShowcaseComponent,
+    PbSheetDismissDirective,
+    PbBinderSwipeDirective,
+  ],
   templateUrl: './pokedex-binder.component.html',
   styleUrl: './pokedex-binder.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -55,6 +67,7 @@ export class PokedexBinderComponent implements OnInit {
   readonly draftSelectedCard = signal<string>('');
   readonly draftInBinder = signal<boolean>(false);
   readonly draftUpgradeWanted = signal<boolean>(false);
+  readonly showcaseCardKey = signal<string | null>(null);
 
   constructor() {
     this.scrollLock.bind(() => this.isSheetOpen(), () => this.closeSlotSheet());
@@ -305,11 +318,68 @@ export class PokedexBinderComponent implements OnInit {
   }
 
   closeSlotSheet(): void {
+    this.showcaseCardKey.set(null);
     this.activeSlot.set(null);
+  }
+
+  readonly showcaseSlotCards = computed(() =>
+    this.activeSlotMatchingCards().filter((c) => isCollectionCardShowcaseEligible(c))
+  );
+
+  readonly activeShowcaseCard = computed<CollectionCard | null>(() => {
+    const key = this.showcaseCardKey();
+    if (!key) return null;
+    return this.showcaseSlotCards().find((c) => `${c.rowIndex}:${c.cardId}` === key) ?? null;
+  });
+
+  readonly activeShowcaseIndex = computed(() => {
+    const active = this.activeShowcaseCard();
+    if (!active) return -1;
+    return this.showcaseSlotCards().findIndex(
+      (c) => c.rowIndex === active.rowIndex && c.cardId === active.cardId
+    );
+  });
+
+  readonly activeShowcaseVm = computed<ShowcaseCardViewModel | null>(() => {
+    const active = this.activeShowcaseCard();
+    return active ? buildShowcaseFromCollectionCard(active) : null;
+  });
+
+  isShowcaseEligible(card: CollectionCard): boolean {
+    return isCollectionCardShowcaseEligible(card);
+  }
+
+  openShowcase(card: CollectionCard): void {
+    if (!this.isShowcaseEligible(card)) return;
+    void this.haptics.light();
+    this.showcaseCardKey.set(`${card.rowIndex}:${card.cardId}`);
+  }
+
+  closeShowcase(): void {
+    this.showcaseCardKey.set(null);
+  }
+
+  showcasePrev(): void {
+    const idx = this.activeShowcaseIndex();
+    if (idx <= 0) return;
+    const prev = this.showcaseSlotCards()[idx - 1];
+    if (prev) this.showcaseCardKey.set(`${prev.rowIndex}:${prev.cardId}`);
+  }
+
+  showcaseNext(): void {
+    const idx = this.activeShowcaseIndex();
+    const list = this.showcaseSlotCards();
+    if (idx < 0 || idx >= list.length - 1) return;
+    const next = list[idx + 1];
+    if (next) this.showcaseCardKey.set(`${next.rowIndex}:${next.cardId}`);
   }
 
   @HostListener('document:keydown.escape')
   onEscapeKey(): void {
+    if (this.activeShowcaseCard()) {
+      this.closeShowcase();
+      return;
+    }
     if (this.activeSlot()) {
       this.closeSlotSheet();
     }
@@ -317,7 +387,7 @@ export class PokedexBinderComponent implements OnInit {
 
   @HostListener('document:keydown', ['$event'])
   onKeydown(event: KeyboardEvent): void {
-    if (this.activeSlot() || isEditableEventTarget(event.target)) return;
+    if (this.activeShowcaseCard() || this.activeSlot() || isEditableEventTarget(event.target)) return;
     if (event.key === '/' && !event.ctrlKey && !event.metaKey && !event.altKey) {
       event.preventDefault();
       const input = document.getElementById('dex-search-input') as HTMLInputElement | null;

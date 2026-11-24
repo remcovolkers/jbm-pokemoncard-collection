@@ -420,11 +420,14 @@
         @if (activeSlotMatchingCards().length > 0) {
           <div class="variants-list">
             @for (card of activeSlotMatchingCards(); track card.rowIndex + '-' + card.cardId) {
-              <button
-                type="button"
+              <div
                 class="variant-option"
+                role="button"
+                tabindex="0"
                 [class.is-selected]="isChoiceSelected(card)"
                 (click)="chooseVariant(card)"
+                (keydown.enter)="chooseVariant(card)"
+                (keydown.space)="$event.preventDefault(); chooseVariant(card)"
               >
                 <div class="variant-option__thumb">
                   <pb-card-artwork [cardId]="card.cardId" [src]="card.imageUrl" [alt]="card.name" [compact]="true" />
@@ -441,11 +444,26 @@
                   <span class="mono variant-option__price">{{ formatEur(card.marketPrice) }}</span>
                 </div>
 
-                <div class="variant-option__radio">
-                  <span class="radio-dot" [class.is-checked]="isChoiceSelected(card)"></span>
-                  <span class="mono">{{ isChoiceSelected(card) ? 'Actief' : 'Kies' }}</span>
+                <div class="variant-option__right">
+                  @if (isShowcaseEligible(card)) {
+                    <button
+                      type="button"
+                      class="pb-btn pb-btn--icon variant-option__showcase-btn"
+                      [attr.aria-label]="card.name + ' in 3D Showcase bekijken'"
+                      title="Open 3D Showcase"
+                      (click)="$event.stopPropagation(); openShowcase(card)"
+                      (keydown.enter)="$event.stopPropagation(); openShowcase(card)"
+                      (keydown.space)="$event.preventDefault(); $event.stopPropagation(); openShowcase(card)"
+                    >
+                      <span class="material-symbols-outlined">3d_rotation</span>
+                    </button>
+                  }
+                  <div class="variant-option__radio">
+                    <span class="radio-dot" [class.is-checked]="isChoiceSelected(card)"></span>
+                    <span class="mono">{{ isChoiceSelected(card) ? 'Actief' : 'Kies' }}</span>
+                  </div>
                 </div>
-              </button>
+              </div>
             }
           </div>
         } @else {
@@ -523,4 +541,17 @@
       </div>
     </div>
   }
+
+  <!-- 3D Showcase voor Rare+ kaarten in de Pokédex Binder -->
+  <pb-card-showcase
+    [open]="!!activeShowcaseCard()"
+    [item]="activeShowcaseVm()"
+    [currentIndex]="activeShowcaseIndex()"
+    [totalCount]="showcaseSlotCards().length"
+    [canPrev]="activeShowcaseIndex() > 0"
+    [canNext]="activeShowcaseIndex() >= 0 && activeShowcaseIndex() < showcaseSlotCards().length - 1"
+    (closed)="closeShowcase()"
+    (prev)="showcasePrev()"
+    (next)="showcaseNext()"
+  />
 </div>
