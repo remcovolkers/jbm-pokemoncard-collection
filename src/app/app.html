@@ -163,16 +163,21 @@
       @if (updates.showUpdateBanner()) {
         <div
           class="update-banner"
-          [class.update-banner--apk]="updates.apkMandatory() || (platform.isNative() && updates.apkUpdateAvailable())"
+          [class.update-banner--apk]="updates.apkMandatory() || (platform.isNative() && updates.apkUpdateAvailable() && !updates.webUpdateAvailable())"
           role="status"
           aria-live="polite"
         >
           <div class="update-banner__left">
             <span class="material-symbols-outlined update-banner__icon">
-              {{ updates.apkMandatory() || (platform.isNative() && updates.apkUpdateAvailable()) ? 'android' : 'system_update' }}
+              {{ updates.apkMandatory() || (platform.isNative() && updates.apkUpdateAvailable() && !updates.webUpdateAvailable()) ? 'android' : 'system_update' }}
             </span>
             <div class="update-banner__copy">
-              @if (updates.apkMandatory() || (platform.isNative() && updates.apkUpdateAvailable())) {
+              @if (updates.apkMandatory()) {
+                <strong>Verplichte nieuwe Android-app (APK) (v{{ updates.latestNativeVersion() }})</strong>
+                <span>
+                  {{ updates.releaseNotes() || 'Download en installeer de nieuwste APK voor nieuwe native functies.' }}
+                </span>
+              } @else if (platform.isNative() && updates.apkUpdateAvailable() && !updates.webUpdateAvailable()) {
                 <strong>Nieuwe Android-app (APK) beschikbaar (v{{ updates.latestNativeVersion() }})</strong>
                 <span>
                   {{ updates.releaseNotes() || 'Download en installeer de nieuwste APK voor nieuwe native functies.' }}
@@ -184,6 +189,11 @@
                     Update wordt op de achtergrond binnengehaald…
                   } @else if (platform.isNative() && updates.otaState() === 'ready') {
                     Update staat klaar — wordt automatisch actief bij heropenen of tik op Nu bijwerken.
+                    @if (updates.apkUpdateAvailable()) {
+                      (Optionele APK v{{ updates.latestNativeVersion() }} ook beschikbaar)
+                    }
+                  } @else if (platform.isNative() && updates.otaState() === 'error') {
+                    Automatisch laden mislukt ({{ updates.otaError() || 'onbekende fout' }}) — tik op Opnieuw proberen.
                   } @else {
                     {{ updates.releaseNotes() || 'Tik op bijwerken om direct de nieuwste versie te laden.' }}
                   }
@@ -193,16 +203,7 @@
           </div>
 
           <div class="update-banner__actions">
-            @if (updates.apkMandatory() || (platform.isNative() && updates.apkUpdateAvailable())) {
-              <button
-                type="button"
-                class="pb-btn pb-btn--primary update-banner__btn"
-                (click)="updates.downloadLatestApk()"
-              >
-                <span class="material-symbols-outlined">download</span>
-                <span>APK downloaden</span>
-              </button>
-            } @else {
+            @if (!updates.apkMandatory() && updates.webUpdateAvailable()) {
               <button
                 type="button"
                 class="pb-btn pb-btn--emerald update-banner__btn"
@@ -212,7 +213,28 @@
                 <span class="material-symbols-outlined" [class.pb-spin]="updates.otaState() === 'downloading' || updates.otaState() === 'applying'">
                   {{ updates.otaState() === 'downloading' || updates.otaState() === 'applying' ? 'progress_activity' : 'refresh' }}
                 </span>
-                <span>{{ updates.otaState() === 'downloading' ? 'Laden…' : 'Nu bijwerken' }}</span>
+                <span>
+                  @if (updates.otaState() === 'downloading') {
+                    Laden…
+                  } @else if (platform.isNative() && updates.otaState() === 'error') {
+                    Opnieuw proberen
+                  } @else {
+                    Nu bijwerken
+                  }
+                </span>
+              </button>
+            }
+
+            @if (updates.apkMandatory() || (platform.isNative() && updates.apkUpdateAvailable())) {
+              <button
+                type="button"
+                class="pb-btn pb-btn--primary update-banner__btn"
+                (click)="updates.downloadLatestApk()"
+              >
+                <span class="material-symbols-outlined">download</span>
+                <span>
+                  {{ updates.webUpdateAvailable() ? 'APK v' + updates.latestNativeVersion() : 'APK downloaden' }}
+                </span>
               </button>
             }
 

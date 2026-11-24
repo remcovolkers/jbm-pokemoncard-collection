@@ -6,9 +6,28 @@ import { filter } from 'rxjs';
 import { CollectionStore } from '../state/collection.store';
 import { APP_VERSION } from './app-version';
 import { PlatformService } from './platform.service';
-import { RemoteVersionManifest, evaluateUpdateManifest } from './version.utils';
+import { RemoteVersionManifest, evaluateUpdateManifest, isNewerWebVersion } from './version.utils';
 
 export type OtaDownloadState = 'idle' | 'downloading' | 'ready' | 'applying' | 'error';
+
+function extractErrorMessage(err: unknown, fallback: string): string {
+  if (err instanceof Error && err.message) {
+    return err.message;
+  }
+  if (typeof err === 'string' && err.trim()) {
+    return err.trim();
+  }
+  if (err && typeof err === 'object') {
+    const record = err as { message?: unknown; errorMessage?: unknown };
+    if (typeof record.message === 'string' && record.message.trim()) {
+      return record.message.trim();
+    }
+    if (typeof record.errorMessage === 'string' && record.errorMessage.trim()) {
+      return record.errorMessage.trim();
+    }
+  }
+  return fallback;
+}
 
 /**
  * Beheert automatische in-app updates voor zowel PWA als Capacitor Android APK:
@@ -108,6 +127,20 @@ export class AppUpdateService {
       const current = await CapacitorUpdater.current();
       if (current?.bundle?.version && current.bundle.version !== 'builtin') {
         this.currentWebVersion.set(current.bundle.version);
+      }
+      if (typeof CapacitorUpdater.getNextBundle === 'function') {
+        const next = await CapacitorUpdater.getNextBundle();
+        if (
+          next?.id &&
+          next.version &&
+          next.status !== 'error' &&
+          next.id !== current?.bundle?.id &&
+          isNewerWebVersion(next.version, this.currentWebVersion())
+        ) {
+          this.readyBundleId = next.id;
+          this.downloadedBundleVersion = next.version;
+          this.otaState.set('ready');
+        }
       }
     } catch {
       // Val terug op APP_VERSION.webVersion
@@ -247,7 +280,7 @@ export class AppUpdateService {
         }
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Update-controle mislukt.';
+      const msg = extractErrorMessage(err, 'Update-controle mislukt.');
       this.checkError.set(msg);
       if (!silent) this.store.showToast(msg, 'error');
     } finally {
@@ -258,7 +291,7 @@ export class AppUpdateService {
   /**
    * Past een beschikbare non-APK update direct toe:
    *  - Android APK: activeert de gedownloade OTA-bundle via CapacitorUpdater.set()
-   *  - PWA: activeert de nieuwe Service Worker en herlaadt de pagina
+   *  - PWA: controleert en activeert de nieuwe Service Worker en herlaadt de pagina
    */
   async applyWebUpdate(): Promise<void> {
     if (this.platform.isNative()) {
@@ -267,6 +300,11 @@ export class AppUpdateService {
     }
 
     if (this.swUpdate?.isEnabled) {
+      try {
+        await this.swUpdate.checkForUpdate();
+      } catch {
+        // Negeer fout tijdens check; probeer alsnog te activeren of te herladen
+      }
       try {
         await this.swUpdate.activateUpdate();
       } catch {
@@ -311,7 +349,7 @@ export class AppUpdateService {
       this.otaState.set('ready');
     } catch (err) {
       this.otaState.set('error');
-      this.otaError.set(err instanceof Error ? err.message : 'Download mislukt.');
+      this.otaError.set(extractErrorMessage(err, 'Download mislukt.'));
     }
   }
 
@@ -351,7 +389,7 @@ export class AppUpdateService {
       await CapacitorUpdater.set({ id: this.readyBundleId });
     } catch (err) {
       this.otaState.set('error');
-      const msg = err instanceof Error ? err.message : 'Kon update niet toepassen.';
+      const msg = extractErrorMessage(err, 'Kon update niet toepassen.');
       this.otaError.set(msg);
       this.store.showToast(msg, 'error');
     }

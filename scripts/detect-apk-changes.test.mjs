@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import { describe, it } from 'node:test';
 import { analyzeApkChanges } from './detect-apk-changes.mjs';
 
@@ -149,5 +151,15 @@ describe('detect-apk-changes.mjs (APK vs WebView OTA beslisser)', () => {
     assert.equal(result.apkChanged, false);
     assert.equal(result.targetNativeVersion, '1.0.2');
     assert.deepEqual(result.reasons, []);
+  });
+
+  it('voert Pages deploy job altijd uit na succesvolle build ook als release-apk is overgeslagen', () => {
+    const workflowPath = path.resolve(import.meta.dirname, '..', '.github', 'workflows', 'deploy.yml');
+    const yaml = fs.readFileSync(workflowPath, 'utf8');
+    const deploySectionMatch = yaml.match(/^\s{2}deploy:\r?\n([\s\S]*)$/m);
+    assert.ok(deploySectionMatch, 'deploy job ontbreekt in .github/workflows/deploy.yml');
+    const deployBlock = deploySectionMatch[1];
+    assert.match(deployBlock, /needs:\s*build/);
+    assert.match(deployBlock, /if:\s*always\(\)\s*&&\s*needs\.build\.result\s*==\s*'success'/);
   });
 });

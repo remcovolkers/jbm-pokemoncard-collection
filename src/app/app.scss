@@ -429,6 +429,7 @@
   &__actions {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: 0.45rem;
     flex-shrink: 0;
   }

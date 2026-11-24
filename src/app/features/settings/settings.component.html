@@ -422,7 +422,15 @@
           <div>
             <strong>Nieuwe versie beschikbaar (v{{ updates.latestWebVersion() }})</strong>
             <p>
-              Non-APK update: pas direct in de app toe zonder opnieuw te installeren.
+              @if (platform.isNative() && updates.otaState() === 'downloading') {
+                OTA-update wordt op de achtergrond gedownload…
+              } @else if (platform.isNative() && updates.otaState() === 'ready') {
+                OTA-update staat klaar en wordt actief bij heropenen of via "Nieuwe versie toepassen".
+              } @else if (platform.isNative() && updates.otaState() === 'error') {
+                Non-APK update beschikbaar — tik op "Nieuwe versie toepassen" om handmatig opnieuw te proberen.
+              } @else {
+                Non-APK update: pas direct in de app toe zonder opnieuw te installeren.
+              }
             </p>
           </div>
         </div>
@@ -436,6 +444,16 @@
             <p>
               {{ updates.releaseNotes() || 'Download de nieuwste APK rechtstreeks via onderstaande link.' }}
             </p>
+          </div>
+        </div>
+      }
+
+      @if (updates.otaError() || updates.checkError()) {
+        <div class="update-notice update-notice--error">
+          <span class="material-symbols-outlined">error</span>
+          <div>
+            <strong>Update-diagnose</strong>
+            <p class="mono">{{ updates.otaError() || updates.checkError() }}</p>
           </div>
         </div>
       }
