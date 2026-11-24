@@ -1,9 +1,16 @@
 # Workspace Guidelines
 
-## Visual & Browser Verification
-- Na elke UI-, CSS-, layout-, routing- of UX-wijziging: draai `npm run test:e2e` (echte headless Chromium op mobiel `390×844` en desktop `1440×900`) en bekijk de relevante screenshots in `e2e/screenshots/mobile/` en `e2e/screenshots/desktop/` (via `read_file`) — of inspecteer interactief live op `http://127.0.0.1:4200` via de **Chrome DevTools** MCP / `browser`-subagent.
-- Controleer expliciet op horizontale overflow (`scrollWidth <= innerWidth`), onbedoelde micro-scrollbars (zoals op `/meer` of desktop `.sidebar`), afgeknipte/overlappende vaste docks of bottom-navigatie, zwak contrast en runtime console-fouten.
-- Los gevonden visuele of layout-problemen eerst op en herverifieer voordat je commit en pusht.
+## Feature Discovery (Business Analyst) bij Grote Features
+- Bij een grote of nieuwe feature (bijv. een nieuw scherm, ingrijpende workflow-uitbreiding, nieuwe datavelden/Google Sheets-kolommen of een open product-idee): begin **niet** direct met coderen.
+- Gebruik de [`business-analyst`](.agents/agents/business-analyst.md) agent / [`feature-discovery`](.agents/skills/feature-discovery/SKILL.md) skill: check kort relevante bestaande code/modellen, stel zo nodig max 3–5 gerichte vragen, denk proactief mee over wat er logisch bij past, en schrijf eerst een gestructureerd Feature Brief-document in `docs/features/YYYY-MM-DD-<slug>.md` met keuze-checkboxes (V1 quick wins vs V2).
+- Pauzeer voor gezamenlijke beoordeling en keuzes op het document voordat de bouw start (sla dit over bij kleine bugfixes, losse styling-tweaks of als de gebruiker expliciet vraagt direct zonder analyse-document te bouwen).
+
+## Pre-Push Volledige UI/UX Review Gate
+- Na elke UI-, CSS-, layout-, routing- of feature-wijziging — en **verplicht vóór elke push naar `main`**:
+  1. Draai `npm run test:e2e` (echte headless Chromium op mobiel `390×844` en desktop `1440×900`, inclusief `e2e/ux-layout.spec.ts`, de interactieve scroll- en invul-walkthrough in `e2e/interactive-ui-walkthrough.spec.ts` en `e2e/visual-audit.spec.ts`).
+  2. Voer de volledige [`ui-ux-reviewer`](.agents/agents/ui-ux-reviewer.md)-beoordeling uit: bekijk de relevante screenshots in `e2e/screenshots/mobile/` en `e2e/screenshots/desktop/` via `read_file` en inspecteer bij grotere of verdachte flows ook interactief live op `http://127.0.0.1:4200` via **Chrome DevTools** MCP / de `browser`-subagent.
+  3. Toets streng en eerlijk op gebruiksvriendelijkheid en best practices (Apple HIG, MD3, WCAG 2.1 AA, touch-targets `>= 44 px`, nul horizontale overflow, geen onbedoelde micro-scrollbars op `/meer` of desktop `.sidebar`, werkende modals/formulieren en logische navigatie).
+  4. Los blokkerende (`NO-GO`) bevindingen eerst op, herverifieer, commit en push daarna pas naar `origin main`, en geef de belangrijkste eerlijke UX-feedback en eventuele vervolgadviezen kort mee in je antwoord.
 
 ## APK vs WebView OTA Discipline
 - Pas tijdens pure web-, UI-, UX- of QA-taken **nooit** `android/`, `capacitor.config.ts`, `package.json` (`version` / `pokebinder.minNativeVersion`) of native `@capacitor/*` / `@capgo/*` dependencies aan, zodat CI via `scripts/detect-apk-changes.mjs` netjes `apkChanged: false` houdt en alleen een lichte WebView OTA-update uitrolt.

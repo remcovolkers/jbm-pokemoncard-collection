@@ -23,6 +23,7 @@
     "test:e2e:mobile": "playwright test --project=mobile",
     "test:e2e:desktop": "playwright test --project=desktop",
     "test:visual": "playwright test e2e/visual-audit.spec.ts",
+    "test:e2e:walkthrough": "playwright test e2e/interactive-ui-walkthrough.spec.ts",
     "gas:login": "node scripts/deploy-gas.mjs login",
     "gas:init": "node scripts/deploy-gas.mjs init",
     "gas:push": "node scripts/deploy-gas.mjs push",

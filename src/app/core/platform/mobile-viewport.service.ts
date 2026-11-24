@@ -130,7 +130,10 @@ export class MobileViewportService implements OnDestroy {
       : this.measureStickyHeaderOffset(scrollContainer);
     const minTop = containerRect.top + stickyOffset + 16;
     const visibleHeight = this.viewportHeight();
-    const effectiveBottom = Math.min(containerRect.bottom, visibleHeight) - 18;
+    const dockHeight = scrollContainer.classList.contains('pb-sheet')
+      ? 0
+      : this.measureBottomDockOffset();
+    const effectiveBottom = Math.min(containerRect.bottom, visibleHeight) - dockHeight - 18;
 
     if (elRect.bottom > effectiveBottom) {
       const delta = elRect.bottom - effectiveBottom;
@@ -200,6 +203,14 @@ export class MobileViewportService implements OnDestroy {
   private measureStickyHeaderOffset(container: HTMLElement): number {
     const sticky = container.querySelector('.controls, .dex-controls, .more-tabs') as HTMLElement | null;
     return sticky ? Math.max(0, sticky.getBoundingClientRect().height) : 0;
+  }
+
+  private measureBottomDockOffset(): number {
+    const dock = this.doc.querySelector('.qa-dock, .detail-dock') as HTMLElement | null;
+    if (!dock) return 0;
+    const style = typeof window !== 'undefined' ? window.getComputedStyle(dock) : null;
+    if (style && style.display === 'none') return 0;
+    return Math.max(0, dock.getBoundingClientRect().height);
   }
 
   private scrollContainerTo(container: HTMLElement, targetTop: number): void {
