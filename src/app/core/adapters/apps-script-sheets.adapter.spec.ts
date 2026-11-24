@@ -44,12 +44,18 @@ describe('AppsScriptSheetsAdapter', () => {
 
   it('test verbinding via GET ?action=ping&token=... en rapporteert zowel succes als fouten', async () => {
     fetchSpy.mockResolvedValueOnce(
-      jsonResponse({ ok: true, spreadsheetName: 'Pokémon Kaartencollectie Tracker', syncedAt: '2026-11-23T10:00:00Z' })
+      jsonResponse({
+        ok: true,
+        spreadsheetName: 'Pokémon Kaartencollectie Tracker',
+        scriptVersion: '2.1.0',
+        syncedAt: '2026-11-23T10:00:00Z',
+      })
     );
 
     const okRes = await adapter.testConnection(validConfig);
     expect(okRes.ok).toBe(true);
     expect(okRes.spreadsheetName).toBe('Pokémon Kaartencollectie Tracker');
+    expect(okRes.scriptVersion).toBe('2.1.0');
     const calledUrl = String(fetchSpy.mock.calls[0][0]);
     expect(calledUrl).toContain('action=ping');
     expect(calledUrl).toContain('token=my-secret-token');

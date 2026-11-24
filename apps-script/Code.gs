@@ -33,6 +33,11 @@ var DEX_COUNT = 1025; // #0001 t/m #1025
 var TCGDEX_BASE_URL = 'https://api.tcgdex.net/v2/en';
 var TCGDEX_GRAPHQL_URL = 'https://api.tcgdex.net/v2/graphql';
 
+var SCRIPT_VERSION = '2.1.0';
+var SCRIPT_CHANGELOG = 'Snellere batch-sync, script-versiecontrole in Instellingen & menu-updatecheck.';
+var POKEBINDER_MANIFEST_URL = 'https://remcovolkers.github.io/jbm-pokemoncard-collection/version.json';
+var POKEBINDER_CODE_URL = 'https://github.com/remcovolkers/jbm-pokemoncard-collection/blob/main/apps-script/Code.gs';
+
 // Mapping van geprinte kaartcodes (linksonder op fysieke kaarten) naar TCGdex API-codes
 var SET_CODE_ALIASES = {
   // Mega Evolution & 30th Anniversary
@@ -248,7 +253,76 @@ function onOpen() {
     .addItem('📚 Setcodes-tabblad aanmaken / bijwerken', 'syncSetCodesSheet')
     .addSeparator()
     .addItem('🔑 PokéBinder App API-token instellen / bekijken', 'configureApiTokenFromMenu')
+    .addItem('🔄 Controleren op PokéBinder Script-update', 'checkScriptUpdateFromMenu')
     .addToUi();
+}
+
+function compareSemverVersions_(a, b) {
+  var parseTuple = function (raw) {
+    var clean = String(raw || '').trim().replace(/^v/i, '').split(/[+-]/)[0] || '0.0.0';
+    var parts = clean.split('.');
+    return [
+      parseInt(parts[0], 10) || 0,
+      parseInt(parts[1], 10) || 0,
+      parseInt(parts[2], 10) || 0
+    ];
+  };
+  var pa = parseTuple(a);
+  var pb = parseTuple(b);
+  for (var i = 0; i < 3; i++) {
+    if (pa[i] !== pb[i]) return pa[i] > pb[i] ? 1 : -1;
+  }
+  return 0;
+}
+
+function checkScriptUpdateFromMenu() {
+  var ui = SpreadsheetApp.getUi();
+  try {
+    var url = POKEBINDER_MANIFEST_URL + '?t=' + Date.now();
+    var res = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+    if (res.getResponseCode() !== 200) {
+      ui.alert(
+        'Update-controle mislukt (HTTP ' + res.getResponseCode() + ').\n\n' +
+          'Bekijk handmatig de nieuwste Code.gs op:\n' + POKEBINDER_CODE_URL
+      );
+      return;
+    }
+
+    var manifest = JSON.parse(res.getContentText() || '{}');
+    var latest = String(manifest.latestScriptVersion || '').trim();
+    if (!latest) {
+      ui.alert(
+        'Je huidige PokéBinder scriptversie is v' + SCRIPT_VERSION + '.\n' +
+          'Er kon geen nieuwere scriptversie uit version.json worden gelezen.'
+      );
+      return;
+    }
+
+    if (compareSemverVersions_(latest, SCRIPT_VERSION) > 0) {
+      var changelog = manifest.scriptChangelog ? '\nWat is nieuw:\n' + manifest.scriptChangelog + '\n' : '';
+      ui.alert(
+        'Nieuwe PokéBinder Script-update beschikbaar!\n\n' +
+          'Huidige versie: v' + SCRIPT_VERSION + '\n' +
+          'Nieuwste versie: v' + latest + '\n' +
+          changelog +
+          '\nZo werk je veilig bij (je /exec-URL & API_TOKEN blijven gelijk):\n' +
+          '1. Kopieer Code.gs vanuit PokéBinder → Instellingen (of via GitHub)\n' +
+          '2. Extensies → Apps Script → Code.gs vervangen → Ctrl+S\n' +
+          '3. Implementeren → Implementaties beheren → Potloodje (Bewerken)\n' +
+          '4. Kies "Nieuwe versie" → Implementeren\n\n' +
+          'Broncode: ' + POKEBINDER_CODE_URL
+      );
+      return;
+    }
+
+    ui.alert('Je gebruikt al de nieuwste PokéBinder Apps Script versie (v' + SCRIPT_VERSION + ')!');
+  } catch (err) {
+    ui.alert(
+      'Kon niet op updates controleren: ' +
+        String(err && err.message ? err.message : err) +
+        '\n\nBekijk de broncode op:\n' + POKEBINDER_CODE_URL
+    );
+  }
 }
 
 /**
@@ -601,6 +675,7 @@ function doGet(e) {
       return jsonResponse_({
         ok: true,
         spreadsheetName: ss.getName(),
+        scriptVersion: SCRIPT_VERSION,
         syncedAt: new Date().toISOString()
       });
     }
@@ -723,6 +798,7 @@ function jsonResponse_(obj) {
 function buildBootstrapPayload_(ss) {
   var collection = readCollection_(ss);
   return {
+    scriptVersion: SCRIPT_VERSION,
     collection: collection,
     setProgress: readSetProgress_(ss, collection),
     pokedex: readPokedex_(ss),

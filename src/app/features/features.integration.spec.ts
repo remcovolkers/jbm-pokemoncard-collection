@@ -77,7 +77,18 @@ class MockCardCatalogAdapter implements CardCatalogPort {
     ];
   }
 
-  async getCardByExactId(): Promise<CatalogCard | null> {
+  async getCardByExactId(cardId?: string): Promise<CatalogCard | null> {
+    if (cardId === 'sv03.5-199') {
+      return {
+        ...MOCK_CATALOG_CARD,
+        id: 'sv03.5-199',
+        localId: '199',
+        setId: 'sv03.5',
+        setName: '151',
+        cardNumber: '199/165',
+        dexIds: [6],
+      };
+    }
     return MOCK_CATALOG_CARD;
   }
 
@@ -1013,6 +1024,37 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
       expect(store.activeProfile()?.id).toBe(testId);
       expect(comp.webAppUrl()).toBe('https://script.google.com/macros/s/test/exec');
       expect(el.textContent).toContain('Test: Remco Test');
+
+      // Barebones Template kopieer-knop opent Google /copy in browser & 1-klik API-token generator
+      const openSpy = vi.spyOn(comp.platform, 'openExternalUrl').mockResolvedValue();
+      await comp.openTemplateCopy();
+      expect(openSpy).toHaveBeenCalledWith(
+        'https://docs.google.com/spreadsheets/d/1bZKzRHDNTaExkag2-5JSt8ncxrARfdojcjk2Stynmwg/copy'
+      );
+
+      const writeTextSpy = vi.fn().mockResolvedValue(undefined);
+      Object.defineProperty(navigator, 'clipboard', {
+        value: { writeText: writeTextSpy },
+        configurable: true,
+      });
+      await comp.generateAndCopyApiToken();
+      expect(comp.apiToken().length).toBeGreaterThanOrEqual(24);
+      expect(comp.showToken()).toBe(true);
+      expect(writeTextSpy).toHaveBeenCalledWith(comp.apiToken());
+
+      // Code.gs ophalen + kopiëren via klembord + scriptversie-update detectie
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+        new Response("var SCRIPT_VERSION = '2.1.0';\nfunction doGet() {}", { status: 200 })
+      );
+      await comp.copyLatestAppsScript();
+      expect(fetchSpy).toHaveBeenCalled();
+      expect(comp.copiedScriptLines()).toBe(2);
+      expect(writeTextSpy).toHaveBeenCalledWith(expect.stringContaining("SCRIPT_VERSION = '2.1.0'"));
+
+      store.connectedScriptVersion.set('1.9.0');
+      expect(comp.scriptUpdateAvailable()).toBe(true);
+      store.connectedScriptVersion.set(comp.latestScriptVersion());
+      expect(comp.scriptUpdateAvailable()).toBe(false);
     });
 
     it('ondersteunt de Alle Sets Catalogus browser in QuickAddComponent met in-bezit detectie, zoekbare dropdown en sortering', async () => {
@@ -1091,6 +1133,96 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
       expect(el.textContent).not.toContain('Snel testen');
       expect(el.textContent).toContain('Recente sets');
       expect(comp.recentSetCodes()).toEqual(['MEW', 'EVS']);
+    });
+
+    it('scrollt nooit automatisch omhoog na opslaan of duplicaat-increment (Feedback #3)', async () => {
+      const fixture = TestBed.createComponent(QuickAddComponent);
+      const comp = fixture.componentInstance;
+      fixture.detectChanges();
+
+      const scrollSpy = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+      const fakeMain = document.createElement('div');
+      fakeMain.className = 'shell__main';
+      const mainScrollSpy = vi.fn();
+      fakeMain.scrollTo = mainScrollSpy;
+      document.body.appendChild(fakeMain);
+
+      try {
+        await comp.lookupByCode('MEW 181');
+        await comp.incrementDuplicate();
+        comp.manualName.set('Bulbasaur Promo');
+        await comp.saveCard(true);
+        await new Promise((r) => setTimeout(r, 20));
+
+        expect(scrollSpy).not.toHaveBeenCalled();
+        expect(mainScrollSpy).not.toHaveBeenCalled();
+      } finally {
+        fakeMain.remove();
+        scrollSpy.mockRestore();
+      }
+    });
+
+    it('ondersteunt Multi-select (Alle Sets + Op Naam), Alleen ontbrekende filter, +1 tegel & set-overstijgende batch-opslag (Feedback #2)', async () => {
+      const fixture = TestBed.createComponent(QuickAddComponent);
+      const comp = fixture.componentInstance;
+      const store = TestBed.inject(CollectionStore);
+      fixture.detectChanges();
+
+      await comp.openSetsCatalog();
+      await comp.selectCatalogSet('sv03.5');
+      fixture.detectChanges();
+
+      // Standaard 2 kaarten (sv03.5-199 in bezit, sv03-125 nieuw)
+      expect(comp.activeSetOwnedCount()).toBe(1);
+      expect(comp.activeSetMissingCount()).toBe(1);
+
+      // Filter 'Alleen ontbrekende' verbergt kaarten die al in bezit zijn
+      comp.toggleOnlyMissingInSet();
+      expect(comp.filteredSetCards().map((c) => c.id)).toEqual(['sv03-125']);
+      comp.toggleOnlyMissingInSet();
+      expect(comp.filteredSetCards().length).toBe(2);
+
+      // Multi-select inschakelen: 1e tik selecteert, +1 verhoogt aantal, 2e tik deselecteert
+      comp.toggleMultiSelectMode();
+      expect(comp.multiSelectMode()).toBe(true);
+      expect(window.localStorage.getItem('pokebinder_qa_multiselect_v1')).toBe('true');
+
+      const [cardOwned, cardNew] = comp.pagedSetCards();
+      comp.onCatalogTileClick(cardOwned, comp.activeSetDetail());
+      comp.onCatalogTileClick(cardNew, comp.activeSetDetail());
+      expect(comp.batchUniqueCount()).toBe(2);
+
+      comp.adjustBatchCardQty(cardNew.id, 1);
+      expect(comp.getSelectedBatchItem(cardNew.id)?.quantity).toBe(2);
+      expect(comp.batchTotalCopies()).toBe(3);
+
+      // 2e tik op cardOwned deselecteert die weer
+      comp.onCatalogTileClick(cardOwned, comp.activeSetDetail());
+      expect(comp.batchUniqueCount()).toBe(1);
+
+      // Set-overstijgend mandje: selecteer ook een kaart via Op Naam
+      comp.inputMode.set('name');
+      await comp.searchByName('Charizard');
+      const nameItem = {
+        id: 'sv03.5-199',
+        localId: '199',
+        name: 'Charizard ex 151',
+        imageUrl: MOCK_CATALOG_CARD.lowImageUrl,
+      };
+      comp.onCatalogTileClick(nameItem);
+      expect(comp.batchUniqueCount()).toBe(2);
+
+      // Variant-override & opslaan in 1 batch
+      comp.setBatchCardVariant('sv03.5-199', 'Reverse Holo');
+      comp.batchDuplicateMode.set('separate');
+      const countBefore = store.collection().length;
+      await comp.saveBatchSelection();
+
+      expect(comp.batchUniqueCount()).toBe(0);
+      expect(comp.showBatchSheet()).toBe(false);
+      expect(store.collection().length).toBe(countBefore + 2);
+      expect(store.collection().some((c) => c.cardId === 'sv03-125' && c.quantity === 2)).toBe(true);
+      expect(store.collection().some((c) => c.cardId === 'sv03.5-199' && c.variant === 'Reverse Holo')).toBe(true);
     });
   });
 

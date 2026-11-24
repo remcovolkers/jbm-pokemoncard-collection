@@ -30,6 +30,11 @@
               {
                 "glob": "**/*",
                 "input": "public"
+              },
+              {
+                "glob": "Code.gs",
+                "input": "apps-script",
+                "output": "apps-script"
               }
             ],
             "styles": ["src/styles.scss"]

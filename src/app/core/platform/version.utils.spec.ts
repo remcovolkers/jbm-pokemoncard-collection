@@ -4,6 +4,7 @@ import {
   compareSemver,
   evaluateUpdateManifest,
   isNewerWebVersion,
+  isScriptUpdateAvailable,
 } from './version.utils';
 
 const BASE_REMOTE: RemoteVersionManifest = {
@@ -92,5 +93,14 @@ describe('version.utils (PWA + Capacitor OTA & APK evaluatie)', () => {
     expect(decision.webUpdateAvailable).toBe(false);
     expect(decision.apkUpdateAvailable).toBe(false);
     expect(decision.apkMandatory).toBe(false);
+  });
+
+  it('detecteert wanneer Google Apps Script (Code.gs) verouderd of actueel is', () => {
+    expect(isScriptUpdateAvailable('2.1.0', '2.1.0', false)).toBe(false);
+    expect(isScriptUpdateAvailable('2.2.0', '2.1.0', false)).toBe(false);
+    expect(isScriptUpdateAvailable('2.0.0', '2.1.0', false)).toBe(true);
+    expect(isScriptUpdateAvailable('', '2.1.0', false)).toBe(true);
+    expect(isScriptUpdateAvailable(null, '2.1.0', false)).toBe(true);
+    expect(isScriptUpdateAvailable('2.1.0', '2.1.0', true)).toBe(true);
   });
 });

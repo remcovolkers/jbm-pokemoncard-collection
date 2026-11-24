@@ -191,6 +191,127 @@ test('Kaart Toevoegen: alle 3 modi, set-picker zoeken & handmatig formulier invu
 
   await scrollMainToBottomAndTop(page, '/toevoegen');
 
+  // Feedback #3: scrollpositie blijft behouden na toevoegen via "Nog één" (geen automatische opscroll)
+  const scrollBeforeAdd = await page.evaluate(() => {
+    const main = document.querySelector('.shell__main') as HTMLElement | null;
+    if (!main) return 0;
+    const maxTop = Math.max(0, main.scrollHeight - main.clientHeight);
+    const target = Math.min(260, maxTop);
+    main.scrollTop = target;
+    return main.scrollTop;
+  });
+  await page.locator('.qa-dock__more').click();
+  await page.waitForTimeout(120);
+  const scrollAfterAdd = await page.evaluate(() => {
+    const main = document.querySelector('.shell__main') as HTMLElement | null;
+    return main ? main.scrollTop : 0;
+  });
+  if (scrollBeforeAdd > 40) {
+    expect(scrollAfterAdd, 'Snel Toevoegen mag na opslaan niet terug naar boven scrollen').toBeGreaterThan(20);
+  }
+
+  expect(errors.pageErrors).toEqual([]);
+  expect(errors.consoleErrors).toEqual([]);
+});
+
+test('Snel Toevoegen: Alle Sets multi-select, Alleen ontbrekende, Selectie-sheet & batch toevoegen', async ({ page }) => {
+  const errors = attachErrorCollectors(page);
+
+  // Mock TCGdex set detail en kaart-metadata deterministisch voor offline-veilige E2E
+  await page.route('https://api.tcgdex.net/v2/en/sets/*', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        id: 'sv03.5',
+        name: '151',
+        tcgOnline: 'MEW',
+        serie: { id: 'sv', name: 'Scarlet & Violet' },
+        cardCount: { official: 165, total: 207 },
+        cards: [
+          { id: 'sv03.5-001', localId: '001', name: 'Bulbasaur' },
+          { id: 'sv03.5-004', localId: '004', name: 'Charmander' },
+          { id: 'sv03.5-199', localId: '199', name: 'Charizard ex' },
+        ],
+      }),
+    });
+  });
+
+  await page.route('https://api.tcgdex.net/v2/en/cards/*', async (route) => {
+    const url = route.request().url();
+    const id = decodeURIComponent(url.split('/cards/')[1] || 'sv03.5-001');
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        id,
+        localId: id.split('-')[1] || '001',
+        name: id.endsWith('004') ? 'Charmander' : id.endsWith('199') ? 'Charizard ex' : 'Bulbasaur',
+        category: 'Pokemon',
+        rarity: id.endsWith('199') ? 'Special Illustration Rare' : 'Common',
+        types: ['Grass'],
+        set: {
+          id: 'sv03.5',
+          name: '151',
+          serie: { id: 'sv', name: 'Scarlet & Violet' },
+          cardCount: { official: 165, total: 207 },
+        },
+        pricing: { cardmarket: { trend: 1.5 } },
+      }),
+    });
+  });
+
+  await page.goto('/toevoegen', { waitUntil: 'domcontentloaded' });
+  await page.locator('button[role="tab"]:has-text("Alle Sets")').click();
+  await page.locator('#qa-set-select').click();
+  await page.locator('#qa-set-search-input').fill('151');
+  await page.locator('.set-picker__option').first().click();
+
+  await expect(page.locator('.result-tile').first()).toBeVisible();
+
+  // Zet Meerdere selecteren aan
+  await page.locator('.batch-toolbar button:has-text("Meerdere selecteren")').click();
+  await page.locator('.result-tile__main').nth(0).click();
+  await page.locator('.result-tile__main').nth(1).click();
+  await page.locator('.result-tile__plus').first().click();
+
+  await expect(page.locator('.qa-dock__select-btn')).toContainText('Selectie (2)');
+  await expect(page.locator('.qa-dock .pb-btn--primary')).toContainText('2 kaarten (3×) toevoegen');
+
+  // Open Selectie-sheet en controleer op horizontale overflow
+  await page.locator('.qa-dock__select-btn').click();
+  await expect(page.locator('.qa-batch-sheet')).toBeVisible();
+  const sheetOverflow = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
+  expect(sheetOverflow, 'Horizontale overflow met Selectie-sheet open').toBe(true);
+
+  await page.locator('.qa-batch-sheet__footer .pb-btn--primary').click();
+  await expect(page.locator('.qa-batch-sheet')).toBeHidden();
+  await expect(page.locator('.toast--success')).toBeVisible();
+
+  expect(errors.pageErrors).toEqual([]);
+  expect(errors.consoleErrors).toEqual([]);
+});
+
+test('Instellingen: barebones template-sectie, token generator & Code.gs kopiëren zonder overflow', async ({
+  page,
+  context,
+}) => {
+  const errors = attachErrorCollectors(page);
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']).catch(() => undefined);
+
+  await page.goto('/meer/instellingen', { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('#sheet-setup')).toBeVisible();
+  await expect(page.locator('button:has-text("Kopieer naar eigen Google Drive")')).toBeVisible();
+
+  await page.locator('.token-gen-btn').click();
+  await expect(page.locator('#cfg-token')).toHaveValue(/^[A-Za-z0-9]{24,}$/);
+
+  await page.locator('button:has-text("Kopieer nieuwste Code.gs")').click();
+  await expect(page.locator('.toast--success').last()).toBeVisible();
+
+  const overflowOk = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
+  expect(overflowOk, 'Horizontale overflow op Instellingen').toBe(true);
+
   expect(errors.pageErrors).toEqual([]);
   expect(errors.consoleErrors).toEqual([]);
 });

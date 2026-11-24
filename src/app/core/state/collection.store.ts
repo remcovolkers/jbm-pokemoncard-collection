@@ -52,6 +52,17 @@ import {
 
 export type SyncStatus = 'synced' | 'syncing' | 'offline' | 'demo' | 'unconfigured' | 'error';
 
+export interface BatchCardCommitItem {
+  payload: AddCardPayload;
+  duplicateStrategy?: 'increment' | 'separate';
+}
+
+export interface BatchCardCommitResult {
+  addedCount: number;
+  incrementedCount: number;
+  totalCopies: number;
+}
+
 const WISHLIST_ARTWORK_CACHE_KEY = 'pokebinder_wishlist_artwork_v1';
 
 @Injectable({ providedIn: 'root' })
@@ -87,6 +98,7 @@ export class CollectionStore {
   readonly toasts = signal<ToastMessage[]>([]);
   readonly pendingCount = computed(() => this.pendingQueue().length);
   readonly legacyAppsScriptDetected = signal<boolean>(false);
+  readonly connectedScriptVersion = signal<string | null>(null);
 
   // Navigatie-hulpsignal voor doorklikken vanuit Set Voortgang & Dashboard
   readonly requestedSetFilter = signal<string | null>(null);
@@ -167,6 +179,7 @@ export class CollectionStore {
 
   constructor() {
     this.tempRowCounter = computeMinTempRowCounter(this.snapshot(), this.pendingQueue());
+    this.connectedScriptVersion.set(this.snapshot().scriptVersion?.trim() || null);
 
     // Persist snapshot & config gescheiden per modus én per profiel zodat test/live nooit door elkaar lekken
     effect(() => {
@@ -411,17 +424,18 @@ export class CollectionStore {
     if (partial.demoMode === true && !prev.demoMode) {
       this.bumpLocalRevision();
       const demoCached = this.cache.loadDemoSnapshot();
-      this.snapshot.set(
-        demoCached
-          ? this.reconcileSetProgress(this.applyDeviceBinderLayout(this.hydrateArtwork(demoCached)))
-          : this.applyDeviceBinderLayout(createDemoSnapshot())
-      );
+      const nextSnap = demoCached
+        ? this.reconcileSetProgress(this.applyDeviceBinderLayout(this.hydrateArtwork(demoCached)))
+        : this.applyDeviceBinderLayout(createDemoSnapshot());
+      this.snapshot.set(nextSnap);
+      this.connectedScriptVersion.set(null);
       this.lastError.set(null);
       this.showToast('Demo-modus ingeschakeld met voorbeeldcollectie.', 'info');
     } else if (!next.demoMode && !hasSheet) {
       this.bumpLocalRevision();
       // Geen spreadsheet gekoppeld -> geen demodata tonen, maar schone lege staat
       this.snapshot.set(this.applyDeviceBinderLayout(createEmptySnapshot()));
+      this.connectedScriptVersion.set(null);
       this.lastError.set(null);
       if (partial.demoMode === false && prev.demoMode) {
         this.showToast(
@@ -432,11 +446,11 @@ export class CollectionStore {
     } else if (partial.demoMode === false && prev.demoMode && hasSheet) {
       this.bumpLocalRevision();
       const liveCached = this.cache.loadSnapshot(next.activeProfileId);
-      this.snapshot.set(
-        liveCached
-          ? this.reconcileSetProgress(this.applyDeviceBinderLayout(this.hydrateArtwork(liveCached)))
-          : this.applyDeviceBinderLayout(createEmptySnapshot())
-      );
+      const nextSnap = liveCached
+        ? this.reconcileSetProgress(this.applyDeviceBinderLayout(this.hydrateArtwork(liveCached)))
+        : this.applyDeviceBinderLayout(createEmptySnapshot());
+      this.snapshot.set(nextSnap);
+      this.connectedScriptVersion.set(nextSnap.scriptVersion?.trim() || null);
       this.tempRowCounter = computeMinTempRowCounter(this.snapshot(), this.pendingQueue());
       void this.syncFromRemote();
     }
@@ -493,11 +507,11 @@ export class CollectionStore {
 
       if (switched && !nextDemo) {
         const cached = this.cache.loadSnapshot(profile.id);
-        this.snapshot.set(
-          cached
-            ? this.reconcileSetProgress(this.applyDeviceBinderLayout(this.hydrateArtwork(cached)))
-            : this.applyDeviceBinderLayout(createEmptySnapshot())
-        );
+        const nextSnap = cached
+          ? this.reconcileSetProgress(this.applyDeviceBinderLayout(this.hydrateArtwork(cached)))
+          : this.applyDeviceBinderLayout(createEmptySnapshot());
+        this.snapshot.set(nextSnap);
+        this.connectedScriptVersion.set(nextSnap.scriptVersion?.trim() || null);
       }
     } else {
       this.config.set({
@@ -538,11 +552,11 @@ export class CollectionStore {
     });
 
     const cached = this.cache.loadSnapshot(profile.id);
-    this.snapshot.set(
-      cached
-        ? this.reconcileSetProgress(this.applyDeviceBinderLayout(this.hydrateArtwork(cached)))
-        : this.applyDeviceBinderLayout(createEmptySnapshot())
-    );
+    const nextSnap = cached
+      ? this.reconcileSetProgress(this.applyDeviceBinderLayout(this.hydrateArtwork(cached)))
+      : this.applyDeviceBinderLayout(createEmptySnapshot());
+    this.snapshot.set(nextSnap);
+    this.connectedScriptVersion.set(nextSnap.scriptVersion?.trim() || null);
 
     this.showToast(
       `Overgeschakeld naar ${profile.name} (${profile.role === 'test' ? 'Test' : 'Live'}).`,
@@ -581,11 +595,11 @@ export class CollectionStore {
         });
         if (!prev.demoMode) {
           const cached = this.cache.loadSnapshot(fallback.id);
-          this.snapshot.set(
-            cached
-              ? this.reconcileSetProgress(this.applyDeviceBinderLayout(this.hydrateArtwork(cached)))
-              : this.applyDeviceBinderLayout(createEmptySnapshot())
-          );
+          const nextSnap = cached
+            ? this.reconcileSetProgress(this.applyDeviceBinderLayout(this.hydrateArtwork(cached)))
+            : this.applyDeviceBinderLayout(createEmptySnapshot());
+          this.snapshot.set(nextSnap);
+          this.connectedScriptVersion.set(nextSnap.scriptVersion?.trim() || null);
           void this.syncFromRemote(true);
         }
       } else {
@@ -598,6 +612,7 @@ export class CollectionStore {
         });
         if (!prev.demoMode) {
           this.snapshot.set(this.applyDeviceBinderLayout(createEmptySnapshot()));
+          this.connectedScriptVersion.set(null);
         }
       }
     } else {
@@ -632,7 +647,16 @@ export class CollectionStore {
 
   async testConnection(overrideConfig?: AppConnectionConfig): Promise<ConnectionTestResult> {
     const cfg = overrideConfig ?? this.config();
-    return this.repo.testConnection(cfg);
+    const res = await this.repo.testConnection(cfg);
+    if (
+      res.ok &&
+      !this.config().demoMode &&
+      cfg.webAppUrl.trim() &&
+      cfg.webAppUrl.trim() === this.config().webAppUrl.trim()
+    ) {
+      this.connectedScriptVersion.set(res.scriptVersion?.trim() || '');
+    }
+    return res;
   }
 
   async syncFromRemote(silent = false): Promise<boolean> {
@@ -673,6 +697,7 @@ export class CollectionStore {
 
       const revBefore = this.localRevision;
       const remote = await this.repo.bootstrap(cfg);
+      this.connectedScriptVersion.set(remote.scriptVersion?.trim() || '');
       if (this.canApplyRemoteSnapshot(revBefore)) {
         this.snapshot.set(this.reconcileRemoteSnapshot(remote));
         this.persistStateImmediately();
@@ -727,6 +752,9 @@ export class CollectionStore {
       }
       const revBefore = this.localRevision;
       const result = await this.repo.refreshPrices(cfg);
+      if (result.snapshot?.scriptVersion !== undefined) {
+        this.connectedScriptVersion.set(result.snapshot.scriptVersion.trim() || '');
+      }
       if (this.canApplyRemoteSnapshot(revBefore)) {
         this.snapshot.set(this.reconcileRemoteSnapshot(result.snapshot));
         this.persistStateImmediately();
@@ -752,6 +780,7 @@ export class CollectionStore {
     } else if (!this.isSheetConfigured()) {
       this.snapshot.set(this.applyDeviceBinderLayout(createEmptySnapshot()));
     }
+    this.connectedScriptVersion.set(null);
     this.showToast('Offline-cache geleegd.', 'info');
   }
 
@@ -820,6 +849,171 @@ export class CollectionStore {
     } else {
       this.showToast(`${newCard.name} opgeslagen & Pokédex gesynct!`, 'success');
     }
+  }
+
+  /**
+   * Voegt meerdere geselecteerde kaarten in één atomische lokale update + één batch-sync toe.
+   */
+  async addCardsBatch(items: BatchCardCommitItem[]): Promise<BatchCardCommitResult> {
+    if (!items || items.length === 0) {
+      return { addedCount: 0, incrementedCount: 0, totalCopies: 0 };
+    }
+
+    const today = new Date().toISOString().slice(0, 10);
+    const cfg = this.config();
+    const isLiveConfigured = !cfg.demoMode && Boolean(cfg.webAppUrl?.trim() && cfg.apiToken?.trim());
+    let workingCollection = [...this.collection()];
+    const addedSetMetas: Array<{ setName: string; series: string; totalCards: number }> = [];
+    const newMutations: PendingMutation[] = [];
+
+    let addedCount = 0;
+    let incrementedCount = 0;
+    let totalCopies = 0;
+
+    for (let idx = 0; idx < items.length; idx++) {
+      const { payload, duplicateStrategy = 'increment' } = items[idx];
+      const cleanCardId = (payload.cardId ?? '').trim();
+      const cleanVariant = (payload.variant ?? 'Normal').trim() || 'Normal';
+      const qty = Math.max(1, Math.floor(Number(payload.quantity) || 1));
+      totalCopies += qty;
+
+      const matchIndex =
+        duplicateStrategy === 'increment' && cleanCardId
+          ? workingCollection.findIndex(
+              (c) =>
+                c.cardId.trim().toLowerCase() === cleanCardId.toLowerCase() &&
+                c.variant.trim().toLowerCase() === cleanVariant.toLowerCase()
+            )
+          : -1;
+
+      if (matchIndex >= 0) {
+        const existing = workingCollection[matchIndex];
+        const nextQty = Math.max(1, existing.quantity + qty);
+        workingCollection[matchIndex] = { ...existing, quantity: nextQty };
+        incrementedCount++;
+
+        if (isLiveConfigured) {
+          newMutations.push({
+            id: `${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 7)}`,
+            action: 'updateCard',
+            payload: {
+              rowIndex: existing.rowIndex,
+              cardId: existing.cardId,
+              quantity: nextQty,
+            },
+            description: `Kaart bijwerken: ${existing.name}`,
+            createdAt: new Date().toISOString(),
+            ...(cfg.activeProfileId ? { profileId: cfg.activeProfileId } : {}),
+            attempts: 0,
+          });
+        }
+        continue;
+      }
+
+      const nextRowIndex = this.allocateLocalRowIndex(workingCollection.map((c) => c.rowIndex));
+      const newCard: CollectionCard = {
+        rowIndex: nextRowIndex,
+        cardId: cleanCardId,
+        name: (payload.name ?? '').trim(),
+        setName: (payload.setName ?? '').trim(),
+        cardNumber: (payload.cardNumber ?? '').trim(),
+        language: payload.language ?? 'EN',
+        type: payload.type ?? 'Colorless',
+        rarity: payload.rarity ?? 'Rare',
+        variant: cleanVariant,
+        condition: payload.condition ?? 'Near Mint (NM)',
+        grading: payload.grading ?? 'Raw',
+        grade: payload.grade ?? '',
+        quantity: qty,
+        storageLocation: payload.storageLocation ?? 'Hoofdbinder',
+        binderDetail: payload.binderDetail ?? '',
+        purchaseDate: payload.purchaseDate ?? today,
+        purchasePrice: roundCurrency(Math.max(0, Number(payload.purchasePrice) || 0)),
+        marketPrice: roundCurrency(payload.marketPrice ?? 0),
+        imageUrl: payload.imageUrl || resolveCardArtworkUrl(cleanCardId, undefined, 'high'),
+        trendPercent: payload.trendPercent,
+        forTrade: Boolean(payload.forTrade),
+        acquisitionMethod: (payload.acquisitionMethod ?? '').trim(),
+        notes: payload.notes ?? '',
+      };
+
+      workingCollection = [newCard, ...workingCollection];
+      addedCount++;
+
+      if (newCard.setName && payload.setTotalCards) {
+        addedSetMetas.push({
+          setName: newCard.setName,
+          series: payload.seriesName || 'Pokémon TCG',
+          totalCards: payload.setTotalCards,
+        });
+      }
+
+      if (isLiveConfigured) {
+        newMutations.push({
+          id: `${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 7)}`,
+          action: 'addCard',
+          payload: {
+            ...payload,
+            cardId: cleanCardId,
+            variant: cleanVariant,
+            quantity: qty,
+          } as Record<string, unknown>,
+          description: `Kaart toevoegen: ${newCard.name}`,
+          createdAt: new Date().toISOString(),
+          ...(nextRowIndex < 0 ? { tempRowIndex: nextRowIndex } : {}),
+          ...(cfg.activeProfileId ? { profileId: cfg.activeProfileId } : {}),
+          attempts: 0,
+        });
+      }
+    }
+
+    this.bumpLocalRevision();
+    this.applyLocalSnapshotUpdate({
+      collection: workingCollection,
+      addedSetMetas,
+    });
+
+    let queueStatus: 'skipped' | 'offline' | 'queued' = 'skipped';
+    if (isLiveConfigured && newMutations.length > 0) {
+      this.pendingQueue.update((q) => {
+        let next = q;
+        for (const mut of newMutations) {
+          next = coalesceOutboxMutation(next, mut, this.inFlightIds);
+        }
+        return next;
+      });
+      this.lastError.set(null);
+      this.hasShownOutboxErrorToast = false;
+      this.persistStateImmediately();
+      if (this.isOnline()) {
+        void this.drainOutbox(true);
+        queueStatus = 'queued';
+      } else {
+        queueStatus = 'offline';
+      }
+    } else {
+      this.persistStateImmediately();
+    }
+
+    const copiesLabel = totalCopies > addedCount + incrementedCount ? ` (${totalCopies}×)` : '';
+    let summaryText: string;
+    if (addedCount > 0 && incrementedCount > 0) {
+      summaryText = `${addedCount} nieuw en ${incrementedCount} bij bestaande${copiesLabel}`;
+    } else if (incrementedCount > 0) {
+      summaryText = `${incrementedCount} bestaande ${incrementedCount === 1 ? 'kaart' : 'kaarten'} bijgewerkt (+${totalCopies}×)`;
+    } else {
+      summaryText = `${addedCount} ${addedCount === 1 ? 'kaart' : 'kaarten'}${copiesLabel}`;
+    }
+
+    if (queueStatus === 'queued') {
+      this.showToast(`${summaryText} opgeslagen — wordt naar Google Sheets gesynct.`, 'success');
+    } else if (queueStatus === 'offline') {
+      this.showToast(`${summaryText} opgeslagen in wachtrij (offline).`, 'warning');
+    } else {
+      this.showToast(`${summaryText} toegevoegd!`, 'success');
+    }
+
+    return { addedCount, incrementedCount, totalCopies };
   }
 
   async updateCard(
@@ -1685,6 +1879,7 @@ export class CollectionStore {
     collection?: CollectionCard[];
     wishlist?: WishlistItem[];
     addedSetMeta?: { setName: string; series: string; totalCards: number };
+    addedSetMetas?: Array<{ setName: string; series: string; totalCards: number }>;
   }): void {
     const current = this.snapshot();
     const nextCollection = changes.collection ?? current.collection;
@@ -1696,12 +1891,16 @@ export class CollectionStore {
       series: s.series,
       totalCards: s.totalCards,
     }));
-    if (changes.addedSetMeta) {
+    const metaList = [
+      ...(changes.addedSetMeta ? [changes.addedSetMeta] : []),
+      ...(changes.addedSetMetas ?? []),
+    ];
+    for (const meta of metaList) {
       const exists = existingSetSeeds.some(
-        (s) => s.setName.toLowerCase() === changes.addedSetMeta!.setName.toLowerCase()
+        (s) => s.setName.toLowerCase() === meta.setName.toLowerCase()
       );
       if (!exists) {
-        existingSetSeeds.push({ ...changes.addedSetMeta, setCode: undefined });
+        existingSetSeeds.push({ ...meta, setCode: undefined });
       }
     }
 

@@ -1,10 +1,16 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { formatEur } from '../../core/domain/card-math.utils';
 import { SheetProfileRole } from '../../core/domain/models';
 import { AppUpdateService } from '../../core/platform/app-update.service';
 import { PlatformService } from '../../core/platform/platform.service';
+import {
+  SHEET_TEMPLATE_CONFIG,
+  copyTextToClipboard,
+  generateSecureApiToken,
+} from '../../core/platform/sheet-template-config';
+import { isScriptUpdateAvailable } from '../../core/platform/version.utils';
 import { ConnectionTestResult } from '../../core/ports/collection-repository.port';
 import { CollectionStore } from '../../core/state/collection.store';
 
@@ -15,11 +21,13 @@ import { CollectionStore } from '../../core/state/collection.store';
   templateUrl: './settings.component.html',
   styleUrl: './settings.component.scss',
 })
-export class SettingsComponent {
+export class SettingsComponent implements OnInit {
   readonly store = inject(CollectionStore);
   readonly platform = inject(PlatformService);
   readonly updates = inject(AppUpdateService);
+  private readonly route = inject(ActivatedRoute, { optional: true });
   readonly formatEur = formatEur;
+  readonly templateConfig = SHEET_TEMPLATE_CONFIG;
 
   readonly selectedProfileId = signal<string>(this.store.config().activeProfileId ?? '');
   readonly profileName = signal<string>(
@@ -33,11 +41,148 @@ export class SettingsComponent {
   readonly isTesting = signal(false);
   readonly testResult = signal<ConnectionTestResult | null>(null);
   readonly cacheSizeKb = signal(this.store.getEstimatedCacheKb());
+  readonly isCopyingScript = signal(false);
+  readonly copiedScriptLines = signal<number | null>(null);
+  readonly manualSetupOpen = signal<boolean | null>(null);
+
+  readonly isLiveSheetConnected = computed(
+    () => !this.store.config().demoMode && this.store.isSheetConfigured()
+  );
+  readonly connectedScriptVersion = computed(() => this.store.connectedScriptVersion());
+  readonly latestScriptVersion = computed(() => this.updates.latestScriptVersion());
+  readonly hasKnownSheetContact = computed(
+    () =>
+      this.store.legacyAppsScriptDetected() ||
+      this.connectedScriptVersion() !== null ||
+      Boolean(this.store.syncedAt())
+  );
+  readonly scriptUpdateAvailable = computed(
+    () =>
+      this.isLiveSheetConnected() &&
+      this.hasKnownSheetContact() &&
+      isScriptUpdateAvailable(
+        this.connectedScriptVersion(),
+        this.latestScriptVersion(),
+        this.store.legacyAppsScriptDetected()
+      )
+  );
+  readonly isSetupSectionExpanded = computed(() => {
+    const manual = this.manualSetupOpen();
+    if (manual !== null) return manual;
+    return !this.isLiveSheetConnected() || this.scriptUpdateAvailable();
+  });
 
   readonly syncedLabel = computed(() => {
     const iso = this.store.syncedAt();
     return iso ? new Date(iso).toLocaleString('nl-NL') : 'Nog nooit';
   });
+
+  ngOnInit(): void {
+    if (this.route?.snapshot?.fragment === 'sheet-setup') {
+      this.manualSetupOpen.set(true);
+      this.scrollToSheetSetup();
+    }
+    this.route?.fragment?.subscribe((frag) => {
+      if (frag === 'sheet-setup') {
+        this.manualSetupOpen.set(true);
+        this.scrollToSheetSetup();
+      }
+    });
+  }
+
+  toggleSetupSection(): void {
+    this.manualSetupOpen.set(!this.isSetupSectionExpanded());
+  }
+
+  async openTemplateCopy(): Promise<void> {
+    await this.platform.openExternalUrl(this.templateConfig.copyUrl);
+  }
+
+  async copyTemplateLink(): Promise<void> {
+    const ok = await copyTextToClipboard(this.templateConfig.copyUrl);
+    if (ok) {
+      this.store.showToast('Template-link gekopieerd naar klembord.', 'success');
+    } else {
+      this.store.showToast('Kon link niet kopiëren — open via de knop ernaast.', 'warning');
+    }
+  }
+
+  async copyLatestAppsScript(): Promise<void> {
+    if (this.isCopyingScript()) return;
+    this.isCopyingScript.set(true);
+    try {
+      const code = await this.fetchLatestAppsScriptSource();
+      const copied = await copyTextToClipboard(code);
+      const lines = code.split(/\r?\n/).length;
+      if (copied) {
+        this.copiedScriptLines.set(lines);
+        this.store.showToast(
+          `Nieuwste Code.gs gekopieerd (${lines} regels) — plak in Apps Script en kies Nieuwe versie.`,
+          'success'
+        );
+      } else {
+        this.store.showToast('Klembord niet beschikbaar — bekijk Code.gs via GitHub.', 'warning');
+      }
+    } catch {
+      this.store.showToast('Kon Code.gs niet ophalen. Open de code via GitHub.', 'warning');
+    } finally {
+      this.isCopyingScript.set(false);
+    }
+  }
+
+  async openGithubScript(): Promise<void> {
+    await this.platform.openExternalUrl(
+      this.updates.scriptGithubUrl() || this.templateConfig.githubCodeUrl
+    );
+  }
+
+  async generateAndCopyApiToken(): Promise<void> {
+    const token = generateSecureApiToken(40);
+    this.apiToken.set(token);
+    this.showToken.set(true);
+    const copied = await copyTextToClipboard(token);
+    this.store.showToast(
+      copied
+        ? 'Veilig API-token gegenereerd en gekopieerd! Plak dit ook in Google Sheets (⚡ Pokémon API → API-token instellen).'
+        : 'Veilig API-token gegenereerd! Kopieer het hieronder naar je Google Sheet.',
+      'success'
+    );
+  }
+
+  private async fetchLatestAppsScriptSource(): Promise<string> {
+    const candidates = [
+      this.templateConfig.bundledCodePath,
+      this.updates.scriptCodeUrl(),
+    ].filter((u): u is string => Boolean(u && u.trim()));
+
+    for (const url of candidates) {
+      try {
+        const res = await fetch(url, { cache: 'no-store' });
+        if (!res.ok) continue;
+        const text = await res.text();
+        if (text && !text.trim().startsWith('<') && text.includes('SCRIPT_VERSION')) {
+          return text;
+        }
+      } catch {
+        // Probeer volgende bron
+      }
+    }
+    throw new Error('Code.gs broncode niet bereikbaar.');
+  }
+
+  private scrollToSheetSetup(): void {
+    if (typeof document === 'undefined') return;
+    setTimeout(() => {
+      try {
+        document.getElementById('sheet-setup')?.scrollIntoView?.({
+          behavior: 'smooth',
+          block: 'start',
+        });
+      } catch {
+        // Negeer in omgevingen zonder scrollIntoView
+      }
+    }, 40);
+  }
 
   toggleDemoMode(): void {
     const next = !this.store.config().demoMode;

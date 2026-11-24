@@ -18,11 +18,28 @@ import { isEditableEventTarget } from '../../core/platform/keyboard.utils';
 import { MobileViewportService } from '../../core/platform/mobile-viewport.service';
 import { ModalScrollLockService } from '../../core/platform/modal-scroll-lock.service';
 import { PlatformService } from '../../core/platform/platform.service';
-import { CollectionStore } from '../../core/state/collection.store';
+import { CollectionStore, BatchCardCommitItem } from '../../core/state/collection.store';
 import { CardArtworkComponent } from '../../shared/card-artwork/card-artwork.component';
 import { PbBinderSwipeDirective } from '../../shared/directives/binder-swipe.directive';
+import { PbSheetDismissDirective } from '../../shared/directives/sheet-dismiss.directive';
 
 const RECENT_SET_CODES_KEY = 'pokebinder_recent_set_codes_v1';
+const MULTI_SELECT_PREF_KEY = 'pokebinder_qa_multiselect_v1';
+
+export interface BatchSelectedCard {
+  id: string;
+  localId: string;
+  name: string;
+  imageUrl: string;
+  setId?: string;
+  setName: string;
+  seriesName?: string;
+  setTotalCount?: number;
+  quantity: number;
+  variantOverride: string;
+  cardDetail?: CatalogCard | null;
+  isLoadingDetail?: boolean;
+}
 
 const SERIES_SORT_PRIORITY: Record<string, number> = {
   me: 10,
@@ -56,7 +73,7 @@ function getSeriesSortPriority(seriesId?: string): number {
 @Component({
   selector: 'app-quick-add',
   standalone: true,
-  imports: [FormsModule, CardArtworkComponent, PbBinderSwipeDirective],
+  imports: [FormsModule, CardArtworkComponent, PbBinderSwipeDirective, PbSheetDismissDirective],
   templateUrl: './quick-add.component.html',
   styleUrl: './quick-add.component.scss',
 })
@@ -72,6 +89,7 @@ export class QuickAddComponent implements OnInit, OnDestroy {
 
   constructor() {
     this.scrollLock.registerDismissHandler(() => this.isSetDropdownOpen(), () => this.closeSetDropdown());
+    this.scrollLock.bind(() => this.showBatchSheet(), () => this.closeBatchSheet());
   }
 
   ngOnInit(): void {
@@ -216,14 +234,17 @@ export class QuickAddComponent implements OnInit, OnDestroy {
   readonly filteredSetCards = computed(() => {
     const detail = this.activeSetDetail();
     if (!detail) return [];
+    const onlyMissing = this.onlyMissingInSet();
     const q = this.setCardFilter().trim().toLowerCase();
-    if (!q) return detail.cards;
-    return detail.cards.filter(
-      (c) =>
+    return detail.cards.filter((c) => {
+      if (onlyMissing && this.isCardOwned(c.id)) return false;
+      if (!q) return true;
+      return (
         c.name.toLowerCase().includes(q) ||
         c.localId.toLowerCase().includes(q) ||
         c.id.toLowerCase().includes(q)
-    );
+      );
+    });
   });
 
   readonly catalogTotalPages = computed(() =>
@@ -239,6 +260,63 @@ export class QuickAddComponent implements OnInit, OnDestroy {
   readonly ownedCardIdSet = computed(
     () => new Set(this.store.collection().map((c) => c.cardId.toLowerCase()))
   );
+
+  // Multi-select batch modus (Alle Sets & Op Naam)
+  readonly multiSelectMode = signal<boolean>(this.loadMultiSelectPref());
+  readonly onlyMissingInSet = signal<boolean>(false);
+  readonly selectedBatchCards = signal<BatchSelectedCard[]>([]);
+  readonly showBatchSheet = signal<boolean>(false);
+  readonly batchVariantMode = signal<string>('auto');
+  readonly batchDuplicateMode = signal<'increment' | 'separate'>('increment');
+
+  readonly selectedBatchMap = computed(() => {
+    const map = new Map<string, BatchSelectedCard>();
+    for (const item of this.selectedBatchCards()) {
+      map.set(item.id.toLowerCase(), item);
+    }
+    return map;
+  });
+
+  readonly batchUniqueCount = computed(() => this.selectedBatchCards().length);
+  readonly batchTotalCopies = computed(() =>
+    this.selectedBatchCards().reduce((acc, item) => acc + Math.max(1, item.quantity), 0)
+  );
+
+  readonly activeSetOwnedCount = computed(() => {
+    const detail = this.activeSetDetail();
+    if (!detail) return 0;
+    const owned = this.ownedCardIdSet();
+    return detail.cards.filter((c) => owned.has(c.id.toLowerCase())).length;
+  });
+
+  readonly activeSetMissingCount = computed(() => {
+    const detail = this.activeSetDetail();
+    if (!detail) return 0;
+    return Math.max(0, detail.cards.length - this.activeSetOwnedCount());
+  });
+
+  readonly isBatchDockActive = computed(() => {
+    const mode = this.inputMode();
+    if (mode !== 'sets' && mode !== 'name') return false;
+    return this.multiSelectMode() || (this.batchUniqueCount() > 0 && !this.previewCard() && !this.manualName().trim());
+  });
+
+  readonly batchSaveLabel = computed(() => {
+    const unique = this.batchUniqueCount();
+    const copies = this.batchTotalCopies();
+    if (unique === 0) return 'Selecteer kaarten';
+    const base = unique === 1 ? '1 kaart' : `${unique} kaarten`;
+    return copies > unique ? `${base} (${copies}×) toevoegen` : `${base} toevoegen`;
+  });
+
+  readonly batchDefaultsSummary = computed(() => {
+    const variantText = this.batchVariantMode() === 'auto' ? 'Slim per kaart' : this.batchVariantMode();
+    const parts = [this.shortCondCode(this.condition()), this.storageLocation(), `Variant: ${variantText}`];
+    if (this.batchDuplicateMode() === 'separate') {
+      parts.push('Aparte rij bij duplicaat');
+    }
+    return parts.join(' · ');
+  });
 
   // Formuliervelden
   readonly variant = signal('Normal');
@@ -340,7 +418,19 @@ export class QuickAddComponent implements OnInit, OnDestroy {
 
   @HostListener('document:keydown', ['$event'])
   onGlobalKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Escape' && this.showBatchSheet()) {
+      event.preventDefault();
+      this.closeBatchSheet();
+      return;
+    }
+
     if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+      if (this.isBatchDockActive()) {
+        if (this.isSaving() || this.batchUniqueCount() === 0) return;
+        event.preventDefault();
+        void this.saveBatchSelection();
+        return;
+      }
       if (this.isSaving() || (!this.previewCard() && !this.manualName().trim())) return;
       event.preventDefault();
       void this.saveCard(true);
@@ -350,6 +440,7 @@ export class QuickAddComponent implements OnInit, OnDestroy {
     if (
       this.inputMode() === 'sets' &&
       !this.isSetDropdownOpen() &&
+      !this.showBatchSheet() &&
       this.catalogTotalPages() > 1 &&
       !isEditableEventTarget(event.target)
     ) {
@@ -699,6 +790,228 @@ export class QuickAddComponent implements OnInit, OnDestroy {
     return this.ownedCardIdSet().has(cardId.toLowerCase());
   }
 
+  getSelectedBatchItem(cardId: string): BatchSelectedCard | undefined {
+    return this.selectedBatchMap().get(cardId.toLowerCase());
+  }
+
+  toggleMultiSelectMode(): void {
+    void this.haptics.light();
+    const next = !this.multiSelectMode();
+    this.multiSelectMode.set(next);
+    this.saveMultiSelectPref(next);
+    if (next) {
+      this.previewCard.set(null);
+    }
+  }
+
+  toggleOnlyMissingInSet(): void {
+    void this.haptics.light();
+    this.onlyMissingInSet.update((prev) => !prev);
+    this.setCatalogPage.set(1);
+  }
+
+  onCatalogTileClick(item: CatalogCardSummary, sourceSet?: CatalogSetDetail | null): void {
+    if (this.multiSelectMode()) {
+      this.toggleBatchCardSelection(item, sourceSet);
+      return;
+    }
+    void this.selectNameResult(item);
+  }
+
+  toggleBatchCardSelection(item: CatalogCardSummary, sourceSet?: CatalogSetDetail | null): void {
+    void this.haptics.light();
+    const key = item.id.toLowerCase();
+    const existing = this.selectedBatchMap().get(key);
+    if (existing) {
+      this.selectedBatchCards.update((list) => list.filter((c) => c.id.toLowerCase() !== key));
+      return;
+    }
+
+    const setInfo = sourceSet ?? this.selectedCatalogSet();
+    const inferredSetName =
+      item.setName?.trim() ||
+      (sourceSet?.name ?? (this.inputMode() === 'sets' ? setInfo?.name : '') ?? '') ||
+      'Onbekende set';
+
+    const newItem: BatchSelectedCard = {
+      id: item.id,
+      localId: item.localId,
+      name: item.name,
+      imageUrl: item.imageUrl,
+      setId: sourceSet?.id ?? (this.inputMode() === 'sets' ? setInfo?.id : undefined),
+      setName: inferredSetName,
+      seriesName: sourceSet?.seriesName ?? (this.inputMode() === 'sets' ? setInfo?.series : undefined),
+      setTotalCount:
+        sourceSet?.officialCount ||
+        sourceSet?.totalCount ||
+        (this.inputMode() === 'sets' ? setInfo?.officialCount || setInfo?.totalCount : undefined),
+      quantity: 1,
+      variantOverride: '',
+      isLoadingDetail: true,
+    };
+
+    this.selectedBatchCards.update((list) => [...list, newItem]);
+    void this.prefetchBatchCardDetail(item.id);
+  }
+
+  adjustBatchCardQty(cardId: string, delta: number, event?: Event): void {
+    event?.stopPropagation();
+    void this.haptics.light();
+    const key = cardId.toLowerCase();
+    this.selectedBatchCards.update((list) =>
+      list
+        .map((c) => (c.id.toLowerCase() === key ? { ...c, quantity: c.quantity + delta } : c))
+        .filter((c) => c.quantity > 0)
+    );
+  }
+
+  setBatchCardVariant(cardId: string, variantOverride: string): void {
+    const key = cardId.toLowerCase();
+    this.selectedBatchCards.update((list) =>
+      list.map((c) => (c.id.toLowerCase() === key ? { ...c, variantOverride } : c))
+    );
+  }
+
+  removeBatchCard(cardId: string): void {
+    const key = cardId.toLowerCase();
+    this.selectedBatchCards.update((list) => list.filter((c) => c.id.toLowerCase() !== key));
+  }
+
+  clearBatchSelection(): void {
+    this.selectedBatchCards.set([]);
+    this.showBatchSheet.set(false);
+  }
+
+  openBatchSheet(): void {
+    void this.haptics.light();
+    this.showBatchSheet.set(true);
+  }
+
+  closeBatchSheet(): void {
+    this.showBatchSheet.set(false);
+  }
+
+  private async prefetchBatchCardDetail(cardId: string): Promise<void> {
+    try {
+      const detail = await this.catalog.getCardByExactId(cardId);
+      const key = cardId.toLowerCase();
+      this.selectedBatchCards.update((list) =>
+        list.map((c) =>
+          c.id.toLowerCase() === key
+            ? {
+                ...c,
+                cardDetail: detail,
+                isLoadingDetail: false,
+                setName: detail?.setName || c.setName,
+                seriesName: detail?.seriesName || c.seriesName,
+                setTotalCount: detail?.officialCardCount || detail?.totalCardCount || c.setTotalCount,
+                imageUrl: detail?.imageUrl || c.imageUrl,
+              }
+            : c
+        )
+      );
+    } catch {
+      const key = cardId.toLowerCase();
+      this.selectedBatchCards.update((list) =>
+        list.map((c) => (c.id.toLowerCase() === key ? { ...c, isLoadingDetail: false } : c))
+      );
+    }
+  }
+
+  async saveBatchSelection(): Promise<void> {
+    const selected = this.selectedBatchCards();
+    if (selected.length === 0 || this.isSaving()) return;
+
+    this.isSaving.set(true);
+    try {
+      const resolvedDetails = new Map<string, CatalogCard | null>();
+      const missing = selected.filter((item) => item.cardDetail === undefined);
+      for (let i = 0; i < missing.length; i += 4) {
+        const chunk = missing.slice(i, i + 4);
+        const fetched = await Promise.all(
+          chunk.map(async (item) => {
+            try {
+              const card = await this.catalog.getCardByExactId(item.id);
+              return { id: item.id.toLowerCase(), card };
+            } catch {
+              return { id: item.id.toLowerCase(), card: null };
+            }
+          })
+        );
+        for (const entry of fetched) {
+          resolvedDetails.set(entry.id, entry.card);
+        }
+      }
+
+      const duplicateStrategy = this.batchDuplicateMode();
+      const variantMode = this.batchVariantMode();
+      const seenSetCodes = new Set<string>();
+
+      const commitItems: BatchCardCommitItem[] = selected.map((item) => {
+        const detail = item.cardDetail ?? resolvedDetails.get(item.id.toLowerCase()) ?? null;
+        const setName = detail?.setName || item.setName || 'Onbekende set';
+        const setCode = getDisplaySetCode(detail?.id || item.id, setName);
+        if (setCode && !seenSetCodes.has(setCode)) {
+          seenSetCodes.add(setCode);
+          this.recordRecentSetCode(setCode);
+        }
+
+        const resolvedVariant =
+          item.variantOverride ||
+          (variantMode === 'auto' ? this.inferDefaultVariant(detail) : variantMode);
+        const fallbackCardNumber =
+          item.setTotalCount && item.setTotalCount > 0
+            ? `${item.localId}/${item.setTotalCount}`
+            : item.localId;
+
+        return {
+          duplicateStrategy,
+          payload: {
+            cardId: detail?.id || item.id,
+            name: detail?.name || item.name,
+            setName,
+            cardNumber: detail?.cardNumber || fallbackCardNumber,
+            language: this.language(),
+            type: detail?.type || 'Colorless',
+            rarity: detail?.rarity || 'Rare',
+            variant: resolvedVariant,
+            condition: this.condition(),
+            grading: this.grading(),
+            grade: this.grading() === 'Raw' ? '' : this.grade().trim(),
+            quantity: item.quantity,
+            storageLocation: this.storageLocation(),
+            binderDetail: this.binderDetail().trim(),
+            purchasePrice: Number(this.purchasePrice()) || 0,
+            marketPrice: detail?.marketPriceEur ?? 0,
+            acquisitionMethod: this.acquisitionMethod(),
+            imageUrl: detail?.imageUrl || item.imageUrl,
+            trendPercent: detail?.trendPercent,
+            forTrade: this.forTrade(),
+            notes: this.notes().trim(),
+            seriesName: detail?.seriesName || item.seriesName,
+            setTotalCards: detail?.officialCardCount || detail?.totalCardCount || item.setTotalCount,
+          },
+        };
+      });
+
+      this.store.updatePackDefaults({
+        enabled: this.packMode(),
+        setCode: Array.from(seenSetCodes)[0] || this.store.packDefaults().setCode,
+        condition: this.condition(),
+        storageLocation: this.storageLocation(),
+        language: this.language(),
+        acquisitionMethod: this.acquisitionMethod(),
+      });
+
+      await this.store.addCardsBatch(commitItems);
+      void this.haptics.success();
+      this.selectedBatchCards.set([]);
+      this.showBatchSheet.set(false);
+    } finally {
+      this.isSaving.set(false);
+    }
+  }
+
   applyExample(code: string): void {
     this.inputMode.set('code');
     this.codeQuery.set(code);
@@ -708,20 +1021,24 @@ export class QuickAddComponent implements OnInit, OnDestroy {
   private applyCatalogCard(card: CatalogCard): void {
     this.previewCard.set(card);
     this.lookupError.set(null);
+    this.variant.set(this.inferDefaultVariant(card));
+  }
 
-    // Kies slimme standaard-variant op basis van rarity
-    const r = card.rarity.toLowerCase();
+  inferDefaultVariant(card?: CatalogCard | null): string {
+    const r = (card?.rarity ?? '').toLowerCase();
     if (r.includes('special illustration') || r.includes('alt')) {
-      this.variant.set('Alt Art');
-    } else if (r.includes('illustration') || r.includes('ultra')) {
-      this.variant.set('Full Art');
-    } else if (r.includes('promo')) {
-      this.variant.set('Stamped / Promo');
-    } else if (r.includes('holo') || r.includes('double rare')) {
-      this.variant.set('Holo');
-    } else {
-      this.variant.set('Normal');
+      return 'Alt Art';
     }
+    if (r.includes('illustration') || r.includes('ultra')) {
+      return 'Full Art';
+    }
+    if (r.includes('promo')) {
+      return 'Stamped / Promo';
+    }
+    if (r.includes('holo') || r.includes('double rare')) {
+      return 'Holo';
+    }
+    return 'Normal';
   }
 
   adjustQty(delta: number): void {
@@ -809,8 +1126,12 @@ export class QuickAddComponent implements OnInit, OnDestroy {
 
   private prepareNextCard(rememberSet = this.packMode()): void {
     const rememberedSet = rememberSet ? this.store.packDefaults().setCode : '';
+    const keepNameResults = this.inputMode() === 'name';
     this.previewCard.set(null);
-    this.nameResults.set([]);
+    if (!keepNameResults) {
+      this.nameResults.set([]);
+      this.nameQuery.set('');
+    }
     this.lookupError.set(null);
     this.manualName.set('');
     this.manualSet.set('');
@@ -821,21 +1142,26 @@ export class QuickAddComponent implements OnInit, OnDestroy {
     this.forTrade.set(false);
     this.grade.set('');
     this.notes.set('');
-    this.codeQuery.set(rememberSet && this.inputMode() !== 'sets' && rememberedSet ? `${rememberedSet} ` : '');
-    this.nameQuery.set('');
+    this.codeQuery.set(rememberSet && this.inputMode() === 'code' && rememberedSet ? `${rememberedSet} ` : '');
 
-    if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+    // Geen automatische scrollTo({ top: 0 }) of ongevraagd toetsenbord-focus op mobiel:
+    // houd het scherm exact op de huidige positie. Alleen op desktop in Code / ID + Pack Mode
+    // klaarzetten als het invoerveld al zichtbaar in de viewport staat.
+    if (
+      typeof window !== 'undefined' &&
+      typeof document !== 'undefined' &&
+      rememberSet &&
+      this.inputMode() === 'code' &&
+      window.innerWidth >= 768
+    ) {
       if (this.focusTimer) clearTimeout(this.focusTimer);
       this.focusTimer = setTimeout(() => {
-        try {
-          window.scrollTo?.({ top: 0, behavior: 'smooth' });
-          document.querySelector('.shell__main')?.scrollTo?.({ top: 0, behavior: 'smooth' });
-        } catch {
-          // Negeer in omgevingen zonder scrollTo-implementatie (bijv. jsdom)
+        const el = document.getElementById('qa-code-input') as HTMLInputElement | null;
+        if (!el) return;
+        const rect = el.getBoundingClientRect();
+        if (rect.top >= 0 && rect.bottom <= window.innerHeight) {
+          el.focus({ preventScroll: true });
         }
-        const targetId = this.inputMode() === 'name' ? 'qa-name-input' : 'qa-code-input';
-        const el = document.getElementById(targetId) as HTMLInputElement | null;
-        el?.focus();
       }, 0);
     }
   }
@@ -876,6 +1202,25 @@ export class QuickAddComponent implements OnInit, OnDestroy {
       return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : [];
     } catch {
       return [];
+    }
+  }
+
+  private loadMultiSelectPref(): boolean {
+    try {
+      if (typeof window === 'undefined') return false;
+      return window.localStorage.getItem(MULTI_SELECT_PREF_KEY) === 'true';
+    } catch {
+      return false;
+    }
+  }
+
+  private saveMultiSelectPref(enabled: boolean): void {
+    try {
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(MULTI_SELECT_PREF_KEY, String(enabled));
+      }
+    } catch {
+      // negeer opslagfout
     }
   }
 }

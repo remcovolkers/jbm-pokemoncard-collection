@@ -255,19 +255,16 @@
 }
 
 .result-tile {
-  @include pressable;
-  padding: 0.4rem;
+  position: relative;
   border-radius: $radius-md;
   background-color: $color-surface-container;
   border: 1px solid rgba($color-outline-variant, 0.55);
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-  text-align: left;
 
-  &.is-selected {
+  &.is-selected,
+  &.is-batch-selected {
     border-color: $color-primary-container;
     background-color: $color-surface-high;
+    box-shadow: 0 0 0 1px rgba($color-primary-container, 0.35);
   }
 
   @media (hover: hover) and (pointer: fine) {
@@ -275,6 +272,16 @@
       border-color: $color-primary-container;
       background-color: $color-surface-high;
     }
+  }
+
+  &__main {
+    @include pressable;
+    width: 100%;
+    padding: 0.4rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    text-align: left;
   }
 
   &__name {
@@ -291,6 +298,42 @@
 
   &.is-owned {
     border-color: rgba($color-secondary, 0.45);
+  }
+
+  &__pick {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    padding: 0.12rem 0.38rem;
+    border-radius: $radius-full;
+    background-color: $color-primary-container;
+    color: #ffffff;
+    font-size: 0.62rem;
+    font-weight: 700;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+  }
+
+  &__plus {
+    @include pressable;
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    min-width: 34px;
+    height: 28px;
+    padding: 0 0.4rem;
+    border-radius: $radius-full;
+    background-color: $color-surface-lowest;
+    border: 1px solid rgba($color-primary-container, 0.8);
+    color: $color-on-surface;
+    font-size: 0.68rem;
+    font-weight: 700;
+    z-index: 2;
+
+    &::before {
+      content: '';
+      position: absolute;
+      inset: -8px;
+    }
   }
 
   &__owned {
@@ -1203,5 +1246,253 @@
 
   &:hover {
     background-color: rgba($color-secondary, 0.22);
+  }
+}
+
+.batch-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.2rem;
+
+  .pb-pill {
+    min-height: 38px;
+    gap: 0.35rem;
+
+    .material-symbols-outlined {
+      font-size: 16px;
+    }
+  }
+
+  &__clear {
+    @include type-body-sm;
+    color: $color-on-surface-muted;
+    padding: 0.35rem 0.5rem;
+    text-decoration: underline;
+  }
+}
+
+.sets-browser__empty-filter {
+  padding: $space-md;
+  border-radius: $radius-md;
+  background-color: $color-surface-low;
+  border: 1px dashed rgba($color-outline-variant, 0.55);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: $space-sm;
+  @include type-body-sm;
+  color: $color-on-surface-muted;
+}
+
+.batch-defaults-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $space-sm;
+  padding: 0.7rem 0.85rem;
+  border-radius: $radius-md;
+  background-color: $color-surface-low;
+  border: 1px solid rgba($color-outline-variant, 0.55);
+
+  &__text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    gap: 2px;
+
+    strong {
+      font-size: 0.84rem;
+    }
+
+    span {
+      font-size: 0.7rem;
+      color: $color-on-surface-muted;
+      @include truncate;
+    }
+  }
+
+  &__btn {
+    min-height: 44px;
+    flex-shrink: 0;
+  }
+}
+
+.qa-dock__inner--batch {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.qa-dock__select-btn {
+  white-space: nowrap;
+}
+
+.qa-batch-sheet {
+  &__sub {
+    @include type-body-sm;
+    color: $color-on-surface-muted;
+  }
+
+  &__close {
+    width: 44px;
+    min-height: 44px;
+    padding: 0;
+    flex-shrink: 0;
+  }
+
+  &__body {
+    display: flex;
+    flex-direction: column;
+    gap: $space-md;
+  }
+
+  &__empty {
+    @include type-body-sm;
+    color: $color-on-surface-muted;
+  }
+
+  &__footer {
+    @include mq-sm {
+      flex-direction: row;
+      align-items: center;
+    }
+  }
+}
+
+.qa-batch-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.qa-batch-row {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  align-items: flex-start;
+  gap: 0.65rem;
+  padding: 0.55rem;
+  border-radius: $radius-md;
+  background-color: $color-surface-container;
+  border: 1px solid rgba($color-outline-variant, 0.45);
+
+  &__art {
+    width: 44px;
+  }
+
+  &__body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    min-width: 0;
+  }
+
+  &__top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.4rem;
+    min-width: 0;
+  }
+
+  &__title {
+    display: flex;
+    flex-direction: column;
+    gap: 0.12rem;
+    min-width: 0;
+    flex: 1;
+
+    strong {
+      font-size: 0.85rem;
+      @include truncate;
+    }
+
+    span {
+      font-size: 0.7rem;
+      color: $color-on-surface-muted;
+      @include truncate;
+    }
+  }
+
+  &__controls {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    min-width: 0;
+  }
+
+  &__variant {
+    flex: 1;
+    min-width: 0;
+    min-height: 40px;
+    padding: 0.25rem 1.85rem 0.25rem 0.55rem;
+    font-size: 0.8rem;
+  }
+
+  &__remove {
+    @include touch-target(44px);
+    flex-shrink: 0;
+    margin: -0.3rem -0.3rem 0 0;
+    color: $color-on-surface-muted;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: $radius-sm;
+
+    &:hover {
+      color: $color-error;
+    }
+  }
+}
+
+.qa-batch-stepper {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 0.25rem;
+  padding: 0.15rem 0.2rem;
+  border-radius: $radius-sm;
+  background-color: $color-surface-lowest;
+  border: 1px solid $color-outline-variant;
+
+  button {
+    width: 36px;
+    height: 36px;
+    border-radius: $radius-xs;
+    background-color: $color-surface-highest;
+    color: $color-on-surface;
+    font-weight: 700;
+  }
+
+  span {
+    min-width: 24px;
+    text-align: center;
+    font-size: 0.82rem;
+    font-weight: 700;
+  }
+}
+
+.qa-batch-prefs {
+  display: flex;
+  flex-direction: column;
+  gap: $space-sm;
+  padding-top: $space-sm;
+  border-top: 1px solid rgba($color-outline-variant, 0.45);
+
+  h3 {
+    @include type-data-sm;
+    text-transform: uppercase;
+    color: $color-secondary;
+    font-weight: 700;
+  }
+
+  &__grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: $space-sm;
+
+    @include mq-sm {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
   }
 }

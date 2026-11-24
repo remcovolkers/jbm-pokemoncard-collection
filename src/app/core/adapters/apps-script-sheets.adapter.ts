@@ -29,6 +29,7 @@ interface AppsScriptResponse<T = unknown> {
   data?: AppSnapshot;
   result?: T;
   spreadsheetName?: string;
+  scriptVersion?: string;
   syncedAt?: string;
 }
 
@@ -46,6 +47,7 @@ export class AppsScriptSheetsAdapter implements CollectionRepository {
       return {
         ok: true,
         spreadsheetName: json.spreadsheetName,
+        scriptVersion: json.scriptVersion,
         syncedAt: json.syncedAt,
       };
     } catch (err) {

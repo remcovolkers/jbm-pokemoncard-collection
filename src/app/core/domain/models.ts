@@ -150,6 +150,7 @@ export interface DropdownSettings {
 }
 
 export interface AppSnapshot {
+  scriptVersion?: string;
   collection: CollectionCard[];
   setProgress: SetProgress[];
   pokedex: PokedexSlot[];

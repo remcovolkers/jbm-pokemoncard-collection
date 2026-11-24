@@ -66,11 +66,11 @@ function printHelp() {
 
 Gebruik:
   npm run gas:login
-  npm run gas:init -- <SCRIPT_ID> [DEPLOYMENT_ID] [--target test|live|feedback]
-  npm run gas:push -- [--target test|live|feedback]
-  npm run gas:deploy -- [--target test|live|feedback]
+  npm run gas:init -- <SCRIPT_ID> [DEPLOYMENT_ID] [--target test|live|template|feedback]
+  npm run gas:push -- [--target test|live|template|feedback]
+  npm run gas:deploy -- [--target test|live|template|feedback]
   npm run gas:deploy:all
-  npm run gas:deployments -- [--target test|live|feedback]
+  npm run gas:deployments -- [--target test|live|template|feedback]
 `);
 }
 
@@ -82,6 +82,11 @@ function deployTarget(targetName) {
 
   const pushStatus = runClasp(['-P', configPath, 'push', '--force']);
   if (pushStatus !== 0) return pushStatus;
+
+  if (targetName === 'template' && !cfg.deploymentId) {
+    console.log('Template-sheet script bijgewerkt (geen Web App deployment nodig op de barebones template).');
+    return 0;
+  }
 
   const stamp = new Date().toISOString().slice(0, 16);
   const deployArgs = ['-P', configPath, 'deploy', '-d', `PokeBinder-${stamp}`];
@@ -111,7 +116,7 @@ function main() {
       const scriptId = (args[0] || '').trim();
       const deploymentId = (args[1] || '').trim();
       if (!scriptId) {
-        console.error('Gebruik: npm run gas:init -- <SCRIPT_ID> [DEPLOYMENT_ID] [--target test|live|feedback]');
+        console.error('Gebruik: npm run gas:init -- <SCRIPT_ID> [DEPLOYMENT_ID] [--target test|live|template|feedback]');
         process.exit(1);
       }
       const cfg = {
@@ -139,10 +144,10 @@ function main() {
     }
 
     case 'deploy-all': {
-      const targets = ['test', 'live', 'feedback'].filter((t) => fs.existsSync(getConfigPath(t)));
+      const targets = ['test', 'live', 'template', 'feedback'].filter((t) => fs.existsSync(getConfigPath(t)));
       if (targets.length === 0) {
-        console.error('Geen .clasp.test.json of .clasp.live.json gevonden.');
-        console.error('Koppel eerst met: npm run gas:init -- <SCRIPT_ID> [DEPLOYMENT_ID] --target test|live');
+        console.error('Geen .clasp.test.json, .clasp.live.json of .clasp.template.json gevonden.');
+        console.error('Koppel eerst met: npm run gas:init -- <SCRIPT_ID> [DEPLOYMENT_ID] --target test|live|template');
         process.exit(1);
       }
       for (const t of targets) {

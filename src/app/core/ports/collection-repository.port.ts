@@ -16,6 +16,7 @@ import {
 export interface ConnectionTestResult {
   ok: boolean;
   spreadsheetName?: string;
+  scriptVersion?: string;
   syncedAt?: string;
   error?: string;
 }

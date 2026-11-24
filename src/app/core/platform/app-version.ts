@@ -9,6 +9,14 @@ export interface AppVersionInfo {
   defaultApkDownloadUrl: string;
   /** GitHub Releases overzichtspagina als fallback */
   defaultReleasePageUrl: string;
+  /** Nieuwste PokéBinder Apps Script (Code.gs) versie */
+  latestScriptVersion: string;
+  /** Korte toelichting van de nieuwste Code.gs wijzigingen */
+  scriptChangelog: string;
+  /** CORS-vrije URL van de actuele Code.gs op GitHub Pages */
+  scriptCodeUrl: string;
+  /** GitHub-bronpagina van Code.gs */
+  scriptGithubUrl: string;
 }
 
 /**
@@ -22,4 +30,8 @@ export const APP_VERSION: AppVersionInfo = {
     'https://github.com/remcovolkers/jbm-pokemoncard-collection/releases/latest/download/pokebinder-release.apk',
   defaultReleasePageUrl:
     'https://github.com/remcovolkers/jbm-pokemoncard-collection/releases/latest',
+  latestScriptVersion: '2.1.0',
+  scriptChangelog: 'Snellere batch-sync, script-versiecontrole in Instellingen & menu-updatecheck.',
+  scriptCodeUrl: 'https://remcovolkers.github.io/jbm-pokemoncard-collection/apps-script/Code.gs',
+  scriptGithubUrl: 'https://github.com/remcovolkers/jbm-pokemoncard-collection/blob/main/apps-script/Code.gs',
 };

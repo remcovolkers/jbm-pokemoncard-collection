@@ -11,7 +11,7 @@
         ></span>
         <p class="sync-strip__text">
           @if (store.syncStatus() === 'unconfigured') {
-            <strong>Nog geen Google Sheet gekoppeld</strong> · Koppel je spreadsheet bij Instellingen
+            <strong>Nog geen Google Sheet gekoppeld</strong> · Kopieer de gratis template of koppel je eigen Sheet
           } @else if (store.syncStatus() === 'error') {
             <strong>Sync-fout</strong> · {{ store.lastError() || 'Controleer je verbinding of Sheet-instellingen' }}
           } @else {
@@ -23,9 +23,13 @@
         </p>
       </div>
       @if (store.syncStatus() === 'unconfigured') {
-        <a routerLink="/meer/instellingen" class="pb-btn pb-btn--primary sync-strip__cta">
+        <a
+          routerLink="/meer/instellingen"
+          fragment="sheet-setup"
+          class="pb-btn pb-btn--primary sync-strip__cta"
+        >
           <span class="material-symbols-outlined">link</span>
-          <span>Koppelen</span>
+          <span>Eigen Sheet starten</span>
         </a>
       } @else {
         <button

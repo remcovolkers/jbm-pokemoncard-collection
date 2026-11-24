@@ -163,26 +163,58 @@
         </div>
 
         @if (nameResults().length > 0) {
-          <div
-            class="search-results"
-            pbSwipeNav
-            [swipeEnabled]="catalogTotalPages() > 1"
-            [swipeCanPrev]="setCatalogPage() > 1"
-            [swipeCanNext]="setCatalogPage() < catalogTotalPages()"
-            (swipeNext)="nextSetCatalogPage()"
-            (swipePrev)="prevSetCatalogPage()"
-          >
-            @for (item of nameResults(); track item.id) {
-              <button
-                type="button"
-                class="result-tile"
-                [class.is-selected]="previewCard()?.id === item.id"
-                (click)="selectNameResult(item)"
-              >
-                <pb-card-artwork [cardId]="item.id" [src]="item.imageUrl" [alt]="item.name" [compact]="true" />
-                <span class="result-tile__name">{{ item.name }}</span>
-                <span class="mono result-tile__id">{{ getDisplaySetCode(item.id) }} #{{ item.localId }}</span>
+          <div class="batch-toolbar">
+            <button
+              type="button"
+              class="pb-pill pb-pill--interactive"
+              [class.is-active]="multiSelectMode()"
+              [attr.aria-pressed]="multiSelectMode()"
+              (click)="toggleMultiSelectMode()"
+            >
+              <span class="material-symbols-outlined">checklist</span>
+              <span>Meerdere selecteren</span>
+            </button>
+            @if (batchUniqueCount() > 0) {
+              <button type="button" class="batch-toolbar__clear" (click)="clearBatchSelection()">
+                Wissen ({{ batchUniqueCount() }})
               </button>
+            }
+          </div>
+
+          <div class="search-results">
+            @for (item of nameResults(); track item.id) {
+              @let selectedItem = getSelectedBatchItem(item.id);
+              <div
+                class="result-tile"
+                [class.is-selected]="!multiSelectMode() && previewCard()?.id === item.id"
+                [class.is-batch-selected]="!!selectedItem"
+                [class.is-owned]="isCardOwned(item.id)"
+              >
+                <button type="button" class="result-tile__main" (click)="onCatalogTileClick(item)">
+                  <pb-card-artwork [cardId]="item.id" [src]="item.imageUrl" [alt]="item.name" [compact]="true">
+                    @if (selectedItem) {
+                      <span class="result-tile__pick mono">
+                        ✓@if (selectedItem.quantity > 1) { {{ selectedItem.quantity }}× }
+                      </span>
+                    }
+                    @if (isCardOwned(item.id)) {
+                      <span class="result-tile__owned mono">✓ In bezit</span>
+                    }
+                  </pb-card-artwork>
+                  <span class="result-tile__name">{{ item.name }}</span>
+                  <span class="mono result-tile__id">{{ getDisplaySetCode(item.id) }} #{{ item.localId }}</span>
+                </button>
+                @if (multiSelectMode() && selectedItem) {
+                  <button
+                    type="button"
+                    class="result-tile__plus mono"
+                    [attr.aria-label]="'Extra exemplaar van ' + item.name + ' toevoegen'"
+                    (click)="adjustBatchCardQty(item.id, 1, $event)"
+                  >
+                    +1
+                  </button>
+                }
+              </div>
             }
           </div>
         }
@@ -419,10 +451,12 @@
             <div class="sets-browser__meta">
               <strong>{{ setDetail.code || getDisplaySetCode(setDetail.id, setDetail.name) }} · {{ setDetail.name }}</strong>
               <span class="mono">
-                {{ setDetail.seriesName || 'Pokémon TCG' }} · {{ setDetail.cards.length }} kaarten · API: {{ setDetail.id }}
+                {{ activeSetOwnedCount() }} / {{ setDetail.cards.length }} in bezit · {{ setDetail.seriesName || 'Pokémon TCG' }}
               </span>
             </div>
             <input
+              id="qa-set-card-filter"
+              name="setCardFilter"
               type="text"
               class="pb-input sets-browser__card-filter"
               placeholder="Filter in {{ setDetail.name }} op naam of nr…"
@@ -430,6 +464,35 @@
               (ngModelChange)="onSetCardFilterChange($event)"
               aria-label="Filter kaarten in geselecteerde set"
             />
+          </div>
+
+          <div class="batch-toolbar">
+            <button
+              type="button"
+              class="pb-pill pb-pill--interactive"
+              [class.is-active]="multiSelectMode()"
+              [attr.aria-pressed]="multiSelectMode()"
+              (click)="toggleMultiSelectMode()"
+            >
+              <span class="material-symbols-outlined">checklist</span>
+              <span>Meerdere selecteren</span>
+            </button>
+
+            <button
+              type="button"
+              class="pb-pill pb-pill--interactive"
+              [class.is-active]="onlyMissingInSet()"
+              [attr.aria-pressed]="onlyMissingInSet()"
+              (click)="toggleOnlyMissingInSet()"
+            >
+              <span>Alleen ontbrekende ({{ activeSetMissingCount() }})</span>
+            </button>
+
+            @if (batchUniqueCount() > 0) {
+              <button type="button" class="batch-toolbar__clear" (click)="clearBatchSelection()">
+                Wis selectie ({{ batchUniqueCount() }})
+              </button>
+            }
           </div>
 
           @if (activeSetHasNoScans()) {
@@ -442,35 +505,63 @@
             </div>
           }
 
-          <div
-            class="search-results"
-            pbSwipeNav
-            [swipeEnabled]="catalogTotalPages() > 1"
-            [swipeCanPrev]="setCatalogPage() > 1"
-            [swipeCanNext]="setCatalogPage() < catalogTotalPages()"
-            (swipeNext)="nextSetCatalogPage()"
-            (swipePrev)="prevSetCatalogPage()"
-          >
-            @for (item of pagedSetCards(); track item.id) {
-              <button
-                type="button"
-                class="result-tile"
-                [class.is-selected]="previewCard()?.id === item.id"
-                [class.is-owned]="isCardOwned(item.id)"
-                (click)="selectNameResult(item)"
-              >
-                <pb-card-artwork [cardId]="item.id" [src]="item.imageUrl" [alt]="item.name" [compact]="true">
-                  @if (isCardOwned(item.id)) {
-                    <span class="result-tile__owned mono">✓ In bezit</span>
+          @if (pagedSetCards().length === 0) {
+            <div class="sets-browser__empty-filter">
+              <p>Geen kaarten gevonden met deze filters in {{ setDetail.name }}.</p>
+              @if (onlyMissingInSet()) {
+                <button type="button" class="pb-btn pb-btn--secondary" (click)="toggleOnlyMissingInSet()">
+                  Toon alle kaarten
+                </button>
+              }
+            </div>
+          } @else {
+            <div
+              class="search-results"
+              pbSwipeNav
+              [swipeEnabled]="catalogTotalPages() > 1"
+              [swipeCanPrev]="setCatalogPage() > 1"
+              [swipeCanNext]="setCatalogPage() < catalogTotalPages()"
+              (swipeNext)="nextSetCatalogPage()"
+              (swipePrev)="prevSetCatalogPage()"
+            >
+              @for (item of pagedSetCards(); track item.id) {
+                @let selectedItem = getSelectedBatchItem(item.id);
+                <div
+                  class="result-tile"
+                  [class.is-selected]="!multiSelectMode() && previewCard()?.id === item.id"
+                  [class.is-batch-selected]="!!selectedItem"
+                  [class.is-owned]="isCardOwned(item.id)"
+                >
+                  <button type="button" class="result-tile__main" (click)="onCatalogTileClick(item, setDetail)">
+                    <pb-card-artwork [cardId]="item.id" [src]="item.imageUrl" [alt]="item.name" [compact]="true">
+                      @if (selectedItem) {
+                        <span class="result-tile__pick mono">
+                          ✓@if (selectedItem.quantity > 1) { {{ selectedItem.quantity }}× }
+                        </span>
+                      }
+                      @if (isCardOwned(item.id)) {
+                        <span class="result-tile__owned mono">✓ In bezit</span>
+                      }
+                    </pb-card-artwork>
+                    <span class="result-tile__name">{{ item.name }}</span>
+                    <span class="mono result-tile__id">
+                      {{ setDetail.code || getDisplaySetCode(item.id) }} #{{ item.localId }}
+                    </span>
+                  </button>
+                  @if (multiSelectMode() && selectedItem) {
+                    <button
+                      type="button"
+                      class="result-tile__plus mono"
+                      [attr.aria-label]="'Extra exemplaar van ' + item.name + ' toevoegen'"
+                      (click)="adjustBatchCardQty(item.id, 1, $event)"
+                    >
+                      +1
+                    </button>
                   }
-                </pb-card-artwork>
-                <span class="result-tile__name">{{ item.name }}</span>
-                <span class="mono result-tile__id">
-                  {{ setDetail.code || getDisplaySetCode(item.id) }} #{{ item.localId }}
-                </span>
-              </button>
-            }
-          </div>
+                </div>
+              }
+            </div>
+          }
 
           @if (catalogTotalPages() > 1) {
             <div class="catalog-pager">
@@ -508,8 +599,21 @@
       </div>
     }
 
-    <!-- Live Dynamic Card Preview Slab -->
-    @if (previewCard(); as card) {
+    @if (isBatchDockActive()) {
+      <!-- Compacte batch-defaults strip in multi-select modus -->
+      <div class="batch-defaults-bar">
+        <div class="batch-defaults-bar__text">
+          <strong>Batch-instellingen</strong>
+          <span class="mono">{{ batchDefaultsSummary() }}</span>
+        </div>
+        <button type="button" class="pb-btn pb-btn--secondary batch-defaults-bar__btn" (click)="openBatchSheet()">
+          <span class="material-symbols-outlined">tune</span>
+          <span>Opties &amp; Selectie</span>
+        </button>
+      </div>
+    } @else {
+      <!-- Live Dynamic Card Preview Slab -->
+      @if (previewCard(); as card) {
       <section class="pb-card pb-card--holo preview-slab">
         <div class="preview-slab__glow" aria-hidden="true"></div>
         <div class="preview-slab__inner">
@@ -677,6 +781,8 @@
         </div>
         <div class="loc-qty-row">
           <input
+            id="qa-binder-detail"
+            name="binderDetail"
             type="text"
             class="pb-input"
             placeholder="Map / Deck detail (bijv. VaultX Pagina 4)"
@@ -840,44 +946,287 @@
         </div>
       }
     </div>
+    }
   </div>
 
   <!-- Slimme Zwevende Actiebalk Onderaan -->
   <div class="qa-dock">
-    <div class="qa-dock__inner" [class.is-pack-mode]="packMode()">
-      @if (packMode()) {
+    @if (isBatchDockActive()) {
+      <div class="qa-dock__inner qa-dock__inner--batch">
         <button
           type="button"
-          class="pb-btn pb-btn--primary pb-btn--full"
-          [disabled]="isSaving() || (!previewCard() && !manualName().trim())"
-          (click)="saveCard(true)"
+          class="pb-btn pb-btn--secondary qa-dock__select-btn"
+          [disabled]="isSaving()"
+          (click)="openBatchSheet()"
         >
-          <span class="material-symbols-outlined is-filled">bolt</span>
-          <span>Opslaan &amp; Volgende kaart</span>
-        </button>
-      } @else {
-        <button
-          type="button"
-          class="pb-btn pb-btn--primary pb-btn--full"
-          [disabled]="isSaving() || (!previewCard() && !manualName().trim())"
-          (click)="saveCard(false)"
-        >
-          <span class="material-symbols-outlined">save</span>
-          <span>Opslaan</span>
+          <span class="material-symbols-outlined">checklist</span>
+          <span>Selectie ({{ batchUniqueCount() }})</span>
         </button>
 
         <button
           type="button"
-          class="pb-btn pb-btn--secondary qa-dock__more"
-          [disabled]="isSaving() || (!previewCard() && !manualName().trim())"
-          aria-label="Opslaan en nog een kaart toevoegen"
-          title="Opslaan en nog een kaart toevoegen"
-          (click)="saveCard(true)"
+          class="pb-btn pb-btn--primary pb-btn--full"
+          [disabled]="isSaving() || batchUniqueCount() === 0"
+          (click)="saveBatchSelection()"
         >
-          <span class="material-symbols-outlined">add</span>
-          <span>Nog één</span>
+          <span class="material-symbols-outlined">library_add</span>
+          <span>{{ batchSaveLabel() }}</span>
         </button>
-      }
-    </div>
+      </div>
+    } @else {
+      <div class="qa-dock__inner" [class.is-pack-mode]="packMode()">
+        @if (packMode()) {
+          <button
+            type="button"
+            class="pb-btn pb-btn--primary pb-btn--full"
+            [disabled]="isSaving() || (!previewCard() && !manualName().trim())"
+            (click)="saveCard(true)"
+          >
+            <span class="material-symbols-outlined is-filled">bolt</span>
+            <span>Opslaan &amp; Volgende kaart</span>
+          </button>
+        } @else {
+          <button
+            type="button"
+            class="pb-btn pb-btn--primary pb-btn--full"
+            [disabled]="isSaving() || (!previewCard() && !manualName().trim())"
+            (click)="saveCard(false)"
+          >
+            <span class="material-symbols-outlined">save</span>
+            <span>Opslaan</span>
+          </button>
+
+          <button
+            type="button"
+            class="pb-btn pb-btn--secondary qa-dock__more"
+            [disabled]="isSaving() || (!previewCard() && !manualName().trim())"
+            aria-label="Opslaan en nog een kaart toevoegen"
+            title="Opslaan en nog een kaart toevoegen"
+            (click)="saveCard(true)"
+          >
+            <span class="material-symbols-outlined">add</span>
+            <span>Nog één</span>
+          </button>
+        }
+      </div>
+    }
   </div>
+
+  <!-- Selectie & Batch-opties Bottom Sheet -->
+  @if (showBatchSheet()) {
+    <div class="pb-sheet-backdrop" (click)="closeBatchSheet()">
+      <div
+        class="pb-sheet pb-sheet--structured qa-batch-sheet"
+        pbSheetDismiss
+        (dismiss)="closeBatchSheet()"
+        (click)="$event.stopPropagation()"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Geselecteerde kaarten en batch-instellingen"
+      >
+        <div class="pb-sheet__top">
+          <div class="pb-sheet__handle"></div>
+          <div class="pb-sheet__header">
+            <div>
+              <h2>Selectie ({{ batchUniqueCount() }} · {{ batchTotalCopies() }}×)</h2>
+              <p class="qa-batch-sheet__sub">Pas aantallen, variant of gedeelde opslaglocatie aan.</p>
+            </div>
+            <button
+              type="button"
+              class="pb-btn pb-btn--surface qa-batch-sheet__close"
+              aria-label="Sluiten"
+              (click)="closeBatchSheet()"
+            >
+              <span class="material-symbols-outlined">close</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="pb-sheet__body qa-batch-sheet__body">
+          @if (selectedBatchCards().length === 0) {
+            <p class="qa-batch-sheet__empty">
+              Tik eerst één of meerdere kaarten aan in <strong>Alle Sets</strong> of <strong>Op Naam</strong>.
+            </p>
+          } @else {
+            <div class="qa-batch-list">
+              @for (item of selectedBatchCards(); track item.id) {
+                <div class="qa-batch-row">
+                  <div class="qa-batch-row__art">
+                    <pb-card-artwork [cardId]="item.id" [src]="item.imageUrl" [alt]="item.name" [compact]="true" />
+                  </div>
+                  <div class="qa-batch-row__body">
+                    <div class="qa-batch-row__top">
+                      <div class="qa-batch-row__title">
+                        <strong>{{ item.name }}</strong>
+                        <span class="mono">{{ item.setName }} · #{{ item.localId }}</span>
+                      </div>
+                      <button
+                        type="button"
+                        class="qa-batch-row__remove"
+                        [attr.aria-label]="item.name + ' uit selectie verwijderen'"
+                        (click)="removeBatchCard(item.id)"
+                      >
+                        <span class="material-symbols-outlined">delete</span>
+                      </button>
+                    </div>
+                    <div class="qa-batch-row__controls">
+                      <select
+                        [attr.id]="'batch-card-var-' + $index"
+                        [attr.name]="'batchCardVar-' + $index"
+                        class="pb-select qa-batch-row__variant"
+                        [ngModel]="item.variantOverride"
+                        (ngModelChange)="setBatchCardVariant(item.id, $event)"
+                        [attr.aria-label]="'Variant voor ' + item.name"
+                      >
+                        <option value="">Standaard ({{ batchVariantMode() === 'auto' ? 'Slim' : batchVariantMode() }})</option>
+                        @for (v of store.settings().variants; track v) {
+                          <option [value]="v">{{ v }}</option>
+                        }
+                      </select>
+                      <div class="qa-batch-stepper">
+                        <button
+                          type="button"
+                          aria-label="Aantal verminderen"
+                          (click)="adjustBatchCardQty(item.id, -1)"
+                        >
+                          −
+                        </button>
+                        <span class="mono">{{ item.quantity }}×</span>
+                        <button
+                          type="button"
+                          aria-label="Aantal vermeerderen"
+                          (click)="adjustBatchCardQty(item.id, 1)"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              }
+            </div>
+          }
+
+          <div class="qa-batch-prefs">
+            <h3>Gedeelde instellingen voor deze batch</h3>
+
+            <div class="qa-batch-prefs__grid">
+              <div class="pb-field">
+                <label class="pb-label" for="batch-variant">Standaard variant</label>
+                <select
+                  id="batch-variant"
+                  class="pb-select"
+                  [ngModel]="batchVariantMode()"
+                  (ngModelChange)="batchVariantMode.set($event)"
+                >
+                  <option value="auto">Slim per kaart (op zeldzaamheid)</option>
+                  @for (v of store.settings().variants; track v) {
+                    <option [value]="v">Alles als {{ v }}</option>
+                  }
+                </select>
+              </div>
+
+              <div class="pb-field">
+                <label class="pb-label" for="batch-dup">Als kaart al in bezit is</label>
+                <select
+                  id="batch-dup"
+                  class="pb-select"
+                  [ngModel]="batchDuplicateMode()"
+                  (ngModelChange)="batchDuplicateMode.set($event)"
+                >
+                  <option value="increment">+1 bij bestaande kaart (zelfde variant)</option>
+                  <option value="separate">Altijd als aparte rij toevoegen</option>
+                </select>
+              </div>
+
+              <div class="pb-field">
+                <label class="pb-label" for="batch-cond">Conditie</label>
+                <select
+                  id="batch-cond"
+                  class="pb-select"
+                  [ngModel]="condition()"
+                  (ngModelChange)="condition.set($event)"
+                >
+                  @for (c of store.settings().conditions; track c) {
+                    <option [value]="c">{{ c }}</option>
+                  }
+                </select>
+              </div>
+
+              <div class="pb-field">
+                <label class="pb-label" for="batch-loc">Opslaglocatie</label>
+                <select
+                  id="batch-loc"
+                  class="pb-select"
+                  [ngModel]="storageLocation()"
+                  (ngModelChange)="storageLocation.set($event)"
+                >
+                  @for (loc of store.settings().storageLocations; track loc) {
+                    <option [value]="loc">{{ loc }}</option>
+                  }
+                </select>
+              </div>
+
+              <div class="pb-field">
+                <label class="pb-label" for="batch-detail">Map / Deck detail</label>
+                <input
+                  id="batch-detail"
+                  type="text"
+                  class="pb-input"
+                  placeholder="bijv. VaultX Pagina 4"
+                  [ngModel]="binderDetail()"
+                  (ngModelChange)="binderDetail.set($event)"
+                />
+              </div>
+
+              <div class="pb-field">
+                <label class="pb-label" for="batch-lang">Taal</label>
+                <select
+                  id="batch-lang"
+                  class="pb-select"
+                  [ngModel]="language()"
+                  (ngModelChange)="language.set($event)"
+                >
+                  @for (lang of store.settings().languages; track lang) {
+                    <option [value]="lang">{{ lang }}</option>
+                  }
+                </select>
+              </div>
+            </div>
+
+            <div class="trade-row">
+              <span>Direct markeren als <strong>Te ruil / verkoop</strong></span>
+              <button
+                type="button"
+                role="switch"
+                class="pb-switch"
+                [class.is-checked]="forTrade()"
+                [attr.aria-checked]="forTrade()"
+                (click)="forTrade.set(!forTrade())"
+              >
+                <span class="pb-switch__thumb"></span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="pb-sheet__footer qa-batch-sheet__footer">
+          @if (batchUniqueCount() > 0) {
+            <button type="button" class="pb-btn pb-btn--surface" (click)="clearBatchSelection()">
+              Selectie wissen
+            </button>
+          }
+          <button
+            type="button"
+            class="pb-btn pb-btn--primary pb-btn--full"
+            [disabled]="isSaving() || batchUniqueCount() === 0"
+            (click)="saveBatchSelection()"
+          >
+            <span class="material-symbols-outlined">library_add</span>
+            <span>{{ batchSaveLabel() }}</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  }
 </div>

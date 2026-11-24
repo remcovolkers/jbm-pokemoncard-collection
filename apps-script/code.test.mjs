@@ -318,11 +318,58 @@ describe('apps-script/Code.gs Backend API & Formule-integriteit', () => {
     const ping = JSON.parse(sandbox.doGet({ parameter: { action: 'ping', token: 'test-secret-token' } }).getContent());
     assert.equal(ping.ok, true);
     assert.equal(ping.spreadsheetName, 'Pokémon Kaartencollectie Tracker');
+    assert.equal(ping.scriptVersion, '2.1.0');
 
     const boot = JSON.parse(sandbox.doGet({ parameter: { action: 'bootstrap', token: 'test-secret-token' } }).getContent());
     assert.equal(boot.ok, true);
+    assert.equal(boot.data.scriptVersion, '2.1.0');
     assert.equal(boot.data.binderSlotsPerPage, 9);
     assert.equal(boot.data.pokedex.length, 4);
+  });
+
+  it('registreert menu-updatecheck in onOpen() en meldt update-status via checkScriptUpdateFromMenu()', () => {
+    const alerts = [];
+    const menuItems = [];
+    let manifestResponse = {
+      latestScriptVersion: '2.2.0',
+      scriptChangelog: 'Extra bulk opties',
+    };
+
+    const { sandbox } = createGasEnvironment({
+      tcgdexMock: () => ({
+        getResponseCode: () => 200,
+        getContentText: () => JSON.stringify(manifestResponse),
+      }),
+    });
+
+    sandbox.SpreadsheetApp.getUi = () => ({
+      alert: (msg) => alerts.push(msg),
+      createMenu: () => {
+        const builder = {
+          addItem: (label, fnName) => {
+            menuItems.push({ label, fnName });
+            return builder;
+          },
+          addSeparator: () => builder,
+          addToUi: () => {},
+        };
+        return builder;
+      },
+    });
+
+    sandbox.onOpen();
+    assert.ok(menuItems.some((m) => m.fnName === 'checkScriptUpdateFromMenu'));
+
+    sandbox.checkScriptUpdateFromMenu();
+    assert.equal(alerts.length, 1);
+    assert.match(alerts[0], /v2\.1\.0/);
+    assert.match(alerts[0], /v2\.2\.0/);
+    assert.match(alerts[0], /Implementaties beheren/);
+
+    manifestResponse = { latestScriptVersion: '2.1.0' };
+    sandbox.checkScriptUpdateFromMenu();
+    assert.equal(alerts.length, 2);
+    assert.match(alerts[1], /nieuwste PokéBinder Apps Script versie/);
   });
 
   it('addCard schrijft A:Q en U:V, behoudt R:T formules, voegt nieuwe set toe (alleen A:C) en synct Pokédex zonder Mew->Mewtwo bug', () => {

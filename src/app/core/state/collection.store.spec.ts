@@ -706,4 +706,93 @@ describe('CollectionStore (Signals, Optimistic UI & Offline Queue)', () => {
     expect(legacyStore.pendingQueue().length).toBe(0);
     expect(legacyStore.lastError()).toBeNull();
   });
+
+  it('voegt meerdere kaarten atomisch toe via addCardsBatch met duplicaat-increment en aparte varianten in 1 batch', async () => {
+    const batchCalls: BatchMutationItem[][] = [];
+    const batchRepo: CollectionRepository = {
+      ...mockRepo,
+      bootstrap: vi.fn(async () => ({ ...createDemoSnapshot(), scriptVersion: '2.1.0' })),
+      batchMutations: vi.fn(async (_cfg, mutations: BatchMutationItem[]): Promise<BatchMutationResponse> => {
+        batchCalls.push(mutations);
+        return {
+          results: mutations.map((m, idx) => ({
+            id: m.id,
+            action: m.action,
+            ok: true,
+            result: { rowIndex: 40 + idx, cardId: String(m.payload['cardId'] ?? '') },
+          })),
+        };
+      }),
+    };
+
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: COLLECTION_REPOSITORY, useValue: batchRepo },
+        { provide: CARD_CATALOG_PORT, useValue: mockCatalog },
+      ],
+    });
+    const batchStore = TestBed.inject(CollectionStore);
+    batchStore.updateConfig({
+      demoMode: false,
+      webAppUrl: 'https://script.google.com/macros/s/batch2/exec',
+      apiToken: 'tok-batch2',
+    });
+    await batchStore.syncFromRemote(true);
+    expect(batchStore.connectedScriptVersion()).toBe('2.1.0');
+
+    const existingBefore = batchStore.collection().find((c) => c.cardId === 'sv03.5-181')!;
+    const countBefore = batchStore.collection().length;
+
+    const result = await batchStore.addCardsBatch([
+      {
+        duplicateStrategy: 'increment',
+        payload: {
+          cardId: existingBefore.cardId,
+          name: existingBefore.name,
+          setName: existingBefore.setName,
+          cardNumber: existingBefore.cardNumber,
+          variant: existingBefore.variant,
+          quantity: 2,
+        },
+      },
+      {
+        duplicateStrategy: 'increment',
+        payload: {
+          cardId: 'sv03.5-001',
+          name: 'Bulbasaur',
+          setName: '151',
+          cardNumber: '001/165',
+          variant: 'Reverse Holo',
+          quantity: 1,
+          setTotalCards: 165,
+        },
+      },
+      {
+        duplicateStrategy: 'separate',
+        payload: {
+          cardId: existingBefore.cardId,
+          name: existingBefore.name,
+          setName: existingBefore.setName,
+          cardNumber: existingBefore.cardNumber,
+          variant: existingBefore.variant,
+          quantity: 1,
+        },
+      },
+    ]);
+
+    expect(result).toEqual({ addedCount: 2, incrementedCount: 1, totalCopies: 4 });
+    expect(batchStore.collection().length).toBe(countBefore + 2);
+    expect(
+      batchStore
+        .collection()
+        .find((c) => c.rowIndex === existingBefore.rowIndex && c.cardId === existingBefore.cardId)?.quantity
+    ).toBe(existingBefore.quantity + 2);
+    expect(batchStore.collection().some((c) => c.cardId === 'sv03.5-001' && c.variant === 'Reverse Holo')).toBe(true);
+
+    await batchStore.waitForPendingSync();
+    expect(batchCalls).toHaveLength(1);
+    expect(batchCalls[0].map((m) => m.action)).toEqual(['updateCard', 'addCard', 'addCard']);
+    expect(batchStore.pendingQueue().length).toBe(0);
+  });
 });

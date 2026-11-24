@@ -107,6 +107,24 @@ const bundleUrl = `${pagesBaseUrl}/ota/web-bundle.zip?v=${encodeURIComponent(web
 const apkDownloadUrl = `https://github.com/${owner}/${repo}/releases/latest/download/pokebinder-release.apk`;
 const releasePageUrl = `https://github.com/${owner}/${repo}/releases/latest`;
 
+let latestScriptVersion = '2.1.0';
+let scriptChangelog = '';
+try {
+  const gasSource = fs.readFileSync(path.join(root, 'apps-script', 'Code.gs'), 'utf8');
+  const verMatch = gasSource.match(/var\s+SCRIPT_VERSION\s*=\s*['"]([^'"]+)['"]/);
+  if (verMatch && verMatch[1]) {
+    latestScriptVersion = verMatch[1].trim();
+  }
+  const changelogMatch = gasSource.match(/var\s+SCRIPT_CHANGELOG\s*=\s*['"]([^'"]+)['"]/);
+  if (changelogMatch && changelogMatch[1]) {
+    scriptChangelog = changelogMatch[1].trim();
+  }
+} catch {
+  // Gebruik fallback
+}
+const scriptCodeUrl = `${pagesBaseUrl}/apps-script/Code.gs?v=${encodeURIComponent(latestScriptVersion)}`;
+const scriptGithubUrl = `https://github.com/${owner}/${repo}/blob/main/apps-script/Code.gs`;
+
 let bundleChecksum = '';
 if (bundleFilePath) {
   const resolvedBundle = path.resolve(root, bundleFilePath);
@@ -131,6 +149,14 @@ if (stampTs) {
   defaultApkDownloadUrl: string;
   /** GitHub Releases overzichtspagina als fallback */
   defaultReleasePageUrl: string;
+  /** Nieuwste PokéBinder Apps Script (Code.gs) versie */
+  latestScriptVersion: string;
+  /** Korte toelichting van de nieuwste Code.gs wijzigingen */
+  scriptChangelog: string;
+  /** CORS-vrije URL van de actuele Code.gs op GitHub Pages */
+  scriptCodeUrl: string;
+  /** GitHub-bronpagina van Code.gs */
+  scriptGithubUrl: string;
 }
 
 export const APP_VERSION: AppVersionInfo = {
@@ -139,10 +165,14 @@ export const APP_VERSION: AppVersionInfo = {
   manifestUrl: ${JSON.stringify(manifestUrl)},
   defaultApkDownloadUrl: ${JSON.stringify(apkDownloadUrl)},
   defaultReleasePageUrl: ${JSON.stringify(releasePageUrl)},
+  latestScriptVersion: ${JSON.stringify(latestScriptVersion)},
+  scriptChangelog: ${JSON.stringify(scriptChangelog)},
+  scriptCodeUrl: ${JSON.stringify(scriptCodeUrl)},
+  scriptGithubUrl: ${JSON.stringify(scriptGithubUrl)},
 };
 `;
   fs.writeFileSync(versionTsPath, tsContent, 'utf8');
-  console.log(`Stamped app-version.ts (web=${webVersion}, native=${nativeVersion})`);
+  console.log(`Stamped app-version.ts (web=${webVersion}, native=${nativeVersion}, script=${latestScriptVersion})`);
 }
 
 if (outManifestPath) {
@@ -150,6 +180,10 @@ if (outManifestPath) {
     webVersion,
     minNativeVersion,
     latestNativeVersion: nativeVersion,
+    latestScriptVersion,
+    scriptChangelog,
+    scriptCodeUrl,
+    scriptGithubUrl,
     bundleUrl,
     bundleChecksum,
     apkDownloadUrl,

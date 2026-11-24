@@ -149,6 +149,139 @@
     </div>
   </section>
 
+  <!-- Eigen Barebones Spreadsheet Starten & Script Updates -->
+  <section id="sheet-setup" class="pb-card template-card">
+    <div class="template-head">
+      <div class="card-head template-head__main">
+        <span class="material-symbols-outlined card-head__icon card-head__icon--emerald">content_copy</span>
+        <div>
+          <div class="template-head__title-row">
+            <h2>Eigen Google Sheet &amp; Script-updates</h2>
+            @if (isLiveSheetConnected() && hasKnownSheetContact()) {
+              @if (scriptUpdateAvailable()) {
+                <span class="pb-pill pb-pill--tertiary">Script-update v{{ latestScriptVersion() }}</span>
+              } @else {
+                <span class="pb-pill pb-pill--secondary">
+                  Script v{{ connectedScriptVersion() || latestScriptVersion() }} up-to-date
+                </span>
+              }
+            } @else {
+              <span class="pb-pill pb-pill--primary">Barebones template</span>
+            }
+          </div>
+          <p>
+            Kopieer gratis een lege PokéBinder Google Sheet naar je eigen Drive of werk je bestaande script bij.
+          </p>
+        </div>
+      </div>
+
+      @if (isLiveSheetConnected() && !scriptUpdateAvailable()) {
+        <button
+          type="button"
+          class="pb-btn pb-btn--surface template-head__toggle"
+          [attr.aria-expanded]="isSetupSectionExpanded()"
+          (click)="toggleSetupSection()"
+        >
+          <span>{{ isSetupSectionExpanded() ? 'Verbergen' : 'Opties tonen' }}</span>
+          <span class="material-symbols-outlined">
+            {{ isSetupSectionExpanded() ? 'expand_less' : 'expand_more' }}
+          </span>
+        </button>
+      }
+    </div>
+
+    @if (isSetupSectionExpanded()) {
+      <div class="template-blocks">
+        <!-- 1. Barebones Spreadsheet naar eigen Drive -->
+        <div class="template-block">
+          <h3>1. Nieuwe eigen spreadsheet starten</h3>
+          <p>
+            De knop hieronder opent je browser (log zo nodig in op Google) en maakt direct een privé-kopie in je
+            eigen Google Drive met alle 6 tabbladen, beschermde formules en de nieuwste <code>Code.gs</code> al
+            ingebouwd.
+          </p>
+          <div class="template-actions">
+            <button type="button" class="pb-btn pb-btn--primary" (click)="openTemplateCopy()">
+              <span class="material-symbols-outlined">open_in_new</span>
+              <span>Kopieer naar eigen Google Drive</span>
+            </button>
+            <button type="button" class="pb-btn pb-btn--secondary" (click)="copyTemplateLink()">
+              <span class="material-symbols-outlined">content_copy</span>
+              <span>Kopieer template-link</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 2. Apps Script (Code.gs) Updaten -->
+        <div class="template-block">
+          <h3>2. Apps Script (Code.gs) updaten</h3>
+          @if (scriptUpdateAvailable()) {
+            <div class="update-notice update-notice--amber">
+              <span class="material-symbols-outlined">bolt</span>
+              <div>
+                <strong>
+                  Nieuwe script-update beschikbaar ({{ connectedScriptVersion() ? 'v' + connectedScriptVersion() : 'v1.x' }} → v{{ latestScriptVersion() }})
+                </strong>
+                <p>
+                  {{ updates.scriptChangelog() || 'Verbeterde sync, batch-mutaties en script-versiecontrole.' }}
+                </p>
+              </div>
+            </div>
+          } @else if (isLiveSheetConnected() && hasKnownSheetContact()) {
+            <div class="update-notice update-notice--emerald">
+              <span class="material-symbols-outlined">check_circle</span>
+              <div>
+                <strong>Je Google Sheet script is up-to-date (v{{ connectedScriptVersion() || latestScriptVersion() }})</strong>
+                <p>Je hoeft op dit moment niets te updaten.</p>
+              </div>
+            </div>
+          } @else {
+            <p>
+              Als <code>apps-script/Code.gs</code> wordt verbeterd, zet je nieuwe functies binnen 1 minuut in je eigen
+              Sheet zonder dat je <code>/exec</code>-URL, <code>API_TOKEN</code> of collectie verandert.
+            </p>
+          }
+
+          <div class="template-actions">
+            <button
+              type="button"
+              class="pb-btn"
+              [class.pb-btn--emerald]="scriptUpdateAvailable()"
+              [class.pb-btn--secondary]="!scriptUpdateAvailable()"
+              [disabled]="isCopyingScript()"
+              (click)="copyLatestAppsScript()"
+            >
+              <span class="material-symbols-outlined" [class.pb-spin]="isCopyingScript()">
+                {{ isCopyingScript() ? 'progress_activity' : 'content_copy' }}
+              </span>
+              <span>
+                @if (copiedScriptLines(); as lines) {
+                  Code.gs gekopieerd ({{ lines }} regels)
+                } @else {
+                  Kopieer nieuwste Code.gs (v{{ latestScriptVersion() }})
+                }
+              </span>
+            </button>
+
+            <button type="button" class="pb-btn pb-btn--surface" (click)="openGithubScript()">
+              <span class="material-symbols-outlined">code</span>
+              <span>Bekijk op GitHub</span>
+            </button>
+          </div>
+
+          <ol class="guide-steps template-update-steps">
+            <li>Open je eigen Google Sheet → <strong>Extensies → Apps Script</strong>.</li>
+            <li>Selecteer alles in <code>Code.gs</code> (<code>Ctrl+A</code> / <code>Cmd+A</code>), plak en sla op (<code>Ctrl+S</code>).</li>
+            <li>
+              Klik rechtsboven op <strong>Implementeren → Implementaties beheren</strong> <em>(maak geen nieuwe implementatie aan — zo blijft je Web App URL exact gelijk!)</em>.
+            </li>
+            <li>Klik op het <strong>potloodje (Bewerken)</strong> → kies bij <em>Versie</em> voor <strong>Nieuwe versie</strong> → <strong>Implementeren</strong>.</li>
+          </ol>
+        </div>
+      </div>
+    }
+  </section>
+
   <!-- Google Apps Script Koppeling -->
   <section class="pb-card config-card">
     <div class="card-head">
@@ -274,6 +407,14 @@
             </span>
           </button>
         </div>
+        <button
+          type="button"
+          class="pb-btn pb-btn--surface token-gen-btn"
+          (click)="generateAndCopyApiToken()"
+        >
+          <span class="material-symbols-outlined">vpn_key</span>
+          <span>Genereer &amp; kopieer veilig API-token</span>
+        </button>
       </div>
 
       @if (testResult(); as res) {
@@ -284,7 +425,14 @@
           <div>
             @if (res.ok) {
               <strong>Verbinding geslaagd!</strong>
-              <p>Gekoppeld met spreadsheet: {{ res.spreadsheetName || 'Pokémon Kaartencollectie Tracker' }}</p>
+              <p>
+                Gekoppeld met spreadsheet: {{ res.spreadsheetName || 'Pokémon Kaartencollectie Tracker' }}
+                @if (res.scriptVersion) {
+                  · Script v{{ res.scriptVersion }}
+                } @else {
+                  · Oudere scriptversie (update beschikbaar naar v{{ latestScriptVersion() }})
+                }
+              </p>
             } @else {
               <strong>Verbinding mislukt</strong>
               <p>{{ res.error }}</p>
@@ -333,31 +481,27 @@
 
       <div class="sheet-guide__body">
         <div class="guide-block">
-          <h3>Stappenplan (eenmalig ±3 minuten)</h3>
+          <h3>Stappenplan voor eerste installatie (±3 minuten, bij voorkeur op desktop)</h3>
           <ol class="guide-steps">
             <li>
-              Open je Google Spreadsheet en klik bovenaan op <strong>Extensies → Apps Script</strong>.
+              Klik bovenaan op <strong>Kopieer naar eigen Google Drive</strong> (log zo nodig in op Google) en kies
+              <strong>Kopie maken</strong>. Alle 6 tabbladen, formules en <code>Code.gs</code> staan direct klaar.
             </li>
             <li>
-              Plak de volledige backend-code uit
-              <a
-                href="https://github.com/remcovolkers/jbm-pokemoncard-collection/blob/main/apps-script/Code.gs"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                apps-script/Code.gs
-              </a>
-              en sla op (<code>Ctrl+S</code>).
+              Wacht 5 seconden of herlaad de spreadsheet. Kies in het nieuwe menu
+              <strong>⚡ Pokémon API / PokéBinder</strong> voor <strong>🔑 PokéBinder App API-token instellen / bekijken</strong>
+              (plak je zelf gegenereerde token of laat leeg voor een automatische sterke sleutel) en klik eenmalig op
+              <strong>⚙️ Auto-sync aanzetten</strong>.
             </li>
             <li>
-              Herlaad je spreadsheet. Kies in het nieuwe menu <strong>⚡ Pokémon API / PokéBinder</strong> voor
-              <strong>Auto-sync aanzetten</strong> (zodat werken in Sheets ook live blijft werken) en
-              <strong>PokéBinder App API-token instellen</strong>.
+              <em>Eenmalige Google-melding:</em> Omdat het script op je eigen Drive-account draait, toont Google een
+              waarschuwingsscherm. Klik daar op <strong>Geavanceerd → Ga naar ... (onveilig) → Toestaan</strong>.
             </li>
             <li>
-              Klik in Apps Script op <strong>Implementeren → Nieuwe implementatie → Web-app</strong>
-              (<em>Uitvoeren als: Ik</em>, <em>Wie heeft toegang: Iedereen</em>). Kopieer de
-              <code>/exec</code>-URL en plak die samen met je token hierboven → klik <strong>Opslaan &amp; Live Sync</strong>.
+              Ga naar <strong>Extensies → Apps Script → Implementeren → Nieuwe implementatie → Web-app</strong>
+              (<em>Uitvoeren als: Ik</em>, <em>Wie heeft toegang: Iedereen</em> — je persoonlijke <code>API_TOKEN</code>
+              beveiligt alle aanroepen). Kopieer de <code>/exec</code>-URL, plak deze samen met je token hierboven en
+              klik <strong>Verbinding testen</strong> → <strong>Opslaan &amp; Live Sync</strong>.
             </li>
           </ol>
         </div>
@@ -442,20 +586,6 @@
         <span>Offline-cache legen</span>
       </button>
     </div>
-
-    @if (store.legacyAppsScriptDetected()) {
-      <div class="update-notice update-notice--amber legacy-gas-notice">
-        <span class="material-symbols-outlined">bolt</span>
-        <div>
-          <strong>Snellere batch-sync beschikbaar</strong>
-          <p>
-            Plak de nieuwste <code>apps-script/Code.gs</code> eenmalig in je Google Sheet (Extensies → Apps Script →
-            Implementeren → Nieuwe versie) om meerdere kaarten in 1 razendsnelle batch weg te schrijven. Tot die tijd
-            blijft alles automatisch werken.
-          </p>
-        </div>
-      </div>
-    }
 
     @if (store.pendingQueue().length > 0) {
       <div class="queue-box">

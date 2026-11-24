@@ -15,6 +15,12 @@ export interface RemoteVersionManifest {
   releasePageUrl?: string;
   /** Korte toelichting bij de release */
   releaseNotes?: string;
+  /** Optionele nieuwste Google Apps Script (Code.gs) versie */
+  latestScriptVersion?: string;
+  /** Optionele CORS-vrije download-URL voor Code.gs */
+  scriptCodeUrl?: string;
+  /** Optionele toelichting bij de nieuwste Code.gs update */
+  scriptChangelog?: string;
   /** ISO-timestamp van uitgave */
   publishedAt?: string;
 }
@@ -127,4 +133,20 @@ export function evaluateUpdateManifest(
     releasePageUrl,
     releaseNotes: remote.releaseNotes || '',
   };
+}
+
+/**
+ * Bepaalt of een gekoppeld Google Apps Script (Code.gs) bijgewerkt moet worden naar `latestVersion`.
+ */
+export function isScriptUpdateAvailable(
+  connectedVersion: string | null | undefined,
+  latestVersion: string,
+  legacyDetected = false
+): boolean {
+  if (legacyDetected) return true;
+  const cleanLatest = (latestVersion || '').trim();
+  if (!cleanLatest) return false;
+  const cleanConnected = (connectedVersion || '').trim();
+  if (!cleanConnected) return true;
+  return compareSemver(cleanLatest, cleanConnected) > 0;
 }

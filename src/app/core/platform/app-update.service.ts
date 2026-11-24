@@ -69,6 +69,10 @@ export class AppUpdateService {
   readonly apkDownloadUrl = signal<string>(APP_VERSION.defaultApkDownloadUrl);
   readonly releasePageUrl = signal<string>(APP_VERSION.defaultReleasePageUrl);
   readonly releaseNotes = signal<string>('');
+  readonly latestScriptVersion = signal<string>(APP_VERSION.latestScriptVersion);
+  readonly scriptCodeUrl = signal<string>(APP_VERSION.scriptCodeUrl);
+  readonly scriptChangelog = signal<string>(APP_VERSION.scriptChangelog);
+  readonly scriptGithubUrl = signal<string>(APP_VERSION.scriptGithubUrl);
 
   readonly bannerDismissed = signal<boolean>(false);
 
@@ -235,6 +239,15 @@ export class AppUpdateService {
       this.releaseNotes.set(decision.releaseNotes);
       this.apkUpdateAvailable.set(decision.apkUpdateAvailable);
       this.apkMandatory.set(decision.apkMandatory);
+      if (manifest.latestScriptVersion?.trim()) {
+        this.latestScriptVersion.set(manifest.latestScriptVersion.trim());
+      }
+      if (manifest.scriptCodeUrl?.trim()) {
+        this.scriptCodeUrl.set(manifest.scriptCodeUrl.trim());
+      }
+      if (manifest.scriptChangelog !== undefined) {
+        this.scriptChangelog.set(manifest.scriptChangelog.trim());
+      }
 
       if (decision.webUpdateAvailable) {
         this.webUpdateAvailable.set(true);
