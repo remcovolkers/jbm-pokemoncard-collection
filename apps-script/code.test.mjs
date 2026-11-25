@@ -51,6 +51,12 @@ function createFakeSheet(name, initialRows = [], options = {}) {
     setValue(val) {
       ensureCell(startRow, startCol);
       grid[startRow - 1][startCol - 1] = val;
+      return this;
+    },
+    setNumberFormat(format) {
+      stats.numberFormats = stats.numberFormats ?? [];
+      stats.numberFormats.push(`${startRow}:${startCol}=${format}`);
+      return this;
     },
     clearContent() {
       for (let r = 0; r < numRows; r++) {
@@ -318,11 +324,11 @@ describe('apps-script/Code.gs Backend API & Formule-integriteit', () => {
     const ping = JSON.parse(sandbox.doGet({ parameter: { action: 'ping', token: 'test-secret-token' } }).getContent());
     assert.equal(ping.ok, true);
     assert.equal(ping.spreadsheetName, 'Pokémon Kaartencollectie Tracker');
-    assert.equal(ping.scriptVersion, '2.2.0');
+    assert.equal(ping.scriptVersion, '2.2.1');
 
     const boot = JSON.parse(sandbox.doGet({ parameter: { action: 'bootstrap', token: 'test-secret-token' } }).getContent());
     assert.equal(boot.ok, true);
-    assert.equal(boot.data.scriptVersion, '2.2.0');
+    assert.equal(boot.data.scriptVersion, '2.2.1');
     assert.equal(boot.data.binderSlotsPerPage, 9);
     assert.equal(boot.data.pokedex.length, 4);
   });
@@ -362,11 +368,11 @@ describe('apps-script/Code.gs Backend API & Formule-integriteit', () => {
 
     sandbox.checkScriptUpdateFromMenu();
     assert.equal(alerts.length, 1);
-    assert.match(alerts[0], /v2\.2\.0/);
+    assert.match(alerts[0], /v2\.2\.1/);
     assert.match(alerts[0], /v2\.3\.0/);
     assert.match(alerts[0], /Implementaties beheren/);
 
-    manifestResponse = { latestScriptVersion: '2.2.0' };
+    manifestResponse = { latestScriptVersion: '2.2.1' };
     sandbox.checkScriptUpdateFromMenu();
     assert.equal(alerts.length, 2);
     assert.match(alerts[1], /nieuwste PokéBinder Apps Script versie/);

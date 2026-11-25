@@ -807,7 +807,7 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
       expect(comp.filteredSlots().length).toBe(2);
     });
 
-    it('wisselt kaartvarianten (met directe sluiting), upgrade-vlag, Escape-sluiting en binder-indeling (4/9/12/16/20)', async () => {
+    it('wisselt direct van kaartversie, slaat upgrade/binder-schakelaars direct op (zonder Bevestig selectie), bladert met Vorige/Volgende en sluit met Escape', async () => {
       const fixture = TestBed.createComponent(PokedexBinderComponent);
       const comp = fixture.componentInstance;
       const store = TestBed.inject(CollectionStore);
@@ -817,23 +817,37 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
       comp.openSlotSheet(venusaurSlot);
       expect(comp.activeSlotMatchingCards().length).toBe(3);
 
+      // Kiezen van een andere versie slaat direct op en houdt de kaartview open
       const baseVenusaur = comp.activeSlotMatchingCards().find((c) => c.cardId === 'base1-15')!;
       await comp.chooseVariant(baseVenusaur);
-      expect(comp.activeSlot()).toBeNull(); // Modaal sluit direct na kiezen van andere kaart!
+      expect(comp.activeSlot()).not.toBeNull();
+      expect(comp.heroCard()?.cardId).toBe('base1-15');
 
       const updatedSlot = store.pokedex().find((s) => s.dexNumber === 3)!;
       expect(updatedSlot.selectedCard).toContain('base1-15');
       expect(updatedSlot.inBinder).toBe(true);
 
-      // Opnieuw klikken op de al actieve kaart sluit zonder extra write naar Google Sheets
+      // Opnieuw dezelfde versie kiezen doet geen extra write naar Google Sheets
       const updateSpy = vi.spyOn(store, 'updatePokedexSlot');
-      comp.openSlotSheet(updatedSlot);
       await comp.chooseVariant(baseVenusaur);
-      expect(comp.activeSlot()).toBeNull();
       expect(updateSpy).not.toHaveBeenCalled();
 
+      // Upgrade gewenst wisselt direct bij aantikken (geen aparte bevestigknop)
+      const wasWanted = store.pokedex().find((s) => s.dexNumber === 3)!.upgradeWanted;
+      await comp.toggleUpgradeWanted();
+      expect(updateSpy).toHaveBeenCalledWith({ dexNumber: 3, upgradeWanted: !wasWanted });
+      expect(store.pokedex().find((s) => s.dexNumber === 3)?.upgradeWanted).toBe(!wasWanted);
+      await comp.toggleUpgradeWanted();
+      expect(store.pokedex().find((s) => s.dexNumber === 3)?.upgradeWanted).toBe(wasWanted);
+
+      // Vorige / Volgende bladert tussen gevulde Pokédex-vakjes
+      const nav = comp.nextNavDex() ?? comp.prevNavDex();
+      expect(comp.navTotal()).toBeGreaterThan(1);
+      expect(nav).not.toBeNull();
+      comp.goToSlot(nav);
+      expect(comp.activeSlot()?.dexNumber).toBe(nav);
+
       // Escape sluit sheet
-      comp.openSlotSheet(venusaurSlot);
       comp.onEscapeKey();
       expect(comp.activeSlot()).toBeNull();
 

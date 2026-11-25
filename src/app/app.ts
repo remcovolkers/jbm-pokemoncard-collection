@@ -1,10 +1,11 @@
-import { Component, ElementRef, OnInit, computed, effect, inject } from '@angular/core';
-import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { Component, ElementRef, OnInit, computed, inject } from '@angular/core';
+import { NavigationEnd, NavigationStart, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { filter, map, startWith } from 'rxjs';
 import { AppUpdateService } from './core/platform/app-update.service';
 import { MobileViewportService } from './core/platform/mobile-viewport.service';
 import { PlatformService } from './core/platform/platform.service';
+import { ScrollRestoreService } from './core/platform/scroll-restore.service';
 import { CollectionStore } from './core/state/collection.store';
 import { FeedbackStore } from './core/state/feedback.store';
 import { FeedbackModalComponent } from './shared/feedback-modal/feedback-modal.component';
@@ -24,15 +25,26 @@ export class App implements OnInit {
   private readonly mobileViewport = inject(MobileViewportService);
   private readonly router = inject(Router);
   private readonly hostEl = inject(ElementRef<HTMLElement>);
+  private readonly scrollRestore = inject(ScrollRestoreService);
+  private previousUrl = this.router.url;
 
   constructor() {
-    effect(() => {
-      this.currentUrl();
-      const mainEl = this.hostEl.nativeElement.querySelector('.shell__main') as HTMLElement | null;
-      if (mainEl) {
-        mainEl.scrollTop = 0;
+    // Scrollpositie onthouden bij doorklikken naar Kaartdetail en herstellen bij terugkeren (verwijderen/opslaan/Terug)
+    this.router.events.subscribe((event) => {
+      if (event instanceof NavigationStart) {
+        this.scrollRestore.onNavigationStart(this.router.url, event.url, this.mainScrollEl()?.scrollTop ?? 0);
+      } else if (event instanceof NavigationEnd) {
+        const fromUrl = this.previousUrl;
+        this.previousUrl = event.urlAfterRedirects;
+        const top = this.scrollRestore.resolveScrollTop(fromUrl, event.urlAfterRedirects);
+        const mainEl = this.mainScrollEl();
+        if (mainEl) this.scrollRestore.applyScrollTop(mainEl, top);
       }
     });
+  }
+
+  private mainScrollEl(): HTMLElement | null {
+    return this.hostEl.nativeElement.querySelector('.shell__main') as HTMLElement | null;
   }
 
   ngOnInit(): void {

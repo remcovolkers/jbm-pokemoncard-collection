@@ -26,6 +26,9 @@ function normalizeForMatch(text: string): string {
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '') // Flabébé -> Flabebe
     .replace(/[’`]/g, "'")
+    .replace(/\s+(?=[♀♂])/g, '') // "Nidoran ♀" -> "Nidoran♀"
+    .replace(/\bNidoran\s*\(?\s*F\s*\)?(?=$|[\s,.!?&/])/gi, 'Nidoran♀') // "Nidoran F" / "Nidoran (F)"
+    .replace(/\bNidoran\s*\(?\s*M\s*\)?(?=$|[\s,.!?&/])/gi, 'Nidoran♂') // "Nidoran M" / "Nidoran (M)"
     .trim();
 }
 

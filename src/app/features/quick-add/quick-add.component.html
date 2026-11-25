@@ -81,6 +81,27 @@
       </button>
     </div>
 
+    <!-- Kaarttaal: kies vóór het zoeken (TCGdex-taal, scan & Cardmarket-filter) -->
+    @if (inputMode() !== 'sets') {
+      <div class="qa-lang-row">
+        <label class="qa-lang-row__label" for="qa-lang-top">
+          <span class="material-symbols-outlined" aria-hidden="true">translate</span>
+          <span>Kaarttaal</span>
+        </label>
+        <select
+          id="qa-lang-top"
+          class="pb-select qa-lang-row__select"
+          [ngModel]="language()"
+          (ngModelChange)="onLanguageChange($event)"
+          aria-label="Kaarttaal voor zoeken en toevoegen"
+        >
+          @for (lang of store.settings().languages; track lang) {
+            <option [value]="lang">{{ getLanguageLabel(lang) }}</option>
+          }
+        </select>
+      </div>
+    }
+
     <!-- Invoermodus 1: Code / ID -->
     @if (inputMode() === 'code') {
       <div class="pb-field">
@@ -202,6 +223,9 @@
                     }
                   </pb-card-artwork>
                   <span class="result-tile__name">{{ item.name }}</span>
+                  @if (item.localizedName) {
+                    <span class="result-tile__local">{{ item.localizedName }}</span>
+                  }
                   <span class="mono result-tile__id">{{ getDisplaySetCode(item.id) }} #{{ item.localId }}</span>
                 </button>
                 @if (multiSelectMode() && selectedItem) {
@@ -887,19 +911,6 @@
                 }
               </div>
 
-              <div class="pb-field">
-                <label class="pb-label" for="qa-lang">Taal</label>
-                <select
-                  id="qa-lang"
-                  class="pb-select"
-                  [ngModel]="language()"
-                  (ngModelChange)="language.set($event)"
-                >
-                  @for (lang of store.settings().languages; track lang) {
-                    <option [value]="lang">{{ lang }}</option>
-                  }
-                </select>
-              </div>
             </div>
 
             <!-- Te ruil schakelaar -->
@@ -1188,7 +1199,7 @@
                   (ngModelChange)="language.set($event)"
                 >
                   @for (lang of store.settings().languages; track lang) {
-                    <option [value]="lang">{{ lang }}</option>
+                    <option [value]="lang">{{ getLanguageLabel(lang) }}</option>
                   }
                 </select>
               </div>

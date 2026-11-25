@@ -1,3 +1,4 @@
+import { getLanguageLabel, normalizeLanguageCode } from '../../core/domain/card-language.utils';
 import { ChangeDetectionStrategy, Component, HostListener, computed, effect, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
@@ -43,6 +44,8 @@ export class CardDetailComponent {
   readonly formatEur = formatEur;
   readonly formatPercent = formatPercent;
   readonly getDisplaySetCode = getDisplaySetCode;
+  readonly getLanguageLabel = getLanguageLabel;
+  readonly normalizeLanguageCode = normalizeLanguageCode;
 
   private readonly paramMap = toSignal(this.route.paramMap, {
     initialValue: this.route.snapshot.paramMap,
@@ -163,7 +166,7 @@ export class CardDetailComponent {
       this.activeCardmarketProductId.set(cachedId);
 
       if (!cachedId && card.cardId && !extractCardmarketUrlFromNotes(card.notes)) {
-        void this.resolveProductIdForDetail(card.cardId);
+        void this.resolveProductIdForDetail(card.cardId, card.language);
       }
     });
   }
@@ -176,6 +179,7 @@ export class CardDetailComponent {
     const draftGrade = draft.grading === 'Raw' ? '' : (draft.grade ?? '');
     return (
       draft.quantity !== orig.quantity ||
+      normalizeLanguageCode(draft.language) !== normalizeLanguageCode(orig.language) ||
       draft.variant !== orig.variant ||
       draft.condition !== orig.condition ||
       draft.grading !== orig.grading ||
@@ -199,6 +203,7 @@ export class CardDetailComponent {
       cardNumber: d.cardNumber,
       cardmarketProductId: this.activeCardmarketProductId(),
       notes: d.notes,
+      language: d.language,
     });
   });
 
@@ -211,11 +216,11 @@ export class CardDetailComponent {
     () => this.store.settings().acquisitionMethods ?? DEFAULT_DROPDOWN_SETTINGS.acquisitionMethods ?? []
   );
 
-  private async resolveProductIdForDetail(cardId: string): Promise<void> {
+  private async resolveProductIdForDetail(cardId: string, language = 'EN'): Promise<void> {
     try {
       const found =
-        (await this.catalog.getCardByExactId(cardId)) ??
-        (await this.catalog.lookupByCardId(cardId));
+        (await this.catalog.getCardByExactId(cardId, language)) ??
+        (await this.catalog.lookupByCardId(cardId, language));
       if (found?.cardmarketProductId && this.activeCard()?.cardId === cardId) {
         this.activeCardmarketProductId.set(found.cardmarketProductId);
       }
@@ -346,6 +351,7 @@ export class CardDetailComponent {
     const cardName = draft.name;
     const patch: Partial<CollectionCard> = {
       quantity: draft.quantity,
+      language: normalizeLanguageCode(draft.language),
       variant: draft.variant,
       condition: draft.condition,
       grading: draft.grading,

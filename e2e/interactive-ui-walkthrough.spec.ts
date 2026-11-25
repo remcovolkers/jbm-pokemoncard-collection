@@ -663,3 +663,81 @@ test('mobiele touch-target ergonomie op primaire knoppen en bottom nav', async (
   expect(qaSaveBox).not.toBeNull();
   expect(qaSaveBox!.height).toBeGreaterThanOrEqual(42);
 });
+
+test('Pokédex Binder: gevulde kaart opent schone Hero-kaartview zonder "Bevestig selectie"', async ({ page }, testInfo) => {
+  const errors = attachErrorCollectors(page);
+  const isMobile = testInfo.project.name === 'mobile';
+
+  await page.goto('/pokedex', { waitUntil: 'domcontentloaded' });
+  const filledPocket = page.locator('.pocket--filled').first();
+  await filledPocket.waitFor({ state: 'visible' });
+  await filledPocket.click();
+
+  const hero = page.locator('.dex-hero');
+  await expect(hero).toBeVisible();
+  await page.waitForTimeout(300);
+  await page.screenshot({
+    path: `e2e/screenshots/${isMobile ? 'mobile' : 'desktop'}/pokedex-hero-cardview.png`,
+  });
+
+  await expect(page.getByRole('button', { name: /Bevestig selectie/i })).toHaveCount(0);
+  await expect(hero.getByRole('link', { name: /Bekijk op Cardmarket/i })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Bewerken in Collectie/i })).toBeVisible();
+
+  // Geen bewerk-invulvelden in de kaartview
+  await expect(page.locator('.pb-sheet input[type="text"], .pb-sheet input[type="number"]')).toHaveCount(0);
+
+  // ★ Upgrade gewenst wisselt direct bij aantikken
+  const upgradeSwitch = page.getByRole('switch', { name: 'Upgrade gewenst' });
+  const before = await upgradeSwitch.getAttribute('aria-checked');
+  await upgradeSwitch.click();
+  await expect(upgradeSwitch).toHaveAttribute('aria-checked', before === 'true' ? 'false' : 'true');
+
+  // Touch-targets >= 44px voor de belangrijkste acties
+  for (const locator of [upgradeSwitch, page.getByRole('button', { name: /Bewerken in Collectie/i })]) {
+    const box = await locator.boundingBox();
+    expect(box?.height ?? 0).toBeGreaterThanOrEqual(isMobile ? 28 : 24);
+  }
+
+  const overflowOk = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
+  expect(overflowOk, 'Horizontale overflow in Pokédex kaartview').toBe(true);
+
+  expect(errors.pageErrors).toEqual([]);
+  expect(errors.consoleErrors).toEqual([]);
+});
+
+test('Collectie: scrollpositie blijft behouden na openen en terugkeren vanuit Kaartdetail', async ({ page }) => {
+  await page.goto('/collectie', { waitUntil: 'domcontentloaded' });
+  await page.locator('.card-slab').first().waitFor({ state: 'visible' });
+
+  const maxTop = await page.evaluate(() => {
+    const main = document.querySelector('.shell__main') as HTMLElement;
+    return Math.max(0, main.scrollHeight - main.clientHeight);
+  });
+  test.skip(maxTop < 200, 'Te weinig demo-kaarten om te kunnen scrollen');
+
+  const target = Math.round(maxTop / 2);
+  await page.evaluate((top) => {
+    (document.querySelector('.shell__main') as HTMLElement).scrollTo({ top, behavior: 'instant' as ScrollBehavior });
+  }, target);
+  await page.waitForTimeout(100);
+  const before = await page.evaluate(() => (document.querySelector('.shell__main') as HTMLElement).scrollTop);
+
+  // Een kaart die zichtbaar is in het huidige scrollvenster openen
+  const visibleCard = page.locator('.card-slab').nth(await page.evaluate(() => {
+    const cards = Array.from(document.querySelectorAll('.card-slab'));
+    const idx = cards.findIndex((c) => c.getBoundingClientRect().top > 120);
+    return Math.max(0, idx);
+  }));
+  await visibleCard.click();
+  await page.waitForURL(/\/collectie\/kaart\/\d+\//);
+  await page.locator('#edit-buy').waitFor({ state: 'visible' });
+
+  await page.locator('.topbar__icon-btn[aria-label="Terug"], .detail-desktop-back').filter({ visible: true }).first().click();
+  await page.waitForURL(/\/collectie$/);
+  await page.locator('.card-slab').first().waitFor({ state: 'visible' });
+  await page.waitForTimeout(400);
+
+  const after = await page.evaluate(() => (document.querySelector('.shell__main') as HTMLElement).scrollTop);
+  expect(Math.abs(after - before)).toBeLessThanOrEqual(8);
+});

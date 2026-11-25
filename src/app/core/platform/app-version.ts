@@ -30,7 +30,7 @@ export const APP_VERSION: AppVersionInfo = {
     'https://github.com/remcovolkers/jbm-pokemoncard-collection/releases/latest/download/pokebinder-release.apk',
   defaultReleasePageUrl:
     'https://github.com/remcovolkers/jbm-pokemoncard-collection/releases/latest',
-  latestScriptVersion: '2.2.0',
+  latestScriptVersion: '2.2.1',
   scriptChangelog:
     'Kaartspot Binder Sync (server-side ophalen zonder CORS & razendsnelle bulk-import), script-versiecontrole & batch-sync.',
   scriptCodeUrl: 'https://remcovolkers.github.io/jbm-pokemoncard-collection/apps-script/Code.gs',

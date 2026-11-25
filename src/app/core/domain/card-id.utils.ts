@@ -1,3 +1,5 @@
+import { withCardmarketLanguage } from './card-language.utils';
+
 /**
  * Mapping van geprinte Pokémon TCG kaartcodes / veelgebruikte afkortingen naar TCGdex API set-ID's.
  * Verzamelaars gebruiken de geprinte kaartcode linksonder op de kaart (zoals DLR, PBL, 30C, MEW, OBF).
@@ -388,6 +390,27 @@ export function parseCardIdInput(rawInput: string): ParsedCardId | null {
   };
 }
 
+const CUSTOM_LANGUAGE_PREFIX_RE = /^(?:zht|chs|zhs|jp|ja|kr|ko|de|fr|nl|es|it|pt)-/;
+
+/**
+ * Verkort lange eigen set-slugs (bijv. "zht-final-flame-dance" uit Kaartspot-sync) tot een korte
+ * 2–4 letter code ("FFD") zodat er nooit een heel slug als setcode-pil op een kaart verschijnt.
+ */
+function abbreviateCustomSetSlug(setSlug: string): string {
+  const lower = setSlug.toLowerCase();
+  const hasLangPrefix = CUSTOM_LANGUAGE_PREFIX_RE.test(lower);
+  if (!hasLangPrefix && lower.length <= 14) return lower.toUpperCase();
+
+  const base = lower.replace(CUSTOM_LANGUAGE_PREFIX_RE, '');
+  const words = base.split('-').filter(Boolean);
+  if (words.length <= 1) return (words[0] ?? lower).toUpperCase().slice(0, 6);
+  return words
+    .map((w) => w[0])
+    .join('')
+    .slice(0, 4)
+    .toUpperCase();
+}
+
 /**
  * Geeft de herkenbare geprinte kaartcode terug voor kaartbadges & overzichten
  * (bijv. me06-011 -> DLR, me05-005 -> PBL, sv03.5-199 -> MEW, swsh7-215 -> EVS).
@@ -405,7 +428,7 @@ export function getDisplaySetCode(cardIdOrSetId: string, fallbackSetName?: strin
     const setId = clean.slice(0, dashIdx).toLowerCase();
     if (dynamicDisplayCodeBySetId.has(setId)) return dynamicDisplayCodeBySetId.get(setId)!;
     if (REVERSE_DISPLAY_CODE[setId]) return REVERSE_DISPLAY_CODE[setId];
-    return setId.toUpperCase();
+    return abbreviateCustomSetSlug(setId);
   }
 
   if (fallbackSetName) {
@@ -682,13 +705,18 @@ export function resolveCardmarketUrl(opts: {
   cardNumber?: string;
   cardmarketProductId?: number;
   notes?: string;
+  /** Kaarttaal (EN/FR/CHS…): opent Cardmarket direct gefilterd op die taal. */
+  language?: string;
 }): string {
+  let base: string;
   if (opts.cardmarketProductId && Number.isFinite(opts.cardmarketProductId) && opts.cardmarketProductId > 0) {
-    return buildCardmarketProductUrl(opts.cardmarketProductId);
+    base = buildCardmarketProductUrl(opts.cardmarketProductId);
+  } else {
+    base =
+      extractCardmarketUrlFromNotes(opts.notes) ??
+      buildCardmarketSearchUrl(opts.name, opts.setName, opts.cardNumber);
   }
-  const stored = extractCardmarketUrlFromNotes(opts.notes);
-  if (stored) return stored;
-  return buildCardmarketSearchUrl(opts.name, opts.setName, opts.cardNumber);
+  return withCardmarketLanguage(base, opts.language);
 }
 
 const KNOWN_SET_NAME_TO_ID: Record<string, string> = {
@@ -783,4 +811,34 @@ export function buildCardmarketSearchUrl(cardName: string, _setName?: string, ca
   const cleanNum = /^\d+$/.test(rawNum) ? String(parseInt(rawNum, 10)) : rawNum;
   const query = [cleanName, cleanNum].filter(Boolean).join(' ').trim();
   return `https://www.cardmarket.com/en/Pokemon/Products/Singles?searchString=${encodeURIComponent(query)}`;
+}
+
+const CORRUPTED_DATE_NUMBER_RE = /(?:GMT|UTC|Standard Time|Daylight Time|\d{4}-\d{2}-\d{2}T)/i;
+
+/**
+ * Herstelt kaartnummers die Google Sheets ooit als datum opsloeg ("5/11" -> "Thu Nov 05 2026 00:00:00 GMT+0100…").
+ * Het echte nummer wordt uit dag/maand van de datum gehaald en met het kaartnummer uit het Kaart-ID gecontroleerd
+ * (bijv. `tk-dp-l-5` -> "5" is de teller, dus 5/11).
+ */
+export function repairCorruptedCardNumber(cardNumber: string | undefined | null, cardId?: string): string {
+  const raw = (cardNumber ?? '').trim();
+  if (!raw || !CORRUPTED_DATE_NUMBER_RE.test(raw)) return raw;
+
+  const date = new Date(raw);
+  const localFromId = (cardId ?? '').trim().split('-').pop()?.replace(/^0+(?=\d)/, '') ?? '';
+  const day = Number.isNaN(date.getTime()) ? NaN : date.getDate();
+  const month = Number.isNaN(date.getTime()) ? NaN : date.getMonth() + 1;
+
+  if (Number.isFinite(day) && Number.isFinite(month)) {
+    if (localFromId && String(month) === localFromId && String(day) !== localFromId) {
+      return `${month}/${day}`;
+    }
+    return `${day}/${month}`;
+  }
+  return /^\d+$/.test(localFromId) ? localFromId : '';
+}
+
+/** Corrigeert bekende titel-typfouten uit TCGdex (bijv. "DP trainer Kit (Lucario)" -> "DP Trainer Kit (Lucario)"). */
+export function normalizeSetDisplayName(setName: string | undefined | null): string {
+  return (setName ?? '').replace(/\btrainer kit\b/i, 'Trainer Kit').trim();
 }

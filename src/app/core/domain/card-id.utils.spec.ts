@@ -14,8 +14,11 @@ import {
   registerDynamicSetCodes,
   resetDynamicSetCodesForTests,
   resolveCardArtworkUrl,
+  normalizeSetDisplayName,
+  repairCorruptedCardNumber,
   resolveCardmarketUrl,
 } from './card-id.utils';
+import { withCardmarketLanguage } from './card-language.utils';
 
 describe('card-id.utils', () => {
   afterEach(() => {
@@ -290,5 +293,44 @@ describe('card-id.utils', () => {
         })
       ).toBe('https://www.cardmarket.com/en/Pokemon/Products/Singles?searchString=Dark%20Charizard%204');
     });
+  });
+});
+
+describe('Taal, Cardmarket & titel-herstel (feedback-ronde)', () => {
+  it('geeft Cardmarket-links de juiste language-filter mee en laat Engels ongemoeid', () => {
+    const base = { name: 'Dracaufeu', cardmarketProductId: 273699 };
+    expect(resolveCardmarketUrl({ ...base, language: 'FR' })).toBe(
+      'https://www.cardmarket.com/en/Pokemon/Products?idProduct=273699&language=2'
+    );
+    expect(resolveCardmarketUrl({ ...base, language: 'CHS' })).toContain('language=6');
+    expect(resolveCardmarketUrl({ ...base, language: 'NL' })).toContain('language=12');
+    expect(resolveCardmarketUrl({ ...base, language: 'EN' })).not.toContain('language=');
+    const search = resolveCardmarketUrl({ name: 'Charizard', cardNumber: '4/102', language: 'DE' });
+    expect(search).toContain('searchString=Charizard%204');
+    expect(search.endsWith('&language=3')).toBe(true);
+  });
+
+  it('vervangt een bestaand language-filter in plaats van het te dupliceren', () => {
+    expect(withCardmarketLanguage('https://x.test/p?idProduct=1&language=2', 'JP')).toBe(
+      'https://x.test/p?idProduct=1&language=7'
+    );
+  });
+
+  it('herstelt kaartnummers die Google Sheets als datum opsloeg (5/11 -> 5 november)', () => {
+    expect(repairCorruptedCardNumber('Thu Nov 05 2026 00:00:00 GMT+0100 (Central European Standard Time)', 'tk-dp-l-5')).toBe('5/11');
+    // Maand/dag omgedraaid (US-locale): "5/11" werd 11 mei -> kaartnummer uit ID bepaalt de volgorde
+    expect(repairCorruptedCardNumber('Mon May 11 2026 00:00:00 GMT+0200 (Central European Summer Time)', 'tk-dp-l-5')).toBe('5/11');
+    expect(repairCorruptedCardNumber('4/102', 'base1-4')).toBe('4/102');
+    expect(repairCorruptedCardNumber('', 'base1-4')).toBe('');
+  });
+
+  it('toont nooit een lang custom set-slug als setcode-pil', () => {
+    expect(getDisplaySetCode('zht-final-flame-dance-38', 'Final Flame Dance')).toBe('FFD');
+    expect(getDisplaySetCode('chs-gem-pack-vol-3-12')).toBe('GPV3');
+  });
+
+  it('corrigeert "DP trainer Kit" naar "DP Trainer Kit"', () => {
+    expect(normalizeSetDisplayName('DP trainer Kit (Lucario)')).toBe('DP Trainer Kit (Lucario)');
+    expect(normalizeSetDisplayName('Jungle')).toBe('Jungle');
   });
 });

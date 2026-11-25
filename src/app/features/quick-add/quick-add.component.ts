@@ -1,7 +1,13 @@
 import { Component, ElementRef, HostListener, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { getDisplaySetCode, isKnownNoScanSet, parseCardIdInput } from '../../core/domain/card-id.utils';
+import {
+  extractArtworkUrlFromNotes,
+  getDisplaySetCode,
+  isKnownNoScanSet,
+  parseCardIdInput,
+} from '../../core/domain/card-id.utils';
+import { getLanguageLabel, normalizeLanguageCode } from '../../core/domain/card-language.utils';
 import { formatDexNumber, formatEur, formatPercent } from '../../core/domain/card-math.utils';
 import {
   CatalogCard,
@@ -115,6 +121,8 @@ export class QuickAddComponent implements OnInit, OnDestroy {
   readonly formatDexNumber = formatDexNumber;
   readonly getDisplaySetCode = getDisplaySetCode;
   readonly isKnownNoScanSet = isKnownNoScanSet;
+  readonly getLanguageLabel = getLanguageLabel;
+  readonly isNonEnglish = (lang: string): boolean => normalizeLanguageCode(lang) !== 'EN';
 
   readonly inputMode = signal<'code' | 'name' | 'sets'>('code');
   readonly codeQuery = signal('');
@@ -381,7 +389,12 @@ export class QuickAddComponent implements OnInit, OnDestroy {
     const card = this.previewCard();
     if (!card) return null;
     const target = card.id.toLowerCase();
-    return this.store.collection().find((c) => c.cardId.toLowerCase() === target) ?? null;
+    const lang = normalizeLanguageCode(this.language());
+    return (
+      this.store
+        .collection()
+        .find((c) => c.cardId.toLowerCase() === target && normalizeLanguageCode(c.language) === lang) ?? null
+    );
   });
 
   // Automatische National Pokédex koppeling preview
@@ -552,7 +565,7 @@ export class QuickAddComponent implements OnInit, OnDestroy {
     this.isSearching.set(true);
     this.lookupError.set(null);
     try {
-      const found = await this.catalog.lookupByCardId(rawInput);
+      const found = await this.catalog.lookupByCardId(rawInput, this.language());
       if (found) {
         this.applyCatalogCard(found);
       } else {
@@ -586,7 +599,7 @@ export class QuickAddComponent implements OnInit, OnDestroy {
     this.isSearching.set(true);
     this.lookupError.set(null);
     try {
-      const results = await this.catalog.searchByName(query, 16);
+      const results = await this.catalog.searchByName(query, 16, this.language());
       this.nameResults.set(results);
       if (results.length === 0) {
         this.lookupError.set(`Geen kaarten gevonden voor "${query}".`);
@@ -599,7 +612,7 @@ export class QuickAddComponent implements OnInit, OnDestroy {
   async selectNameResult(item: CatalogCardSummary): Promise<void> {
     this.isSearching.set(true);
     try {
-      const full = await this.catalog.getCardByExactId(item.id);
+      const full = await this.catalog.getCardByExactId(item.id, this.language());
       if (full) {
         this.applyCatalogCard(full);
         const humanCode = getDisplaySetCode(full.id, full.setName);
@@ -893,7 +906,7 @@ export class QuickAddComponent implements OnInit, OnDestroy {
 
   private async prefetchBatchCardDetail(cardId: string): Promise<void> {
     try {
-      const detail = await this.catalog.getCardByExactId(cardId);
+      const detail = await this.catalog.getCardByExactId(cardId, this.language());
       const key = cardId.toLowerCase();
       this.selectedBatchCards.update((list) =>
         list.map((c) =>
@@ -931,7 +944,7 @@ export class QuickAddComponent implements OnInit, OnDestroy {
         const fetched = await Promise.all(
           chunk.map(async (item) => {
             try {
-              const card = await this.catalog.getCardByExactId(item.id);
+              const card = await this.catalog.getCardByExactId(item.id, this.language());
               return { id: item.id.toLowerCase(), card };
             } catch {
               return { id: item.id.toLowerCase(), card: null };
@@ -987,7 +1000,7 @@ export class QuickAddComponent implements OnInit, OnDestroy {
             imageUrl: detail?.imageUrl || item.imageUrl,
             trendPercent: detail?.trendPercent,
             forTrade: this.forTrade(),
-            notes: this.notes().trim(),
+            notes: this.withLocalizedImageNote(this.notes().trim(), detail?.imageUrl, detail?.language),
             seriesName: detail?.seriesName || item.seriesName,
             setTotalCards: detail?.officialCardCount || detail?.totalCardCount || item.setTotalCount,
           },
@@ -1016,6 +1029,29 @@ export class QuickAddComponent implements OnInit, OnDestroy {
     this.inputMode.set('code');
     this.codeQuery.set(code);
     void this.lookupByCode(code);
+  }
+
+  /**
+   * Wijzigt de kaarttaal: ververst direct de actieve zoekopdracht zodat resultaten, scans en
+   * Cardmarket-link in de gekozen taal verschijnen (FR, DE, JP, CHS…).
+   */
+  onLanguageChange(lang: string): void {
+    if (normalizeLanguageCode(lang) === normalizeLanguageCode(this.language())) return;
+    this.language.set(lang);
+    this.previewCard.set(null);
+    this.lookupError.set(null);
+    if (this.inputMode() === 'code' && this.codeQuery().trim()) {
+      void this.lookupByCode(this.codeQuery().trim());
+    } else if (this.inputMode() === 'name' && this.nameQuery().trim().length >= 2) {
+      void this.searchByName(this.nameQuery().trim());
+    }
+  }
+
+  /** Bewaar anderstalige scan-URL in de notities (`[IMG:…]`) zodat die ook na een sync zichtbaar blijft. */
+  private withLocalizedImageNote(notes: string, imageUrl?: string, cardLanguage?: string): string {
+    if (!imageUrl || !cardLanguage || normalizeLanguageCode(cardLanguage) === 'EN') return notes;
+    if (extractArtworkUrlFromNotes(notes)) return notes;
+    return [notes, `[IMG:${imageUrl}]`].filter(Boolean).join(' ').trim();
   }
 
   private applyCatalogCard(card: CatalogCard): void {
@@ -1108,7 +1144,7 @@ export class QuickAddComponent implements OnInit, OnDestroy {
         imageUrl: card?.imageUrl,
         trendPercent: card?.trendPercent,
         forTrade: this.forTrade(),
-        notes: this.notes().trim(),
+        notes: this.withLocalizedImageNote(this.notes().trim(), card?.imageUrl, card?.language),
         seriesName: card?.seriesName,
         setTotalCards: card?.officialCardCount || card?.totalCardCount,
       });

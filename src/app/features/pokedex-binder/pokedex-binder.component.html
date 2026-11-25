@@ -374,7 +374,7 @@
     }
   </div>
 
-  <!-- Variant Picker & Slot Bottom Sheet -->
+  <!-- Pokédex Kaart-view: Hero Card (gevuld vakje) of compacte "ontbrekend"-kaart. Alles slaat direct op. -->
   @if (activeSlot(); as slot) {
     <div
       class="pb-sheet-backdrop"
@@ -383,7 +383,7 @@
       aria-labelledby="dex-sheet-title"
       (click)="closeSlotSheet()"
     >
-      <div class="pb-sheet pb-sheet--structured" (pbSheetDismiss)="closeSlotSheet()" (click)="$event.stopPropagation()">
+      <div class="pb-sheet pb-sheet--structured dex-card-sheet" (pbSheetDismiss)="closeSlotSheet()" (click)="$event.stopPropagation()">
         <div class="pb-sheet__top">
           <div class="pb-sheet__handle"></div>
 
@@ -396,10 +396,6 @@
               @if (activeSlotPosition(); as pos) {
                 <p class="dex-sheet-head__sub">
                   {{ slot.generation }} · Pagina {{ pos.page }}, Vakje {{ pos.slotInPage }} ({{ pos.label }})
-                  @if (activeSlotMatchingCards().length > 0) {
-                    · Je bezit {{ activeSlotMatchingCards().length }}
-                    {{ activeSlotMatchingCards().length === 1 ? 'versie' : 'verschillende versies' }}
-                  }
                 </p>
               }
             </div>
@@ -413,126 +409,250 @@
               <span class="material-symbols-outlined">close</span>
             </button>
           </div>
+
+          @if (navTotal() > 1 && navIndex() >= 0) {
+            <div class="dex-stepper" role="group" aria-label="Blader door je Pokédex-kaarten">
+              <button
+                type="button"
+                class="dex-stepper__btn"
+                [disabled]="prevNavDex() === null"
+                (click)="goToSlot(prevNavDex())"
+                aria-label="Vorige Pokémon"
+              >
+                <span class="material-symbols-outlined">chevron_left</span>
+                <span>Vorige</span>
+              </button>
+              <span class="mono dex-stepper__count">{{ navIndex() + 1 }} / {{ navTotal() }}</span>
+              <button
+                type="button"
+                class="dex-stepper__btn"
+                [disabled]="nextNavDex() === null"
+                (click)="goToSlot(nextNavDex())"
+                aria-label="Volgende Pokémon"
+              >
+                <span>Volgende</span>
+                <span class="material-symbols-outlined">chevron_right</span>
+              </button>
+            </div>
+          }
         </div>
 
-        <div class="pb-sheet__body">
-          <!-- Beschikbare Kaart-varianten in Collectie -->
-        @if (activeSlotMatchingCards().length > 0) {
-          <div class="variants-list">
-            @for (card of activeSlotMatchingCards(); track card.rowIndex + '-' + card.cardId) {
-              <div
-                class="variant-option"
-                role="button"
-                tabindex="0"
-                [class.is-selected]="isChoiceSelected(card)"
-                (click)="chooseVariant(card)"
-                (keydown.enter)="chooseVariant(card)"
-                (keydown.space)="$event.preventDefault(); chooseVariant(card)"
-              >
-                <div class="variant-option__thumb">
-                  <pb-card-artwork [cardId]="card.cardId" [src]="card.imageUrl" [alt]="card.name" [compact]="true" />
-                </div>
+        <div
+          class="pb-sheet__body"
+          pbSwipeNav
+          [swipeEnabled]="navTotal() > 1"
+          [swipeCanPrev]="prevNavDex() !== null"
+          [swipeCanNext]="nextNavDex() !== null"
+          (swipeNext)="goToSlot(nextNavDex())"
+          (swipePrev)="goToSlot(prevNavDex())"
+        >
+          @if (heroCard(); as card) {
+            <section class="dex-hero" [class.dex-hero--holo]="isShowcaseEligible(card)">
+              <div class="dex-hero__badges">
+                <span class="pb-pill pb-pill--primary mono">
+                  {{ getDisplaySetCode(card.cardId, card.setName) }} #{{ card.cardNumber }}
+                </span>
+                @if (card.rarity) {
+                  <span class="mono dex-hero__rarity">• {{ card.rarity }}</span>
+                }
+                @if (normalizeLanguageCode(card.language) !== 'EN') {
+                  <span class="pb-pill pb-pill--secondary mono">{{ normalizeLanguageCode(card.language) }}</span>
+                }
+                @if (card.variant && card.variant !== 'Normal') {
+                  <span class="pb-pill pb-pill--neutral">{{ card.variant }}</span>
+                }
+              </div>
 
-                <div class="variant-option__info">
-                  <div class="variant-option__title-row">
-                    <strong>{{ card.name }}</strong>
-                    <span class="pb-pill pb-pill--primary">{{ rarityShort(card) }}</span>
-                  </div>
-                  <span class="mono variant-option__set">
-                    {{ card.setName }} ({{ card.cardNumber }}) · {{ card.variant }}
-                  </span>
-                  <span class="mono variant-option__price">{{ formatEur(card.marketPrice) }}</span>
-                </div>
+              <h3 class="dex-hero__title">{{ card.name }}</h3>
+              <p class="dex-hero__set">{{ card.setName }} · {{ card.condition }}</p>
 
-                <div class="variant-option__right">
-                  @if (isShowcaseEligible(card)) {
-                    <button
-                      type="button"
-                      class="pb-btn pb-btn--icon variant-option__showcase-btn"
-                      [attr.aria-label]="card.name + ' in 3D Showcase bekijken'"
-                      title="Open 3D Showcase"
-                      (click)="$event.stopPropagation(); openShowcase(card)"
-                      (keydown.enter)="$event.stopPropagation(); openShowcase(card)"
-                      (keydown.space)="$event.preventDefault(); $event.stopPropagation(); openShowcase(card)"
-                    >
+              @if (isShowcaseEligible(card)) {
+                <button
+                  type="button"
+                  class="dex-hero__art dex-hero__art-btn"
+                  [attr.aria-label]="card.name + ' in 360° 3D Showcase bekijken'"
+                  (click)="openShowcase(card)"
+                >
+                  <pb-card-artwork [cardId]="card.cardId" [src]="card.imageUrl" [alt]="card.name">
+                    <span class="dex-hero__zoom-pill" aria-hidden="true">
                       <span class="material-symbols-outlined">3d_rotation</span>
-                    </button>
+                    </span>
+                  </pb-card-artwork>
+                </button>
+                <button type="button" class="pb-btn pb-btn--secondary dex-hero__showcase-btn" (click)="openShowcase(card)">
+                  <span class="material-symbols-outlined">3d_rotation</span>
+                  <span>360° 3D Showcase</span>
+                </button>
+              } @else {
+                <div class="dex-hero__art">
+                  <pb-card-artwork [cardId]="card.cardId" [src]="card.imageUrl" [alt]="card.name" />
+                </div>
+              }
+
+              <div class="dex-hero__pricing">
+                <span class="dex-hero__eyebrow">Cardmarket Marktwaarde p/s</span>
+                <div class="dex-hero__price-line">
+                  <span class="mono dex-hero__price">{{ formatEur(card.marketPrice) }}</span>
+                  @if (heroMetrics(); as m) {
+                    @if (card.purchasePrice > 0) {
+                      <span class="mono dex-hero__roi" [class.is-negative]="m.roiPercent < 0">
+                        {{ formatPercent(m.roiPercent) }}
+                      </span>
+                    }
                   }
-                  <div class="variant-option__radio">
-                    <span class="radio-dot" [class.is-checked]="isChoiceSelected(card)"></span>
-                    <span class="mono">{{ isChoiceSelected(card) ? 'Actief' : 'Kies' }}</span>
-                  </div>
                 </div>
               </div>
+
+              @if (heroMetrics(); as m) {
+                <div class="dex-hero__mini-grid">
+                  <div class="dex-mini-stat">
+                    <span class="dex-mini-stat__label">Totale waarde ({{ card.quantity }}×)</span>
+                    <span class="mono dex-mini-stat__val">{{ formatEur(m.totalValue) }}</span>
+                  </div>
+                  @if (card.purchasePrice > 0) {
+                    <div class="dex-mini-stat" [class.is-negative]="m.profitLoss < 0">
+                      <span class="dex-mini-stat__label">Winst / Verlies</span>
+                      <span class="mono dex-mini-stat__val">{{ formatEur(m.profitLoss, true) }}</span>
+                    </div>
+                  } @else {
+                    <div class="dex-mini-stat">
+                      <span class="dex-mini-stat__label">Aankoopprijs</span>
+                      <span class="mono dex-mini-stat__val">{{ formatEur(0) }}</span>
+                    </div>
+                  }
+                </div>
+              }
+
+              <a
+                class="pb-btn pb-btn--surface pb-btn--full"
+                [href]="heroCardmarketUrl()"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <span>Bekijk op Cardmarket</span>
+                <span class="material-symbols-outlined">open_in_new</span>
+              </a>
+            </section>
+
+            <!-- Meerdere versies: 1 tik wisselt direct (geen bevestigen) -->
+            @if (activeSlotMatchingCards().length > 1) {
+              <section class="dex-versions" aria-label="Kies welke versie in dit vakje hoort">
+                <h4 class="dex-versions__title">
+                  Je bezit {{ activeSlotMatchingCards().length }} versies — kies er 1 voor dit vakje
+                </h4>
+                <div class="dex-versions__list">
+                  @for (option of activeSlotMatchingCards(); track option.rowIndex + '-' + option.cardId) {
+                    <button
+                      type="button"
+                      class="dex-version"
+                      [class.is-selected]="isChoiceSelected(option)"
+                      [attr.aria-pressed]="isChoiceSelected(option)"
+                      (click)="chooseVariant(option)"
+                    >
+                      <span class="dex-version__thumb">
+                        <pb-card-artwork [cardId]="option.cardId" [src]="option.imageUrl" [alt]="option.name" [compact]="true" />
+                      </span>
+                      <span class="dex-version__info">
+                        <strong>{{ rarityShort(option) }}</strong>
+                        <span class="mono">{{ getDisplaySetCode(option.cardId, option.setName) }} {{ option.cardNumber }}</span>
+                        <span class="mono dex-version__price">{{ formatEur(option.marketPrice) }}</span>
+                      </span>
+                      @if (isChoiceSelected(option)) {
+                        <span class="material-symbols-outlined is-filled dex-version__check" aria-hidden="true">check_circle</span>
+                      }
+                    </button>
+                  }
+                </div>
+              </section>
             }
-          </div>
-        } @else {
-          <div class="no-variants-note">
-            <div class="no-variants-note__top">
-              <span class="material-symbols-outlined">info</span>
-              <p>
-                Nog geen kaart van <strong>{{ slot.pokemonName }}</strong> gevonden in je Collectie. Je kunt dit
-                vakje handmatig afvinken of direct een kaart toevoegen.
-              </p>
+
+            <div class="slot-toggle">
+              <div>
+                <strong>In Binder geplaatst</strong>
+                <span>Staat deze kaart fysiek in je National Pokédex map?</span>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                class="pb-switch"
+                aria-label="In Binder geplaatst"
+                [class.is-checked]="slot.inBinder"
+                [attr.aria-checked]="slot.inBinder"
+                (click)="toggleInBinder()"
+              >
+                <span class="pb-switch__thumb"></span>
+              </button>
             </div>
-            <button
-              type="button"
-              class="pb-btn pb-btn--secondary no-variants-note__btn"
-              (click)="addMissingPokemon(slot)"
-            >
-              <span class="material-symbols-outlined">add_circle</span>
-              <span>Zoek {{ slot.pokemonName }} om toe te voegen</span>
-            </button>
-          </div>
-        }
 
-        <!-- Handmatig In Binder toggle -->
-        <div class="slot-toggle">
-          <div>
-            <strong>In Binder geplaatst</strong>
-            <span>Vink aan als deze Pokémon fysiek in je National Pokédex map zit</span>
-          </div>
-          <button
-            type="button"
-            role="switch"
-            class="pb-switch"
-            [class.is-checked]="draftInBinder()"
-            [attr.aria-checked]="draftInBinder()"
-            (click)="draftInBinder.set(!draftInBinder())"
-          >
-            <span class="pb-switch__thumb"></span>
-          </button>
-        </div>
-
-        <!-- Upgrade gewenst toggle -->
-        <div class="slot-toggle slot-toggle--amber">
-          <div>
-            <div class="slot-toggle__amber-head">
-              <span class="material-symbols-outlined">bookmark_add</span>
-              <strong>Markeer als “Upgrade gewenst”</strong>
+            <div class="slot-toggle slot-toggle--amber">
+              <div>
+                <div class="slot-toggle__amber-head">
+                  <span class="material-symbols-outlined">bookmark_add</span>
+                  <strong>★ Upgrade gewenst</strong>
+                </div>
+                <span>Zoek een mooiere Full Art, SIR of betere conditie</span>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                class="pb-switch is-amber"
+                aria-label="Upgrade gewenst"
+                [class.is-checked]="slot.upgradeWanted"
+                [attr.aria-checked]="slot.upgradeWanted"
+                (click)="toggleUpgradeWanted()"
+              >
+                <span class="pb-switch__thumb"></span>
+              </button>
             </div>
-            <span>Zoekt specifiek naar een mooiere Full Art, SIR of betere conditie</span>
-          </div>
-          <button
-            type="button"
-            role="switch"
-            class="pb-switch is-amber"
-            [class.is-checked]="draftUpgradeWanted()"
-            [attr.aria-checked]="draftUpgradeWanted()"
-            (click)="draftUpgradeWanted.set(!draftUpgradeWanted())"
-          >
-            <span class="pb-switch__thumb"></span>
-          </button>
-        </div>
+          } @else {
+            <!-- Ontbrekend / handmatig gemarkeerd vakje -->
+            <div class="no-variants-note">
+              <div class="no-variants-note__top">
+                <span class="material-symbols-outlined">info</span>
+                <p>
+                  Nog geen kaart van <strong>{{ slot.pokemonName }}</strong> gevonden in je Collectie. Voeg direct een
+                  kaart toe, of markeer dit vakje handmatig als aanwezig.
+                </p>
+              </div>
+              <button
+                type="button"
+                class="pb-btn pb-btn--primary no-variants-note__btn"
+                (click)="addMissingPokemon(slot)"
+              >
+                <span class="material-symbols-outlined">add_circle</span>
+                <span>+ Zoek {{ slot.pokemonName }} om toe te voegen</span>
+              </button>
+            </div>
+
+            <div class="slot-toggle">
+              <div>
+                <strong>Handmatig als aanwezig markeren</strong>
+                <span>Bijv. een kaart die je wel hebt maar (nog) niet in de Collectie staat</span>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                class="pb-switch"
+                aria-label="Handmatig als aanwezig markeren"
+                [class.is-checked]="slot.inBinder"
+                [attr.aria-checked]="slot.inBinder"
+                (click)="toggleInBinder()"
+              >
+                <span class="pb-switch__thumb"></span>
+              </button>
+            </div>
+          }
         </div>
 
-        <!-- Actieknoppen -->
+        <!-- Acties -->
         <div class="pb-sheet__footer">
           <div class="dex-sheet-actions">
-            <button type="button" class="pb-btn pb-btn--primary" (click)="confirmSlotSelection()">
-              <span class="material-symbols-outlined">check</span>
-              <span>Bevestig selectie</span>
-            </button>
+            @if (heroCard(); as card) {
+              <button type="button" class="pb-btn pb-btn--secondary" (click)="editInCollection(card)">
+                <span class="material-symbols-outlined">edit</span>
+                <span>Bewerken in Collectie</span>
+              </button>
+            }
             <button type="button" class="pb-btn pb-btn--secondary" (click)="closeSlotSheet()">
               Sluiten
             </button>

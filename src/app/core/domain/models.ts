@@ -183,12 +183,18 @@ export interface CatalogCard {
   highPriceEur?: number;
   trendPercent?: number;
   dexIds?: number[];
+  /** Kaarttaal van deze gegevens/scan (EN weggelaten). */
+  language?: string;
+  /** Originele anderstalige naam (de `name` blijft Engels). */
+  localizedName?: string;
 }
 
 export interface CatalogCardSummary {
   id: string;
   localId: string;
   name: string;
+  /** Originele anderstalige kaartnaam wanneer `name` de Engelse naam is. */
+  localizedName?: string;
   imageBase?: string;
   imageUrl: string;
   setName?: string;
@@ -298,7 +304,7 @@ export interface ToastMessage {
 }
 
 export const DEFAULT_DROPDOWN_SETTINGS: DropdownSettings = {
-  languages: ['EN', 'NL', 'JP', 'DE', 'FR', 'KR'],
+  languages: ['EN', 'NL', 'JP', 'DE', 'FR', 'KR', 'CHS', 'ZHT'],
   types: [
     'Fire',
     'Water',

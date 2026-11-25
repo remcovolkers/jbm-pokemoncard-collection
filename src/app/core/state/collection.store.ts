@@ -1,8 +1,11 @@
+import { mergeLanguageOptions } from '../domain/card-language.utils';
 import { Injectable, computed, effect, inject, signal } from '@angular/core';
 import {
   buildTcgdexAssetUrl,
   extractArtworkUrlFromNotes,
   getDisplaySetCode,
+  normalizeSetDisplayName,
+  repairCorruptedCardNumber,
   inferCardIdFromSetAndNumber,
   resolveCardArtworkUrl,
 } from '../domain/card-id.utils';
@@ -129,6 +132,7 @@ export class CollectionStore {
     return {
       ...DEFAULT_DROPDOWN_SETTINGS,
       ...remote,
+      languages: mergeLanguageOptions(remote?.languages),
       acquisitionMethods:
         remote?.acquisitionMethods && remote.acquisitionMethods.length > 0
           ? remote.acquisitionMethods
@@ -310,6 +314,8 @@ export class CollectionStore {
       ...snap,
       collection: snap.collection.map((c) => ({
         ...c,
+        cardNumber: repairCorruptedCardNumber(c.cardNumber, c.cardId),
+        setName: normalizeSetDisplayName(c.setName),
         imageUrl:
           c.imageUrl ||
           extractArtworkUrlFromNotes(c.notes) ||
@@ -340,6 +346,7 @@ export class CollectionStore {
 
         return {
           ...w,
+          cardNumber: repairCorruptedCardNumber(w.cardNumber, resolvedCardId),
           cardId: resolvedCardId,
           imageUrl: resolvedImageUrl,
         };

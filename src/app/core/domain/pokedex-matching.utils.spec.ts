@@ -70,6 +70,13 @@ describe('pokedex-matching.utils', () => {
       expect(doesCardMatchPokemon('Type: Null', 'Type: Null')).toBe(true);
       expect(doesCardMatchPokemon('Nidoran♀', 'Nidoran♀')).toBe(true);
       expect(doesCardMatchPokemon('Nidoran♂', 'Nidoran♀')).toBe(false);
+      // Kaartspot schrijft een spatie vóór het symbool
+      expect(doesCardMatchPokemon('Nidoran ♀', 'Nidoran♀')).toBe(true);
+      expect(doesCardMatchPokemon('Nidoran ♂', 'Nidoran♂')).toBe(true);
+      expect(doesCardMatchPokemon('Nidoran ♂', 'Nidoran♀')).toBe(false);
+      expect(doesCardMatchPokemon('Nidoran F', 'Nidoran♀')).toBe(true);
+      expect(doesCardMatchPokemon('Nidoran (M)', 'Nidoran♂')).toBe(true);
+      expect(doesCardMatchPokemon('Nidoran (M)', 'Nidoran♀')).toBe(false);
       expect(doesCardMatchPokemon('Flabebe', 'Flabébé')).toBe(true);
       expect(doesCardMatchPokemon('Chien-Pao ex', 'Chien-Pao')).toBe(true);
     });

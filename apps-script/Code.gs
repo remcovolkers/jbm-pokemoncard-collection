@@ -33,7 +33,7 @@ var DEX_COUNT = 1025; // #0001 t/m #1025
 var TCGDEX_BASE_URL = 'https://api.tcgdex.net/v2/en';
 var TCGDEX_GRAPHQL_URL = 'https://api.tcgdex.net/v2/graphql';
 
-var SCRIPT_VERSION = '2.2.0';
+var SCRIPT_VERSION = '2.2.1';
 var SCRIPT_CHANGELOG = 'Kaartspot Binder Sync (server-side ophalen zonder CORS & razendsnelle bulk-import), script-versiecontrole & batch-sync.';
 var POKEBINDER_MANIFEST_URL = 'https://remcovolkers.github.io/jbm-pokemoncard-collection/version.json';
 var POKEBINDER_CODE_URL = 'https://github.com/remcovolkers/jbm-pokemoncard-collection/blob/main/apps-script/Code.gs';
@@ -842,7 +842,7 @@ function readCollection_(ss) {
       cardId: cardId,
       name: cardName,
       setName: String(row[2] || '').trim(),
-      cardNumber: String(row[3] || '').trim(),
+      cardNumber: repairCardNumberCell_(row[3], cardId),
       language: String(row[4] || 'EN').trim(),
       type: String(row[5] || '').trim(),
       rarity: String(row[6] || '').trim(),
@@ -1027,7 +1027,7 @@ function readWishlist_(ss) {
       cardId: cardId || undefined,
       cardName: name,
       setName: String(row[1] || '').trim(),
-      cardNumber: String(row[2] || '').trim(),
+      cardNumber: repairCardNumberCell_(row[2], cardId),
       desiredVariant: String(row[3] || 'Normal').trim(),
       minCondition: String(row[4] || 'Near Mint (NM)').trim(),
       priority: String(row[5] || 'Gemiddeld').trim(),
@@ -1076,7 +1076,7 @@ function readTrades_(ss) {
 
 function readSettings_(ss) {
   var defaults = {
-    languages: ['EN', 'NL', 'JP', 'DE', 'FR', 'KR'],
+    languages: ['EN', 'NL', 'JP', 'DE', 'FR', 'KR', 'CHS', 'ZHT'],
     types: [
       'Fire', 'Water', 'Grass', 'Lightning', 'Psychic', 'Fighting',
       'Darkness', 'Metal', 'Dragon', 'Fairy', 'Colorless', 'Trainer', 'Energy'
@@ -1151,7 +1151,23 @@ function readSettings_(ss) {
     }
   }
 
+  defaults.languages = mergeLanguageOptions_(defaults.languages);
   return defaults;
+}
+
+/** Vult een bestaande Taal-dropdown aan met ontbrekende standaardtalen (CHS, ZHT, ...). */
+function mergeLanguageOptions_(existing) {
+  var wanted = ['EN', 'NL', 'JP', 'DE', 'FR', 'KR', 'CHS', 'ZHT'];
+  var result = [];
+  var seen = {};
+  var all = (existing || []).concat(wanted);
+  for (var i = 0; i < all.length; i++) {
+    var code = String(all[i] || '').trim().toUpperCase();
+    if (!code || seen[code]) continue;
+    seen[code] = true;
+    result.push(code);
+  }
+  return result;
 }
 
 // ============================================================================
@@ -1309,6 +1325,8 @@ function writeCollectionRow_(sheet, rowIndex, data) {
     toNumber_(data.purchasePrice, 0),
     toNumber_(data.marketPrice, 0)
   ];
+  // Kolom D (kaartnummer) als platte tekst zodat "5/11" nooit als datum (5 november) wordt opgeslagen
+  sheet.getRange(rowIndex, 4).setNumberFormat('@');
   // Kolommen A:Q (1..17) en U:V (21..22) — sla R:T (18..20) bewust over!
   sheet.getRange(rowIndex, 1, 1, 17).setValues([rowAQ]);
   sheet.getRange(rowIndex, 21, 1, 2).setValues([[Boolean(data.forTrade), String(data.notes || '').trim()]]);
@@ -1393,6 +1411,8 @@ function handleAddWishlist_(ss, payload) {
   if (!sheet) throw new Error('Tabblad "' + SHEET_NAMES.WISHLIST + '" niet gevonden.');
 
   var targetRow = findFirstEmptyRow_(sheet, 2, [1]);
+  // Kolom C (kaartnummer) als platte tekst zodat "5/11" nooit als datum wordt opgeslagen
+  sheet.getRange(targetRow, 3).setNumberFormat('@');
   // Kolommen A:H (1..8) en K:L (11..12) — sla I:J (formules) bewust over!
   sheet.getRange(targetRow, 1, 1, 8).setValues([[
     String(payload.cardName || '').trim(),
@@ -1464,11 +1484,12 @@ function handleUpdateWishlist_(ss, payload) {
   var curAH = sheet.getRange(rowIndex, 1, 1, 8).getValues()[0];
   var curKL = sheet.getRange(rowIndex, 11, 1, 2).getValues()[0];
 
+  sheet.getRange(rowIndex, 3).setNumberFormat('@');
   // Kolommen A:H (1..8) en K:L (11..12) — sla I:J (formules) bewust over!
   sheet.getRange(rowIndex, 1, 1, 8).setValues([[
     payload.cardName !== undefined ? String(payload.cardName || '').trim() : String(curAH[0] || ''),
     payload.setName !== undefined ? String(payload.setName || '').trim() : String(curAH[1] || ''),
-    payload.cardNumber !== undefined ? String(payload.cardNumber || '').trim() : String(curAH[2] || ''),
+    payload.cardNumber !== undefined ? String(payload.cardNumber || '').trim() : repairCardNumberCell_(curAH[2], payload.cardId),
     payload.desiredVariant !== undefined ? String(payload.desiredVariant || 'Normal').trim() : String(curAH[3] || 'Normal'),
     payload.minCondition !== undefined ? String(payload.minCondition || 'Near Mint (NM)').trim() : String(curAH[4] || 'Near Mint (NM)'),
     payload.priority !== undefined ? String(payload.priority || 'Gemiddeld').trim() : String(curAH[5] || 'Gemiddeld'),
@@ -2281,7 +2302,10 @@ function buildPokemonNameRegex_(pokemonName) {
 
 function doesCardMatchPokemon_(cardName, pokemonName) {
   if (!cardName || !pokemonName) return false;
-  var cleanCard = String(cardName).trim();
+  var cleanCard = String(cardName)
+    .trim()
+    .replace(/Nidoran\s*\(?\s*F\s*\)?(?=$|[\s,.!?&\/])/gi, 'Nidoran♀')
+    .replace(/Nidoran\s*\(?\s*M\s*\)?(?=$|[\s,.!?&\/])/gi, 'Nidoran♂');
   var cleanPoke = String(pokemonName).trim();
   var regex = buildPokemonNameRegex_(cleanPoke);
   if (!regex.test(cleanCard)) return false;
@@ -2329,7 +2353,7 @@ function fetchAndPopulateRow_(ss, sheet, row, rawInput, priceOnly) {
   sheet.getRange(row, 1).setValue(card.id || normalized);
   sheet.getRange(row, 2).setValue(card.name || '');
   sheet.getRange(row, 3).setValue(setName);
-  sheet.getRange(row, 4).setValue(cardNum);
+  sheet.getRange(row, 4).setNumberFormat('@').setValue(cardNum);
   sheet.getRange(row, 6).setValue(cardType);
   if (rarity) sheet.getRange(row, 7).setValue(rarity);
 
@@ -2597,6 +2621,28 @@ function mapTcgdexRarity_(rarity) {
   if (r.indexOf('common') !== -1 || r === 'one diamond') return 'Common';
   if (r.indexOf('rare') !== -1 || r === 'three diamond') return 'Rare';
   return raw;
+}
+
+/**
+ * Herstelt een kaartnummer dat Google Sheets ooit als datum opsloeg ("5/11" -> 5 november).
+ * Ontvangt een Date-object of een datum-string en leidt het echte nummer af uit dag/maand + Kaart-ID.
+ */
+function repairCardNumberCell_(value, cardId) {
+  var isDate = Object.prototype.toString.call(value) === '[object Date]';
+  var text = isDate ? '' : String(value === null || value === undefined ? '' : value).trim();
+  if (!isDate && !/(GMT|UTC|Standard Time|Daylight Time)/i.test(text)) return text;
+
+  var date = isDate ? value : new Date(text);
+  var parts = String(cardId || '').trim().split('-');
+  var localFromId = String(parts[parts.length - 1] || '').replace(/^0+(?=\d)/, '');
+  if (isNaN(date.getTime())) return /^\d+$/.test(localFromId) ? localFromId : '';
+
+  var day = date.getDate();
+  var month = date.getMonth() + 1;
+  if (localFromId && String(month) === localFromId && String(day) !== localFromId) {
+    return month + '/' + day;
+  }
+  return day + '/' + month;
 }
 
 function formatCardNumber_(localId, officialCount) {

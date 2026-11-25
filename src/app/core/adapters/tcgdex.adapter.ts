@@ -2,12 +2,16 @@ import { Injectable, inject } from '@angular/core';
 import {
   buildTcgdexAssetUrl,
   getDisplaySetCode,
+  normalizeSetDisplayName,
   hasKnownSetCode,
   parseCardIdInput,
   registerDynamicSetCodes,
   resolveCardArtworkUrl,
 } from '../domain/card-id.utils';
+import { getTcgdexLanguagePath, normalizeLanguageCode } from '../domain/card-language.utils';
 import { roundCurrency, roundOneDecimal } from '../domain/card-math.utils';
+import { NATIONAL_DEX_NAMES } from '../domain/national-dex.data';
+import { doesCardMatchPokemon } from '../domain/pokedex-matching.utils';
 import {
   CatalogCard,
   CatalogCardSummary,
@@ -85,6 +89,16 @@ interface TcgdexBriefResponse {
 }
 
 const TCGDEX_API_BASE = 'https://api.tcgdex.net/v2/en';
+const TCGDEX_API_ROOT = 'https://api.tcgdex.net/v2';
+
+/** Westerse talen delen set-/kaart-ID's met Engels (zelfde `base1-4`, andere scan). */
+const WESTERN_TCGDEX_LANGS = new Set(['fr', 'de', 'nl', 'es', 'it', 'pt']);
+const TCG_NAME_SUFFIX_RE = /\s?(ex|EX|GX|VMAX|VSTAR|V-UNION|V|BREAK|δ|☆)$/;
+
+function apiBaseFor(language: string): string {
+  const path = getTcgdexLanguagePath(language);
+  return path === 'en' ? TCGDEX_API_BASE : `${TCGDEX_API_ROOT}/${path}`;
+}
 
 const RARITY_NORMALIZATION: Record<string, string> = {
   common: 'Common',
@@ -124,6 +138,7 @@ export class TcgdexAdapter implements CardCatalogPort {
   private readonly memoryCards = new Map<string, CatalogCard>();
   private readonly memorySetDetails = new Map<string, CatalogSetDetail>();
   private memoryAllSets: CatalogSetSummary[] | null = null;
+  private readonly languageSetIds = new Map<string, Set<string>>();
   private staticCatalogAttempted = false;
   private readonly artworkMap: Record<string, string>;
   private readonly cardmarketIdMap: Record<string, number>;
@@ -133,7 +148,7 @@ export class TcgdexAdapter implements CardCatalogPort {
     this.cardmarketIdMap = this.cache.loadCardmarketIdCache();
   }
 
-  async lookupByCardId(rawInput: string): Promise<CatalogCard | null> {
+  async lookupByCardId(rawInput: string, language = 'EN'): Promise<CatalogCard | null> {
     let parsed = parseCardIdInput(rawInput);
     if (!parsed) return null;
 
@@ -145,15 +160,22 @@ export class TcgdexAdapter implements CardCatalogPort {
     }
 
     for (const candidateId of parsed.candidateIds) {
-      const card = await this.getCardByExactId(candidateId);
+      const card = await this.getCardByExactId(candidateId, language);
       if (card) return card;
     }
     return null;
   }
 
-  async getCardByExactId(cardId: string): Promise<CatalogCard | null> {
+  async getCardByExactId(cardId: string, language = 'EN'): Promise<CatalogCard | null> {
     const cleanId = cardId.trim();
     if (!cleanId) return null;
+
+    const lang = normalizeLanguageCode(language);
+    if (getTcgdexLanguagePath(lang) !== 'en') {
+      const localized = await this.getLocalizedCardByExactId(cleanId, lang);
+      if (localized) return localized;
+      // Fallback: kaart bestaat niet in deze taal -> Engelse gegevens
+    }
 
     const cached = this.memoryCards.get(cleanId.toLowerCase());
     if (cached) return cached;
@@ -183,9 +205,141 @@ export class TcgdexAdapter implements CardCatalogPort {
     }
   }
 
-  async searchByName(query: string, limit = 18): Promise<CatalogCardSummary[]> {
+  /**
+   * Haalt een kaart op in de gekozen taal (echte anderstalige scan, eigen set-naam).
+   * Kaartnaam blijft Engels: bij westerse talen via de Engelse kaart, bij Aziatische talen via dexId.
+   */
+  private async getLocalizedCardByExactId(cardId: string, lang: string): Promise<CatalogCard | null> {
+    const memKey = `${lang}:${cardId.toLowerCase()}`;
+    const cached = this.memoryCards.get(memKey);
+    if (cached) return cached;
+
+    try {
+      const response = await fetch(`${apiBaseFor(lang)}/cards/${encodeURIComponent(cardId)}`);
+      if (!response.ok) return null;
+      const raw = (await response.json()) as TcgdexCardResponse;
+      if (!raw || !raw.id) return null;
+
+      const mapped = this.mapFullCard(raw);
+      let englishName: string | undefined;
+      if (WESTERN_TCGDEX_LANGS.has(getTcgdexLanguagePath(lang))) {
+        const en = await this.getCardByExactId(raw.id, 'EN');
+        englishName = en?.name;
+        if (en && !mapped.marketPriceEur) {
+          mapped.marketPriceEur = en.marketPriceEur;
+          mapped.lowPriceEur = en.lowPriceEur;
+          mapped.highPriceEur = en.highPriceEur;
+          mapped.trendPercent = en.trendPercent;
+        }
+        mapped.cardmarketProductId = mapped.cardmarketProductId ?? en?.cardmarketProductId;
+      } else {
+        englishName = this.englishNameFromDex(raw.name, raw.dexId);
+      }
+
+      const result: CatalogCard = {
+        ...mapped,
+        name: englishName || mapped.name,
+        localizedName: englishName && englishName !== raw.name ? raw.name : undefined,
+        language: lang,
+      };
+      this.memoryCards.set(memKey, result);
+      return result;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Leidt de Engelse Pokémon-naam af uit dexId + TCG-suffix (ex/GX/V…) van een Aziatische kaartnaam. */
+  private englishNameFromDex(localName: string, dexIds?: number[]): string | undefined {
+    const names = (dexIds ?? [])
+      .map((n) => NATIONAL_DEX_NAMES[n - 1])
+      .filter((n): n is string => Boolean(n));
+    if (names.length === 0) return undefined;
+    const suffix = localName.match(TCG_NAME_SUFFIX_RE);
+    const base = names.join(' & ');
+    return suffix ? `${base} ${suffix[1]}` : base;
+  }
+
+  private async fetchLanguageSetIds(lang: string): Promise<Set<string> | null> {
+    const cached = this.languageSetIds.get(lang);
+    if (cached) return cached;
+    try {
+      const response = await fetch(`${apiBaseFor(lang)}/sets`);
+      if (!response.ok) return null;
+      const raw = (await response.json()) as Array<{ id?: string }>;
+      if (!Array.isArray(raw)) return null;
+      const ids = new Set(raw.map((x) => (x.id ?? '').toLowerCase()).filter(Boolean));
+      this.languageSetIds.set(lang, ids);
+      return ids;
+    } catch {
+      return null;
+    }
+  }
+
+  private async searchLocalizedByName(
+    clean: string,
+    limit: number,
+    lang: string
+  ): Promise<CatalogCardSummary[]> {
+    const langPath = getTcgdexLanguagePath(lang);
+
+    if (WESTERN_TCGDEX_LANGS.has(langPath)) {
+      // Zoek op Engelse naam en toon alleen kaarten uit sets die er in deze taal bestaan, met anderstalige scan
+      const english = await this.searchByName(clean, 60, 'EN');
+      const setIds = await this.fetchLanguageSetIds(lang);
+      const filtered = setIds
+        ? english.filter((item) => setIds.has(item.id.slice(0, item.id.lastIndexOf('-')).toLowerCase()))
+        : english;
+      return filtered.slice(0, limit).map((item) => {
+        const imageBase = item.imageBase?.replace('/en/', `/${langPath}/`);
+        return {
+          ...item,
+          imageBase,
+          imageUrl: imageBase ? `${imageBase}/low.webp` : item.imageUrl,
+        };
+      });
+    }
+
+    // Aziatische talen: koppel via Pokédex-nummer (Engelse naam) of zoek direct op de lokale naam
+    const dexIndex = NATIONAL_DEX_NAMES.findIndex((n) => doesCardMatchPokemon(clean, n));
+    const url =
+      dexIndex >= 0
+        ? `${apiBaseFor(lang)}/cards?dexId=eq:${dexIndex + 1}`
+        : `${apiBaseFor(lang)}/cards?name=${encodeURIComponent(clean)}`;
+    try {
+      const response = await fetch(url);
+      if (!response.ok) return [];
+      const items = (await response.json()) as TcgdexBriefResponse[];
+      if (!Array.isArray(items)) return [];
+      const withArt = items.filter((item) => Boolean(item.image));
+      const withoutArt = items.filter((item) => !item.image);
+      return [...withArt.reverse(), ...withoutArt].slice(0, limit).map((item) => {
+        const englishBase = dexIndex >= 0 ? NATIONAL_DEX_NAMES[dexIndex] : undefined;
+        const suffix = item.name.match(TCG_NAME_SUFFIX_RE);
+        return {
+          id: item.id,
+          localId: item.localId,
+          name: englishBase ? `${englishBase}${suffix ? ` ${suffix[1]}` : ''}` : item.name,
+          localizedName: englishBase ? item.name : undefined,
+          imageBase: item.image,
+          imageUrl: item.image ? `${item.image}/low.webp` : '',
+        };
+      });
+    } catch {
+      return [];
+    }
+  }
+
+  async searchByName(query: string, limit = 18, language = 'EN'): Promise<CatalogCardSummary[]> {
     const clean = query.trim();
     if (clean.length < 2) return [];
+
+    const lang = normalizeLanguageCode(language);
+    if (getTcgdexLanguagePath(lang) !== 'en') {
+      const localized = await this.searchLocalizedByName(clean, limit, lang);
+      if (localized.length > 0) return localized;
+      // Niets gevonden in deze taal: toon Engelse resultaten i.p.v. een lege lijst
+    }
 
     try {
       const url = `${TCGDEX_API_BASE}/cards?name=${encodeURIComponent(clean)}`;
@@ -274,7 +428,7 @@ export class TcgdexAdapter implements CardCatalogPort {
             s.tcgOnline ||
             getDisplaySetCode(s.id, s.name)
           ).toUpperCase(),
-          name: s.name,
+          name: normalizeSetDisplayName(s.name),
           series: s.serie?.name,
           seriesId: s.serie?.id,
           logoUrl: s.logo ? `${s.logo}.webp` : undefined,
@@ -304,6 +458,7 @@ export class TcgdexAdapter implements CardCatalogPort {
         .filter((s) => Boolean(s?.id && s?.name) && s.seriesId !== 'tcgp')
         .map((s) => ({
           ...s,
+          name: normalizeSetDisplayName(s.name),
           code: (s.code || getDisplaySetCode(s.id, s.name)).toUpperCase(),
         }));
 
@@ -357,7 +512,7 @@ export class TcgdexAdapter implements CardCatalogPort {
       const detail: CatalogSetDetail = {
         id: raw.id,
         code: resolvedCode,
-        name: raw.name,
+        name: normalizeSetDisplayName(raw.name),
         series: raw.serie?.name ?? '',
         seriesId: raw.serie?.id ?? '',
         seriesName: raw.serie?.name ?? '',
@@ -436,7 +591,7 @@ export class TcgdexAdapter implements CardCatalogPort {
       localId: raw.localId,
       name: raw.name,
       setId: raw.set?.id ?? raw.id.split('-')[0] ?? '',
-      setName: raw.set?.name ?? '',
+      setName: normalizeSetDisplayName(raw.set?.name),
       seriesName: raw.set?.serie?.name ?? '',
       officialCardCount: official,
       totalCardCount: total,

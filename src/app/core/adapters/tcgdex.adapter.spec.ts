@@ -240,4 +240,68 @@ describe('TcgdexAdapter', () => {
     const trainerKit = await adapter.getSetCards('tk-ex-latia');
     expect(trainerKit?.cards[0].imageUrl).toBe('https://images.pokemontcg.io/tk1a/4.png');
   });
+
+  it('haalt een Franse kaart op met Engelse naam, Franse scan en Franse set-naam', async () => {
+    fetchSpy.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes('/v2/fr/cards/base1-4')) {
+        return jsonResponse({
+          id: 'base1-4',
+          localId: '4',
+          name: 'Dracaufeu',
+          image: 'https://assets.tcgdex.net/fr/base/base1/4',
+          rarity: 'Rare',
+          dexId: [6],
+          set: { id: 'base1', name: 'Set de Base', cardCount: { official: 102, total: 102 } },
+          pricing: { cardmarket: { idProduct: 273699, trend: 120 } },
+        });
+      }
+      if (url.includes('/v2/en/cards/base1-4')) {
+        return jsonResponse({
+          id: 'base1-4',
+          localId: '4',
+          name: 'Charizard',
+          image: 'https://assets.tcgdex.net/en/base/base1/4',
+          set: { id: 'base1', name: 'Base Set', cardCount: { official: 102, total: 102 } },
+        });
+      }
+      return new Response('Not found', { status: 404 });
+    });
+
+    const card = await adapter.getCardByExactId('base1-4', 'FR');
+    expect(card?.name).toBe('Charizard');
+    expect(card?.localizedName).toBe('Dracaufeu');
+    expect(card?.setName).toBe('Set de Base');
+    expect(card?.language).toBe('FR');
+    expect(card?.imageUrl).toBe('https://assets.tcgdex.net/fr/base/base1/4/high.webp');
+    expect(card?.cardmarketProductId).toBe(273699);
+  });
+
+  it('valt terug op de Engelse kaart wanneer een kaart niet in de gekozen taal bestaat', async () => {
+    fetchSpy.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes('/v2/nl/')) return new Response('Not found', { status: 404 });
+      return jsonResponse({
+        id: 'sv03.5-3',
+        localId: '3',
+        name: 'Venusaur ex',
+        image: 'https://assets.tcgdex.net/en/sv/sv03.5/003',
+        set: { id: 'sv03.5', name: '151', cardCount: { official: 165, total: 207 } },
+      });
+    });
+    const card = await adapter.getCardByExactId('sv03.5-3', 'NL');
+    expect(card?.name).toBe('Venusaur ex');
+    expect(card?.imageUrl).toContain('/en/');
+  });
+
+  it('zoekt Simplified Chinese kaarten via Pokédex-nummer en toont de Engelse Pokémon-naam', async () => {
+    fetchSpy.mockResolvedValueOnce(
+      jsonResponse([{ id: 'CSMPiC-002', localId: '002', name: '喷火龙GX', image: 'https://assets.tcgdex.net/zh-cn/CSM/CSMPiC/002' }])
+    );
+    const results = await adapter.searchByName('Charizard', 10, 'CHS');
+    expect(String(fetchSpy.mock.calls[0][0])).toBe('https://api.tcgdex.net/v2/zh-cn/cards?dexId=eq:6');
+    expect(results[0].name).toBe('Charizard GX');
+    expect(results[0].localizedName).toBe('喷火龙GX');
+    expect(results[0].imageUrl).toBe('https://assets.tcgdex.net/zh-cn/CSM/CSMPiC/002/low.webp');
+  });
 });

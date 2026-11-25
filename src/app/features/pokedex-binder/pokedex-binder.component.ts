@@ -1,11 +1,14 @@
 import { ChangeDetectionStrategy, Component, HostListener, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { getDisplaySetCode } from '../../core/domain/card-id.utils';
+import { getDisplaySetCode, resolveCardmarketUrl } from '../../core/domain/card-id.utils';
+import { normalizeLanguageCode } from '../../core/domain/card-language.utils';
 import {
   calculateBinderPosition,
+  calculateCardMetrics,
   formatDexNumber,
   formatEur,
+  formatPercent,
 } from '../../core/domain/card-math.utils';
 import {
   ShowcaseCardViewModel,
@@ -21,6 +24,7 @@ import {
 import { HapticsService } from '../../core/platform/haptics.service';
 import { isEditableEventTarget } from '../../core/platform/keyboard.utils';
 import { ModalScrollLockService } from '../../core/platform/modal-scroll-lock.service';
+import { CARD_CATALOG_PORT } from '../../core/ports/card-catalog.port';
 import { CollectionStore } from '../../core/state/collection.store';
 import { CardArtworkComponent } from '../../shared/card-artwork/card-artwork.component';
 import { CardShowcaseComponent } from '../../shared/card-showcase/card-showcase.component';
@@ -48,10 +52,13 @@ export class PokedexBinderComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly scrollLock = inject(ModalScrollLockService);
   private readonly haptics = inject(HapticsService);
+  private readonly catalog = inject(CARD_CATALOG_PORT, { optional: true });
 
   readonly generations = GENERATIONS;
   readonly formatDexNumber = formatDexNumber;
   readonly formatEur = formatEur;
+  readonly formatPercent = formatPercent;
+  readonly normalizeLanguageCode = normalizeLanguageCode;
   readonly getDisplaySetCode = getDisplaySetCode;
 
   readonly selectedGen = signal<number>(1); // 0 = Alle, 1..9 = specifieke Gen
@@ -62,11 +69,16 @@ export class PokedexBinderComponent implements OnInit {
   readonly checklistLimit = signal<number>(60);
 
   // Bottom Sheet state voor slot-bewerking & variant-kiezer
-  readonly activeSlot = signal<PokedexSlot | null>(null);
+  readonly activeDexNumber = signal<number | null>(null);
+  /** Het actieve vakje volgt live de store, zodat schakelaars direct zichtbaar zijn zonder "Bevestig selectie". */
+  readonly activeSlot = computed<PokedexSlot | null>(() => {
+    const dex = this.activeDexNumber();
+    if (dex === null) return null;
+    return this.store.pokedex().find((s) => s.dexNumber === dex) ?? null;
+  });
   readonly isSheetOpen = computed(() => this.activeSlot() !== null);
-  readonly draftSelectedCard = signal<string>('');
-  readonly draftInBinder = signal<boolean>(false);
-  readonly draftUpgradeWanted = signal<boolean>(false);
+  /** Gevulde vakjes (op volgorde van de huidige lijst) waartussen je kunt bladeren met Vorige/Volgende of swipen. */
+  private readonly navDexNumbers = signal<number[]>([]);
   readonly showcaseCardKey = signal<string | null>(null);
 
   constructor() {
@@ -304,22 +316,110 @@ export class PokedexBinderComponent implements OnInit {
   }
 
   openSlotSheet(slot: PokedexSlot): void {
-    this.activeSlot.set(slot);
-    this.draftInBinder.set(slot.inBinder);
-    this.draftUpgradeWanted.set(slot.upgradeWanted);
-    const matches = this.store.getCardsForPokemon(slot.pokemonName);
-    if (slot.selectedCard) {
-      this.draftSelectedCard.set(slot.selectedCard);
-    } else if (matches.length > 0) {
-      this.draftSelectedCard.set(formatBinderChoice(matches[0]));
-    } else {
-      this.draftSelectedCard.set('');
-    }
+    this.activeDexNumber.set(slot.dexNumber);
+    const filled = this.filteredSlots()
+      .filter((s) => this.slotIsFilled(s))
+      .map((s) => s.dexNumber);
+    // Zorg dat het geopende vakje altijd in de bladerlijst zit
+    const includeActive = this.slotIsFilled(slot) && !filled.includes(slot.dexNumber);
+    this.navDexNumbers.set(includeActive ? [...filled, slot.dexNumber] : filled);
   }
 
   closeSlotSheet(): void {
     this.showcaseCardKey.set(null);
-    this.activeSlot.set(null);
+    this.activeDexNumber.set(null);
+  }
+
+  private slotIsFilled(slot: PokedexSlot): boolean {
+    return slot.inBinder || slot.inCollectionCount > 0;
+  }
+
+  /** De kaart die in de Hero-kaartview getoond wordt: gekozen versie, anders de eerste passende kaart. */
+  readonly heroCard = computed<CollectionCard | null>(() => {
+    const slot = this.activeSlot();
+    if (!slot) return null;
+    const matches = this.activeSlotMatchingCards();
+    if (slot.selectedCard) {
+      const exact = matches.find((c) => formatBinderChoice(c) === slot.selectedCard);
+      if (exact) return exact;
+      const chosenId = extractCardIdFromChoice(slot.selectedCard).toLowerCase();
+      const byId = matches.find((c) => c.cardId.toLowerCase() === chosenId) ?? this.cardByIdMap().get(chosenId);
+      if (byId) return byId;
+    }
+    return matches[0] ?? null;
+  });
+
+  readonly heroMetrics = computed(() => {
+    const card = this.heroCard();
+    return card ? calculateCardMetrics(card) : null;
+  });
+
+  readonly heroCardmarketUrl = computed(() => {
+    const card = this.heroCard();
+    if (!card) return '';
+    return resolveCardmarketUrl({
+      name: card.name,
+      setName: card.setName,
+      cardNumber: card.cardNumber,
+      cardmarketProductId: this.catalog?.getCachedCardmarketProductId?.(card.cardId),
+      notes: card.notes,
+      language: card.language,
+    });
+  });
+
+  readonly navIndex = computed(() => {
+    const dex = this.activeDexNumber();
+    return dex === null ? -1 : this.navDexNumbers().indexOf(dex);
+  });
+
+  readonly navTotal = computed(() => this.navDexNumbers().length);
+
+  readonly prevNavDex = computed<number | null>(() => {
+    const idx = this.navIndex();
+    return idx > 0 ? (this.navDexNumbers()[idx - 1] ?? null) : null;
+  });
+
+  readonly nextNavDex = computed<number | null>(() => {
+    const idx = this.navIndex();
+    const list = this.navDexNumbers();
+    return idx >= 0 && idx < list.length - 1 ? (list[idx + 1] ?? null) : null;
+  });
+
+  goToSlot(dexNumber: number | null): void {
+    if (dexNumber === null) return;
+    if (!this.store.pokedex().some((s) => s.dexNumber === dexNumber)) return;
+    void this.haptics.light();
+    this.showcaseCardKey.set(null);
+    this.activeDexNumber.set(dexNumber);
+  }
+
+  /** Slaat "Upgrade gewenst" direct op bij aantikken (geen aparte bevestigknop). */
+  async toggleUpgradeWanted(): Promise<void> {
+    const slot = this.activeSlot();
+    if (!slot) return;
+    void this.haptics.light();
+    await this.store.updatePokedexSlot({ dexNumber: slot.dexNumber, upgradeWanted: !slot.upgradeWanted });
+  }
+
+  /** Markeert het vakje direct als wel/niet in de fysieke binder geplaatst. */
+  async toggleInBinder(): Promise<void> {
+    const slot = this.activeSlot();
+    if (!slot) return;
+    void this.haptics.light();
+    const next = !slot.inBinder;
+    const hero = this.heroCard();
+    await this.store.updatePokedexSlot({
+      dexNumber: slot.dexNumber,
+      inBinder: next,
+      ...(next && !slot.selectedCard && hero ? { selectedCard: formatBinderChoice(hero) } : {}),
+    });
+  }
+
+  /** Bewerken (aantal, conditie, verwijderen…) gebeurt op het Kaartdetail in de Collectie. */
+  editInCollection(card: CollectionCard): void {
+    void this.haptics.light();
+    this.closeSlotSheet();
+    void this.router.navigate(['/collectie/kaart', card.rowIndex, card.cardId]);
   }
 
   readonly showcaseSlotCards = computed(() =>
@@ -387,7 +487,17 @@ export class PokedexBinderComponent implements OnInit {
 
   @HostListener('document:keydown', ['$event'])
   onKeydown(event: KeyboardEvent): void {
-    if (this.activeShowcaseCard() || this.activeSlot() || isEditableEventTarget(event.target)) return;
+    if (this.activeShowcaseCard() || isEditableEventTarget(event.target)) return;
+    if (this.activeSlot()) {
+      if (event.key === 'ArrowLeft' && this.prevNavDex() !== null) {
+        event.preventDefault();
+        this.goToSlot(this.prevNavDex());
+      } else if (event.key === 'ArrowRight' && this.nextNavDex() !== null) {
+        event.preventDefault();
+        this.goToSlot(this.nextNavDex());
+      }
+      return;
+    }
     if (event.key === '/' && !event.ctrlKey && !event.metaKey && !event.altKey) {
       event.preventDefault();
       const input = document.getElementById('dex-search-input') as HTMLInputElement | null;
@@ -413,49 +523,23 @@ export class PokedexBinderComponent implements OnInit {
     void this.router.navigateByUrl('/toevoegen');
   }
 
+  /** Wisselt direct naar een andere versie van deze Pokémon (1 tik, zonder bevestigen). */
   async chooseVariant(card: CollectionCard): Promise<void> {
     const slot = this.activeSlot();
     if (!slot) return;
+    if (this.isChoiceSelected(card) && slot.inBinder) return;
 
-    const alreadySelected =
-      this.isChoiceSelected(card) &&
-      slot.inBinder &&
-      this.draftUpgradeWanted() === slot.upgradeWanted;
-    if (alreadySelected) {
-      this.closeSlotSheet();
-      return;
-    }
-
-    this.draftSelectedCard.set(formatBinderChoice(card));
-    this.draftInBinder.set(true);
-    await this.confirmSlotSelection();
+    void this.haptics.light();
+    await this.store.updatePokedexSlot({
+      dexNumber: slot.dexNumber,
+      inBinder: true,
+      selectedCard: formatBinderChoice(card),
+    });
   }
 
   isChoiceSelected(card: CollectionCard): boolean {
-    const choice = formatBinderChoice(card);
-    if (this.draftSelectedCard() === choice) return true;
-    const chosenId = extractCardIdFromChoice(this.draftSelectedCard()).toLowerCase();
-    return Boolean(chosenId) && chosenId === card.cardId.toLowerCase();
-  }
-
-  async confirmSlotSelection(): Promise<void> {
-    const slot = this.activeSlot();
-    if (!slot) return;
-
-    const payload = {
-      dexNumber: slot.dexNumber,
-      inBinder: this.draftInBinder(),
-      selectedCard: this.draftSelectedCard(),
-      upgradeWanted: this.draftUpgradeWanted(),
-    };
-
-    void this.haptics.success();
-    this.closeSlotSheet();
-    this.store.showToast(
-      `${formatDexNumber(slot.dexNumber)} ${slot.pokemonName} bijgewerkt in Pokédex Binder.`,
-      'success'
-    );
-    await this.store.updatePokedexSlot(payload);
+    const hero = this.heroCard();
+    return Boolean(hero) && hero!.rowIndex === card.rowIndex && hero!.cardId === card.cardId;
   }
 
   async quickPlaceReadySlot(slot: PokedexSlot): Promise<void> {

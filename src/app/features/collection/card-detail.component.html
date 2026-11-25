@@ -60,6 +60,9 @@
             @if (draft.rarity) {
               <span class="mono hero-card__rarity">• {{ draft.rarity }}</span>
             }
+            @if (normalizeLanguageCode(draft.language) !== 'EN') {
+              <span class="pb-pill pb-pill--secondary mono">{{ normalizeLanguageCode(draft.language) }}</span>
+            }
             @if (draft.acquisitionMethod) {
               <span class="pb-pill pb-pill--neutral">{{ draft.acquisitionMethod }}</span>
             }
@@ -243,6 +246,20 @@
                 </button>
               }
             </div>
+          </div>
+
+          <div class="pb-field">
+            <label class="pb-label" for="edit-language">Kaarttaal (bepaalt de Cardmarket-link)</label>
+            <select
+              id="edit-language"
+              class="pb-select"
+              [ngModel]="normalizeLanguageCode(draft.language)"
+              (ngModelChange)="patchDraft({ language: $event })"
+            >
+              @for (lang of store.settings().languages; track lang) {
+                <option [value]="lang">{{ getLanguageLabel(lang) }}</option>
+              }
+            </select>
           </div>
 
           <div class="pb-field">
