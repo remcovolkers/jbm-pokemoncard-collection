@@ -324,11 +324,11 @@ describe('apps-script/Code.gs Backend API & Formule-integriteit', () => {
     const ping = JSON.parse(sandbox.doGet({ parameter: { action: 'ping', token: 'test-secret-token' } }).getContent());
     assert.equal(ping.ok, true);
     assert.equal(ping.spreadsheetName, 'Pokémon Kaartencollectie Tracker');
-    assert.equal(ping.scriptVersion, '2.2.4');
+    assert.equal(ping.scriptVersion, '2.2.5');
 
     const boot = JSON.parse(sandbox.doGet({ parameter: { action: 'bootstrap', token: 'test-secret-token' } }).getContent());
     assert.equal(boot.ok, true);
-    assert.equal(boot.data.scriptVersion, '2.2.4');
+    assert.equal(boot.data.scriptVersion, '2.2.5');
     assert.equal(boot.data.binderSlotsPerPage, 9);
     assert.equal(boot.data.pokedex.length, 4);
   });
@@ -368,11 +368,11 @@ describe('apps-script/Code.gs Backend API & Formule-integriteit', () => {
 
     sandbox.checkScriptUpdateFromMenu();
     assert.equal(alerts.length, 1);
-    assert.match(alerts[0], /v2\.2\.4/);
+    assert.match(alerts[0], /v2\.2\.5/);
     assert.match(alerts[0], /v2\.3\.0/);
     assert.match(alerts[0], /Implementaties beheren/);
 
-    manifestResponse = { latestScriptVersion: '2.2.4' };
+    manifestResponse = { latestScriptVersion: '2.2.5' };
     sandbox.checkScriptUpdateFromMenu();
     assert.equal(alerts.length, 2);
     assert.match(alerts[1], /nieuwste PokéBinder Apps Script versie/);
@@ -544,6 +544,74 @@ describe('apps-script/Code.gs Backend API & Formule-integriteit', () => {
     assert.match(notes, /Gastly-V2-TEF177/);
     assert.doesNotMatch(notes, /idProduct/);
     assert.match(notes, /^Kaartspot sync /);
+  });
+
+  it('toPtcgCardId_ zet TCGdex-ID\'s om naar Pokémon TCG API-ID\'s en slaat niet-ondersteunde sets over', () => {
+    const { sandbox } = createGasEnvironment();
+    assert.equal(sandbox.toPtcgCardId_('sv05-177'), 'sv5-177');
+    assert.equal(sandbox.toPtcgCardId_('sv03.5-199'), 'sv3pt5-199');
+    assert.equal(sandbox.toPtcgCardId_('swsh7-215'), 'swsh7-215');
+    assert.equal(sandbox.toPtcgCardId_('base1-004'), 'base1-4');
+    assert.equal(sandbox.toPtcgCardId_('me02-011'), '');
+    assert.equal(sandbox.toPtcgCardId_('zht-final-flame-dance-38'), '');
+    assert.equal(sandbox.toPtcgCardId_('https://x.test/y'), '');
+  });
+
+  it('menuknop Cardmarket-links aanvullen zoekt alle kaarten op, slaat Aziatische/bestaande over en meldt het resultaat', () => {
+    const alerts = [];
+    const store = {};
+    const fetched = [];
+    const { sandbox, sheets } = createGasEnvironment({
+      tcgdexMock: (url) => {
+        const id = decodeURIComponent(url.split('/cardmarket/')[1]);
+        fetched.push(id);
+        if (id === 'sv5-177') {
+          return {
+            getResponseCode: () => 302,
+            getHeaders: () => ({ Location: 'https://cardmarket.com/en/Pokemon/Products/Singles/Temporal-Forces/Gastly-V2-TEF177?utm=x' }),
+            getContentText: () => '',
+          };
+        }
+        return { getResponseCode: () => 404, getHeaders: () => ({}), getContentText: () => '' };
+      },
+    });
+    sandbox.SpreadsheetApp.getUi = () => ({ alert: (msg) => alerts.push(msg) });
+    sandbox.PropertiesService.getDocumentProperties = () => ({
+      getProperty: (k) => store[k] ?? null,
+      setProperty: (k, v) => { store[k] = v; },
+    });
+
+    const row = (cardId, lang, notes) => [
+      cardId, 'Naam', 'Set', '1/100', lang, 'Fire', 'Rare', 'Normal', 'Near Mint (NM)', 'Raw', '', 1,
+      'Hoofdbinder', '', '2026-11-25', 0, 1, '=F', '=F', '=F', false, notes,
+    ];
+    sheets.Collectie._grid.push(row('sv05-177', 'EN', 'Kaartspot sync'));
+    sheets.Collectie._grid.push(row('sv05-177', 'EN', '')); // tweede exemplaar: ook bijgewerkt, maar maar 1x opgezocht
+    sheets.Collectie._grid.push(row('sv02-001', 'EN', 'https://www.cardmarket.com/en/Pokemon/Products/Singles/Paldea-Evolved/Sprigatito-V1-PAL001'));
+    sheets.Collectie._grid.push(row('sv2a-006', 'JP', ''));
+    sheets.Collectie._grid.push(row('sv09-050', 'EN', ''));
+    sheets.Collectie._grid.push(row('me02-011', 'EN', '')); // niet ondersteund
+
+    const res = sandbox.completeCardmarketLinksFromMenu();
+    assert.equal(res.found, 1);
+    assert.equal(res.notFound, 1);
+    assert.equal(res.unsupported, 1);
+    assert.equal(fetched.filter((id) => id === 'sv5-177').length, 1);
+    assert.ok(!fetched.includes('sv2-1')); // had al een link
+    assert.ok(!fetched.includes('sv2a-6')); // Aziatische taal
+
+    const grid = sheets.Collectie._grid;
+    const gastly = grid.filter((r) => r[0] === 'sv05-177');
+    assert.match(gastly[0][21], /^Kaartspot sync https:\/\/www\.cardmarket\.com\/en\/Pokemon\/Products\/Singles\/Temporal-Forces\/Gastly-V2-TEF177$/);
+    assert.match(gastly[1][21], /Gastly-V2-TEF177$/);
+    assert.match(alerts[0], /Toegevoegd: 1/);
+    assert.match(alerts[0], /Onbekend bij de bron.*1/);
+
+    // Tweede run: onbekende kaart wordt niet opnieuw opgevraagd, de rest heeft al een link
+    fetched.length = 0;
+    sandbox.completeCardmarketLinksFromMenu();
+    assert.equal(fetched.length, 0);
+    assert.match(alerts[1], /Onbekend bij de bron.*1/);
   });
 
   it('deleteCard wist alleen A:Q en U:V en laat R:T formules intact', () => {

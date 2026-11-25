@@ -5,6 +5,8 @@ import { expect, Page, test } from '@playwright/test';
 // Houd de e2e onafhankelijk van het live version.json op GitHub Pages (anders verschijnt een update-banner met
 // wisselende hoogte/tekst en verandert de verwachte Code.gs-versie na elke deploy).
 test.beforeEach(async ({ page }) => {
+  // Feedback Hub leest GitHub Issues (anoniem: 60 verzoeken/uur) -> in de e2e altijd een lege lijst
+  await page.route('https://api.github.com/**', (route) => route.fulfill({ contentType: 'application/json', body: '[]' }));
   await page.route('**/version.json*', (route) =>
     route.fulfill({
       contentType: 'application/json',

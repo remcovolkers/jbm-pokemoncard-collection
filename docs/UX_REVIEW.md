@@ -100,3 +100,6 @@
 ### Addendum — Cardmarket-links (2026-11-25)
 - **Specifieke kaart** (Kaartdetail, Pokédex-kaartview, Verlanglijst): de knop opent de exacte Cardmarket-productpagina inclusief kaartversie/setcode, met `?language=` van de kaarttaal. Die link wordt server-side opgezocht (Code.gs ≥ 2.2.3, via de doorverwijzing van prices.pokemontcg.io) en per apparaat onthouden. Zonder gekoppelde Sheet, bij oudere Code.gs, voor JP/KR/CHS/ZHT of onbekende sets valt de knop terug op een zoeklink (naam + kaartnummer).
 - **Algemene naam** (Snel Toevoegen "Op Naam", ontbrekend Pokédex-vakje): een aparte link "Bekijk alle opties … op Cardmarket" naar de Cardmarket-zoekresultaten.
+
+### Addendum — Cardmarket-links aanvullen (Sheets-menu)
+- Sheets-menu **PokéBinder → 🔗 Cardmarket-links aanvullen** zoekt voor alle kaarten in Collectie en Verlanglijst de exacte Cardmarket-pagina op en bewaart die in de notities. Veilig om opnieuw te draaien (bestaande links worden overgeslagen, voortgang blijft bewaard bij het ~6-minuten-limiet van Apps Script).

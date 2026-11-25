@@ -33,7 +33,7 @@ var DEX_COUNT = 1025; // #0001 t/m #1025
 var TCGDEX_BASE_URL = 'https://api.tcgdex.net/v2/en';
 var TCGDEX_GRAPHQL_URL = 'https://api.tcgdex.net/v2/graphql';
 
-var SCRIPT_VERSION = '2.2.4';
+var SCRIPT_VERSION = '2.2.5';
 var SCRIPT_CHANGELOG = 'Kaartspot Binder Sync (server-side ophalen zonder CORS & razendsnelle bulk-import), script-versiecontrole & batch-sync.';
 var POKEBINDER_MANIFEST_URL = 'https://remcovolkers.github.io/jbm-pokemoncard-collection/version.json';
 var POKEBINDER_CODE_URL = 'https://github.com/remcovolkers/jbm-pokemoncard-collection/blob/main/apps-script/Code.gs';
@@ -250,6 +250,7 @@ function onOpen() {
     .addItem('✨ Lege rijen met Kaart-ID aanvullen', 'fillMissingRows')
     .addItem('📖 Pokédex Binder volledig synchroniseren', 'syncAllPokedexBinder')
     .addItem('🔄 Alle marktprijzen verversen (Cardmarket EUR)', 'refreshAllPrices')
+    .addItem('🔗 Cardmarket-links aanvullen (exacte kaartpagina)', 'completeCardmarketLinksFromMenu')
     .addItem('📚 Setcodes-tabblad aanmaken / bijwerken', 'syncSetCodesSheet')
     .addSeparator()
     .addItem('🔑 PokéBinder App API-token instellen / bekijken', 'configureApiTokenFromMenu')
@@ -1825,6 +1826,194 @@ function persistCardmarketUrls_(ss, urlsByCardId) {
       sheet.getRange(r + 2, targets[t].notesCol).setValue(next);
     }
   }
+}
+
+// ----------------------------------------------------------------------------
+// MENU: Cardmarket-links aanvullen (alle kaarten in één keer)
+// ----------------------------------------------------------------------------
+
+var PTCG_SET_ID_MAP_ = {
+  'tk-ex-latia': 'tk1a', 'tk-ex-latio': 'tk1b', 'tk-ex-p': 'tk2a', 'tk-ex-m': 'tk2b',
+  'swsh4.5sv': 'swsh45sv', 'swsh4.5': 'swsh45', 'swsh3.5': 'swsh35', 'swsh10.5': 'pgo',
+  'swsh12.5': 'swsh12pt5', 'swsh12.5gg': 'swsh12pt5gg', 'sm3.5': 'sm35', 'sm7.5': 'sm75',
+  'sm11.5': 'sm115', 'sv03.5': 'sv3pt5', 'sv04.5': 'sv4pt5', 'sv06.5': 'sv6pt5', 'sv08.5': 'sv8pt5',
+  'bog': 'bp', 'hgssp': 'hsp', 'exu': 'ex10', '2011bw': 'mcd11', '2012bw': 'mcd12', '2016xy': 'mcd16',
+  '2019sm': 'mcd19', '2021swsh': 'mcd21', '2022swsh': 'mcd22'
+};
+
+var PTCG_UNSUPPORTED_SETS_ = {
+  'mep': 1, 'mee': 1, 'mfb': 1, 'xya': 1, 'ex5.5': 1, 'miscp': 1, 'cel25cc': 1,
+  '2014xy': 1, '2015xy': 1, '2017sm': 1, '2018sm': 1, '2023sv': 1, '2024sv': 1
+};
+
+/**
+ * TCGdex kaart-ID -> Pokémon TCG API-ID (bijv. "sv03.5-199" -> "sv3pt5-199"); leeg als de set daar niet bestaat.
+ * Spiegelt toPokemonTcgCardId() in de app.
+ */
+function toPtcgCardId_(cardId) {
+  var val = String(cardId || '').trim();
+  if (!val || /^https?:/i.test(val)) return '';
+  var dash = val.lastIndexOf('-');
+  if (dash <= 0 || dash >= val.length - 1) return '';
+  var setId = val.slice(0, dash).toLowerCase();
+  var localId = val.slice(dash + 1);
+  if (
+    PTCG_UNSUPPORTED_SETS_[setId] ||
+    /^me\d/.test(setId) ||
+    /^30th/.test(setId) ||
+    /^tk-(?:dp|hs|bw|xy|sm)-/.test(setId) ||
+    /^sv10\.5[wb]$/.test(setId)
+  ) {
+    return '';
+  }
+  var ptcgSet = PTCG_SET_ID_MAP_[setId];
+  if (!ptcgSet) {
+    var svMatch = setId.match(/^sv0(\d)$/);
+    ptcgSet = svMatch ? 'sv' + svMatch[1] : setId;
+  }
+  var local = localId;
+  if (/^\d+$/.test(localId)) {
+    local = String(parseInt(localId, 10));
+  } else {
+    var holo = localId.match(/^H0+(\d+)$/i);
+    if (holo) local = 'H' + Number(holo[1]);
+  }
+  var id = ptcgSet + '-' + local;
+  return /^[A-Za-z0-9.]+-[A-Za-z0-9]+$/.test(id) ? id : '';
+}
+
+/**
+ * Menuknop: zoekt voor ALLE kaarten in Collectie en Verlanglijst de exacte Cardmarket-productpagina op en bewaart
+ * die in de notities. Veilig om vaker te draaien: kaarten met een link worden overgeslagen en bij tijdgebrek
+ * ga je gewoon verder waar het gebleven was (Apps Script stopt na ~6 minuten).
+ */
+function completeCardmarketLinksFromMenu() {
+  var ui = SpreadsheetApp.getUi();
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var startedAt = new Date().getTime();
+  var budgetMs = 4.5 * 60 * 1000;
+  var slugRe = /cardmarket\.com\/[a-z]{2}\/Pokemon\/Products\/Singles\//i;
+  var asianLang = { JP: 1, KR: 1, CHS: 1, ZHT: 1 };
+
+  // Eerder als onbekend (404) gemelde kaarten overslaan
+  var props = null;
+  try {
+    props = PropertiesService.getDocumentProperties ? PropertiesService.getDocumentProperties() : null;
+  } catch (e) {
+    props = null;
+  }
+  var knownMissing = {};
+  var missingList = [];
+  try {
+    missingList = JSON.parse((props && props.getProperty('CM_NOT_FOUND')) || '[]');
+  } catch (e) {
+    missingList = [];
+  }
+  for (var m = 0; m < missingList.length; m++) knownMissing[missingList[m]] = true;
+
+  // 1. Welke kaarten hebben nog geen kanonieke link?
+  var wanted = {};
+  var order = [];
+  var unsupported = 0;
+  var sources = [
+    { name: SHEET_NAMES.COLLECTION, idCol: 1, notesCol: 22, langCol: 5 },
+    { name: SHEET_NAMES.WISHLIST, idCol: 13, notesCol: 11, langCol: 14 }
+  ];
+  for (var t = 0; t < sources.length; t++) {
+    var sheet = ss.getSheetByName(sources[t].name);
+    if (!sheet) continue;
+    var lastRow = sheet.getLastRow();
+    if (lastRow < 2) continue;
+    var maxCol = Math.max(sources[t].idCol, sources[t].notesCol, sources[t].langCol);
+    var width = sheet.getLastColumn ? Math.min(sheet.getLastColumn(), maxCol) : maxCol;
+    var values = sheet.getRange(2, 1, lastRow - 1, width).getValues();
+    for (var r = 0; r < values.length; r++) {
+      var cardId = String(values[r][sources[t].idCol - 1] || '').trim();
+      if (!cardId) continue;
+      var notes = String(values[r][sources[t].notesCol - 1] || '');
+      if (slugRe.test(notes)) continue;
+      var lang = String(values[r][sources[t].langCol - 1] || 'EN').trim().toUpperCase();
+      if (asianLang[lang]) continue;
+      var key = cardId.toLowerCase();
+      if (wanted[key]) continue;
+      var ptcgId = toPtcgCardId_(cardId);
+      if (!ptcgId) {
+        unsupported++;
+        wanted[key] = { skip: true };
+        continue;
+      }
+      wanted[key] = { cardId: cardId, ptcgId: ptcgId };
+      order.push(key);
+    }
+  }
+
+  // 2. Opzoeken (met voortgang bewaren per 15 gevonden links)
+  var found = 0;
+  var notFound = 0;
+  var transient = 0;
+  var remaining = 0;
+  var chunk = {};
+  var chunkCount = 0;
+  var flush = function () {
+    if (chunkCount === 0) return;
+    var lock = LockService.getDocumentLock();
+    lock.waitLock(20000);
+    try {
+      persistCardmarketUrls_(ss, chunk);
+    } finally {
+      lock.releaseLock();
+    }
+    chunk = {};
+    chunkCount = 0;
+  };
+
+  for (var i = 0; i < order.length; i++) {
+    var item = wanted[order[i]];
+    if (knownMissing[item.ptcgId]) {
+      notFound++;
+      continue;
+    }
+    if (new Date().getTime() - startedAt > budgetMs) {
+      remaining = order.length - i;
+      break;
+    }
+    var outcome = resolveCardmarketProductUrl_(item.ptcgId);
+    if (outcome.url) {
+      chunk[item.cardId] = outcome.url;
+      chunkCount++;
+      found++;
+      if (chunkCount >= 15) flush();
+    } else if (outcome.notFound) {
+      notFound++;
+      knownMissing[item.ptcgId] = true;
+      missingList.push(item.ptcgId);
+    } else {
+      transient++;
+    }
+  }
+  flush();
+
+  if (props) {
+    try {
+      props.setProperty('CM_NOT_FOUND', JSON.stringify(missingList.slice(-400)));
+    } catch (e) {
+      // Te groot/niet beschikbaar: volgende keer worden onbekende kaarten gewoon opnieuw geprobeerd
+    }
+  }
+
+  var lines = [];
+  lines.push('Cardmarket-links aanvullen is klaar.');
+  lines.push('');
+  lines.push('✅ Toegevoegd: ' + found + ' kaart(en)');
+  if (notFound > 0) lines.push('❔ Onbekend bij de bron (blijft zoeklink): ' + notFound);
+  if (unsupported > 0) lines.push('⏭️ Niet ondersteund (bijv. nieuwste sets of eigen kaarten): ' + unsupported);
+  if (transient > 0) lines.push('⚠️ Tijdelijk mislukt: ' + transient + ' — draai de knop later nog eens.');
+  if (remaining > 0) lines.push('⏱️ Nog te doen: ' + remaining + ' — draai de knop nogmaals om verder te gaan.');
+  if (found === 0 && notFound === 0 && transient === 0 && remaining === 0) {
+    lines.push('Alle kaarten hebben al een exacte Cardmarket-link.');
+  }
+  ui.alert(lines.join('\n'));
+  return { found: found, notFound: notFound, unsupported: unsupported, transient: transient, remaining: remaining };
 }
 
 function handleFetchKaartspotProfile_(payload) {
