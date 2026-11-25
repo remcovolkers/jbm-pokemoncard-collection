@@ -1,7 +1,7 @@
 import { Component, ElementRef, HostListener, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { extractArtworkUrlFromNotes, getCardSetCode, getDisplaySetCode, isKnownNoScanSet, parseCardIdInput } from '../../core/domain/card-id.utils';
+import { buildCardmarketNameSearchUrl, extractArtworkUrlFromNotes, getCardSetCode, getDisplaySetCode, isKnownNoScanSet, parseCardIdInput } from '../../core/domain/card-id.utils';
 import { getLanguageLabel, normalizeLanguageCode } from '../../core/domain/card-language.utils';
 import { formatDexNumber, formatEur, formatPercent } from '../../core/domain/card-math.utils';
 import {
@@ -118,6 +118,8 @@ export class QuickAddComponent implements OnInit, OnDestroy {
   readonly getCardSetCode = getCardSetCode;
   readonly isKnownNoScanSet = isKnownNoScanSet;
   readonly getLanguageLabel = getLanguageLabel;
+  /** Algemene Cardmarket-zoekopdracht op de ingetypte naam (alle opties bekijken). */
+  readonly cardmarketNameSearchUrl = computed(() => buildCardmarketNameSearchUrl(this.nameQuery(), this.language()));
   readonly isNonEnglish = (lang: string): boolean => normalizeLanguageCode(lang) !== 'EN';
 
   readonly inputMode = signal<'code' | 'name' | 'sets'>('code');

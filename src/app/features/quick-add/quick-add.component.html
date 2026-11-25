@@ -198,6 +198,18 @@
           />
         </div>
 
+        @if (nameQuery().trim().length >= 2) {
+          <a
+            class="qa-cm-search"
+            [href]="cardmarketNameSearchUrl()"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <span class="material-symbols-outlined">open_in_new</span>
+            <span>Bekijk alle opties voor “{{ nameQuery().trim() }}” op Cardmarket</span>
+          </a>
+        }
+
         @if (nameResults().length > 0) {
           <div class="batch-toolbar">
             <button

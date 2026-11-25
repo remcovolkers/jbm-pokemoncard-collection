@@ -1,7 +1,7 @@
-import { ChangeDetectionStrategy, Component, HostListener, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, HostListener, OnInit, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { getCardSetCode, getDisplaySetCode, resolveCardmarketUrl } from '../../core/domain/card-id.utils';
+import { buildCardmarketNameSearchUrl, getCardSetCode, getDisplaySetCode, resolveCardmarketUrl } from '../../core/domain/card-id.utils';
 import { normalizeLanguageCode } from '../../core/domain/card-language.utils';
 import {
   calculateBinderPosition,
@@ -82,6 +82,10 @@ export class PokedexBinderComponent implements OnInit {
 
   constructor() {
     this.scrollLock.bind(() => this.isSheetOpen(), () => this.closeSlotSheet());
+    effect(() => {
+      const card = this.heroCard();
+      if (card) void this.store.ensureCardmarketUrls([{ cardId: card.cardId, language: card.language }]);
+    });
   }
 
   readonly slotsPerPage = computed(() => this.store.binderSlotsPerPage());
@@ -348,6 +352,12 @@ export class PokedexBinderComponent implements OnInit {
     return matches[0] ?? null;
   });
 
+  /** Algemene Cardmarket-zoekopdracht op de Pokémon-naam (alle opties bekijken) voor een ontbrekend vakje. */
+  readonly missingSlotSearchUrl = computed(() => {
+    const slot = this.activeSlot();
+    return slot ? buildCardmarketNameSearchUrl(slot.pokemonName) : '';
+  });
+
   readonly heroMetrics = computed(() => {
     const card = this.heroCard();
     return card ? calculateCardMetrics(card) : null;
@@ -362,6 +372,7 @@ export class PokedexBinderComponent implements OnInit {
       cardNumber: card.cardNumber,
       notes: card.notes,
       language: card.language,
+      resolvedUrl: this.store.cardmarketUrls()[card.cardId.toLowerCase()],
     });
   });
 

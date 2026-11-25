@@ -699,14 +699,39 @@ export function resolveCardmarketUrl(opts: {
   setName?: string;
   cardNumber?: string;
   notes?: string;
+  /** Exacte productlink die server-side is opgezocht (zie `CollectionStore.ensureCardmarketUrls`). */
+  resolvedUrl?: string;
   /** Kaarttaal (EN/FR/CHS…): opent Cardmarket direct gefilterd op die taal. */
   language?: string;
 }): string {
-  // Kanonieke slug-link uit de notities, anders de zoeklink (naam + kaartnummer) die Cardmarket zelf naar de kaart doorstuurt.
-  // De kale `Products?idProduct=`-link wordt niet meer gebruikt: die geeft regelmatig een 401.
+  // Voorrang: 1) kanonieke slug in de notities, 2) exact opgezochte productlink, 3) zoeklink (naam + kaartnummer).
+  // De kale `Products?idProduct=`-link wordt niet gebruikt: die geeft regelmatig een 401.
   const base =
-    extractCardmarketUrlFromNotes(opts.notes) ?? buildCardmarketSearchUrl(opts.name, opts.setName, opts.cardNumber);
+    extractCardmarketUrlFromNotes(opts.notes) ??
+    (opts.resolvedUrl && extractCardmarketUrlFromNotes(opts.resolvedUrl)) ??
+    buildCardmarketSearchUrl(opts.name, opts.setName, opts.cardNumber);
   return withCardmarketLanguage(base, opts.language);
+}
+
+/**
+ * Algemene Cardmarket-zoekopdracht op alleen een naam (bijv. "Bulbasaur") om alle opties te bekijken.
+ */
+export function buildCardmarketNameSearchUrl(name: string, language?: string): string {
+  const query = (name || '').trim();
+  return withCardmarketLanguage(
+    `https://www.cardmarket.com/en/Pokemon/Products/Singles?searchString=${encodeURIComponent(query)}`,
+    language
+  );
+}
+
+/**
+ * Leidt het Pokémon TCG API-ID (bijv. `sv3pt5-199`) af uit een TCGdex kaart-ID; leeg als de set daar niet bestaat.
+ * Wordt gebruikt om de exacte Cardmarket-productpagina op te zoeken via de doorverwijzing van prices.pokemontcg.io.
+ */
+export function toPokemonTcgCardId(cardId: string): string {
+  const url = buildPokemonTcgAssetUrl(cardId, 'low');
+  const match = url.match(/images\.pokemontcg\.io\/([^/]+)\/([^/.]+)\.png$/i);
+  return match ? `${match[1]}-${match[2]}` : '';
 }
 
 const KNOWN_SET_NAME_TO_ID: Record<string, string> = {

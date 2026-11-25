@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   SET_CODE_ALIASES,
+  buildCardmarketNameSearchUrl,
   buildCardmarketSearchUrl,
   buildPokemonTcgAssetUrl,
   buildTcgdexAssetUrl,
@@ -18,6 +19,7 @@ import {
   getCardSetCode,
   normalizeSetDisplayName,
   repairCorruptedCardNumber,
+  toPokemonTcgCardId,
   resolveCardmarketUrl,
 } from './card-id.utils';
 import { withCardmarketLanguage } from './card-language.utils';
@@ -341,6 +343,39 @@ describe('Echte setcode uit notities (Chinese sets)', () => {
     expect(extractSetCodeFromImagePath('cs3ac/x.png')).toBe('CS3AC');
     expect(extractSetCodeFromImagePath('promo/x.png')).toBeNull();
     expect(extractSetCodeFromImagePath('')).toBeNull();
+  });
+});
+
+describe('Exacte Cardmarket-links', () => {
+  it('prefereert een server-side opgezochte productlink boven de zoeklink en voegt de taal toe', () => {
+    const resolved = 'https://www.cardmarket.com/en/Pokemon/Products/Singles/151/Charizard-ex-V3-MEW199';
+    expect(resolveCardmarketUrl({ name: 'Charizard ex', cardNumber: '199/165', resolvedUrl: resolved })).toBe(resolved);
+    expect(resolveCardmarketUrl({ name: 'Charizard ex', cardNumber: '199/165', resolvedUrl: resolved, language: 'FR' })).toBe(
+      `${resolved}?language=2`
+    );
+    // Een handmatig geplakte slug in de notities wint van de opgezochte link
+    const manual = 'https://www.cardmarket.com/en/Pokemon/Products/Singles/Other/Manual-Link';
+    expect(resolveCardmarketUrl({ name: 'X', notes: manual, resolvedUrl: resolved })).toBe(manual);
+    // Een ongeldige opgezochte link wordt genegeerd -> zoeklink
+    expect(resolveCardmarketUrl({ name: 'Charizard ex', cardNumber: '199', resolvedUrl: 'https://evil.test/x' })).toContain(
+      'searchString=Charizard%20ex%20199'
+    );
+  });
+
+  it('bouwt een algemene zoeklink op alleen een naam, met optioneel taalfilter', () => {
+    expect(buildCardmarketNameSearchUrl('Bulbasaur')).toBe(
+      'https://www.cardmarket.com/en/Pokemon/Products/Singles?searchString=Bulbasaur'
+    );
+    expect(buildCardmarketNameSearchUrl(' Mr. Mime ', 'DE')).toBe(
+      'https://www.cardmarket.com/en/Pokemon/Products/Singles?searchString=Mr.%20Mime&language=3'
+    );
+  });
+
+  it('leidt het Pokémon TCG API-ID af uit een TCGdex kaart-ID', () => {
+    expect(toPokemonTcgCardId('sv03.5-199')).toBe('sv3pt5-199');
+    expect(toPokemonTcgCardId('swsh7-215')).toBe('swsh7-215');
+    expect(toPokemonTcgCardId('base5-4')).toBe('base5-4');
+    expect(toPokemonTcgCardId('me02-011')).toBe(''); // niet in de Pokémon TCG API
   });
 });
 

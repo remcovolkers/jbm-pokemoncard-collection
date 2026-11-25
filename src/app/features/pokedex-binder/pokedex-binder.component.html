@@ -619,6 +619,15 @@
                 <span class="material-symbols-outlined">add_circle</span>
                 <span>+ Zoek {{ slot.pokemonName }} om toe te voegen</span>
               </button>
+              <a
+                class="pb-btn pb-btn--secondary no-variants-note__btn"
+                [href]="missingSlotSearchUrl()"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <span class="material-symbols-outlined">open_in_new</span>
+                <span>Bekijk {{ slot.pokemonName }} op Cardmarket</span>
+              </a>
             </div>
 
             <div class="slot-toggle">

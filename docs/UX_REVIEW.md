@@ -96,3 +96,7 @@
 - **Kaartdetail:** taal aanpasbaar, Cardmarket-link volgt de taal.
 - **Scrollbehoud:** terugkeren vanuit Kaartdetail herstelt de scrollpositie van de overzichtspagina.
 - **Opgevolgd:** Vorige/Volgende zijn 44 px icoonknoppen naast de titel (artwork staat nu boven de vouw); Snel Toevoegen toont recent gebruikte talen als snelkeuze-chips; de Pokédex-tab in de onderbalk toont een badge met het aantal kaarten dat klaar is voor de binder; kaartafbeeldingen tonen een shimmer tijdens het laden; Verlanglijst heeft een taalveld met Cardmarket-knop.
+
+### Addendum — Cardmarket-links (2026-11-25)
+- **Specifieke kaart** (Kaartdetail, Pokédex-kaartview, Verlanglijst): de knop opent de exacte Cardmarket-productpagina inclusief kaartversie/setcode, met `?language=` van de kaarttaal. Die link wordt server-side opgezocht (Code.gs ≥ 2.2.3, via de doorverwijzing van prices.pokemontcg.io) en per apparaat onthouden. Zonder gekoppelde Sheet, bij oudere Code.gs, voor JP/KR/CHS/ZHT of onbekende sets valt de knop terug op een zoeklink (naam + kaartnummer).
+- **Algemene naam** (Snel Toevoegen "Op Naam", ontbrekend Pokédex-vakje): een aparte link "Bekijk alle opties … op Cardmarket" naar de Cardmarket-zoekresultaten.

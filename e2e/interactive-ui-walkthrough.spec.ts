@@ -813,3 +813,35 @@ test('Snel Toevoegen: recent gebruikte talen verschijnen als snelkeuze', async (
   await page.locator('.qa-lang-chips__chip', { hasText: 'CHS' }).click();
   await expect(page.locator('#qa-lang-top')).toHaveValue('CHS');
 });
+
+test('Cardmarket: algemene naam = zoeklink met alle opties; specifieke kaart = kaartlink met taal', async ({ page }) => {
+  // 1. Snel Toevoegen op naam: link naar alle Cardmarket-opties voor de ingetypte naam (+ taal)
+  await page.goto('/toevoegen', { waitUntil: 'domcontentloaded' });
+  await page.locator('.mode-tabs__btn', { hasText: 'Op Naam' }).click();
+  await page.locator('#qa-lang-top').selectOption('DE');
+  await page.locator('#qa-name-input').fill('Bulbasaur');
+  const allOptions = page.locator('.qa-cm-search');
+  await expect(allOptions).toBeVisible();
+  const href = await allOptions.getAttribute('href');
+  expect(href).toContain('Products/Singles?searchString=Bulbasaur');
+  expect(href).toContain('language=3');
+  const box = await allOptions.boundingBox();
+  expect(box?.height ?? 0).toBeGreaterThanOrEqual(43.9);
+
+  // 2. Pokédex: ontbrekend vakje -> zoeken op Cardmarket naar alle opties van die Pokémon
+  await page.goto('/pokedex', { waitUntil: 'domcontentloaded' });
+  await page.locator('.status-pills button:has-text("Ontbrekend")').click();
+  await page.locator('.pocket').first().click();
+  const missingLink = page.locator('.no-variants-note a', { hasText: 'op Cardmarket' });
+  await expect(missingLink).toBeVisible();
+  expect(await missingLink.getAttribute('href')).toMatch(/searchString=[A-Za-z]+$/);
+
+  // 3. Kaartdetail: specifieke kaart -> link met naam + kaartnummer en kaarttaal
+  await page.goto('/collectie', { waitUntil: 'domcontentloaded' });
+  await page.locator('.card-slab').first().click();
+  await page.waitForURL(/\/collectie\/kaart\/\d+\//);
+  await page.locator('#edit-language').selectOption('FR');
+  const cardLink = await page.getByRole('link', { name: /Bekijk op Cardmarket/ }).getAttribute('href');
+  expect(cardLink).toContain('language=2');
+  expect(cardLink).not.toContain('idProduct');
+});

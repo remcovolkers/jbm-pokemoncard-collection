@@ -158,6 +158,15 @@ export interface CollectionRepository {
     payload: ApplyKaartspotSyncPayload
   ): Promise<ApplyKaartspotSyncResult>;
   refreshPrices(config: AppConnectionConfig): Promise<RefreshPricesResult>;
+
+  /**
+   * Zoekt exacte Cardmarket-productlinks op (server-side, via Apps Script). Optioneel: demo/offline heeft dit niet.
+   * Resultaat: map van kaart-ID naar kanonieke `…/Products/Singles/<Set>/<Kaart>`-URL.
+   */
+  resolveCardmarketUrls?(
+    config: AppConnectionConfig,
+    items: Array<{ cardId: string; ptcgId: string }>
+  ): Promise<Record<string, string>>;
 }
 
 export const COLLECTION_REPOSITORY = new InjectionToken<CollectionRepository>('COLLECTION_REPOSITORY');

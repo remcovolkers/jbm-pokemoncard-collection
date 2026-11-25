@@ -189,6 +189,7 @@ export class CardDetailComponent {
       cardNumber: d.cardNumber,
       notes: d.notes,
       language: d.language,
+      resolvedUrl: this.store.cardmarketUrls()[d.cardId.toLowerCase()],
     });
   });
 

@@ -324,11 +324,11 @@ describe('apps-script/Code.gs Backend API & Formule-integriteit', () => {
     const ping = JSON.parse(sandbox.doGet({ parameter: { action: 'ping', token: 'test-secret-token' } }).getContent());
     assert.equal(ping.ok, true);
     assert.equal(ping.spreadsheetName, 'Pokémon Kaartencollectie Tracker');
-    assert.equal(ping.scriptVersion, '2.2.2');
+    assert.equal(ping.scriptVersion, '2.2.3');
 
     const boot = JSON.parse(sandbox.doGet({ parameter: { action: 'bootstrap', token: 'test-secret-token' } }).getContent());
     assert.equal(boot.ok, true);
-    assert.equal(boot.data.scriptVersion, '2.2.2');
+    assert.equal(boot.data.scriptVersion, '2.2.3');
     assert.equal(boot.data.binderSlotsPerPage, 9);
     assert.equal(boot.data.pokedex.length, 4);
   });
@@ -368,11 +368,11 @@ describe('apps-script/Code.gs Backend API & Formule-integriteit', () => {
 
     sandbox.checkScriptUpdateFromMenu();
     assert.equal(alerts.length, 1);
-    assert.match(alerts[0], /v2\.2\.2/);
+    assert.match(alerts[0], /v2\.2\.3/);
     assert.match(alerts[0], /v2\.3\.0/);
     assert.match(alerts[0], /Implementaties beheren/);
 
-    manifestResponse = { latestScriptVersion: '2.2.2' };
+    manifestResponse = { latestScriptVersion: '2.2.3' };
     sandbox.checkScriptUpdateFromMenu();
     assert.equal(alerts.length, 2);
     assert.match(alerts[1], /nieuwste PokéBinder Apps Script versie/);
@@ -476,6 +476,49 @@ describe('apps-script/Code.gs Backend API & Formule-integriteit', () => {
     );
     const machop = boot.data.collection.find((c) => c.cardId === 'tk-dp-l-5');
     assert.equal(machop.cardNumber, '5/11');
+  });
+
+  it('resolveCardmarketUrls volgt de pokemontcg.io-redirect server-side en geeft kanonieke Cardmarket-slugs terug', () => {
+    const fetched = [];
+    const { sandbox } = createGasEnvironment({
+      tcgdexMock: (url) => {
+        fetched.push(url);
+        const redirects = {
+          'sv3pt5-199': 'https://cardmarket.com/en/Pokemon/Products/Singles/151/Charizard-ex-V3-MEW199?utm_source=pokemontcgio',
+        };
+        const id = decodeURIComponent(url.split('/cardmarket/')[1]);
+        if (redirects[id]) {
+          return { getResponseCode: () => 302, getHeaders: () => ({ Location: redirects[id] }), getContentText: () => '' };
+        }
+        return { getResponseCode: () => 404, getHeaders: () => ({}), getContentText: () => '' };
+      },
+    });
+
+    const res = JSON.parse(
+      sandbox.doPost({
+        postData: {
+          contents: JSON.stringify({
+            token: 'test-secret-token',
+            action: 'resolveCardmarketUrls',
+            skipBootstrap: true,
+            payload: {
+              items: [
+                { cardId: 'sv03.5-199', ptcgId: 'sv3pt5-199' },
+                { cardId: 'zht-x-1', ptcgId: 'nope-1' },
+                { cardId: 'bad', ptcgId: '../etc' },
+              ],
+            },
+          }),
+        },
+      }).getContent()
+    );
+
+    assert.equal(res.ok, true);
+    assert.deepEqual(res.result.urls, {
+      'sv03.5-199': 'https://www.cardmarket.com/en/Pokemon/Products/Singles/151/Charizard-ex-V3-MEW199',
+    });
+    // Ongeldige ID's worden niet eens opgehaald
+    assert.equal(fetched.some((u) => u.includes('etc')), false);
   });
 
   it('deleteCard wist alleen A:Q en U:V en laat R:T formules intact', () => {

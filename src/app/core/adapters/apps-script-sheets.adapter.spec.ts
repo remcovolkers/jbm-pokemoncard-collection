@@ -188,4 +188,20 @@ describe('AppsScriptSheetsAdapter', () => {
       adapter.batchMutations(validConfig, [{ id: 'm3', action: 'addCard', payload: {} }], { skipBootstrap: true })
     ).rejects.toThrow(/Onbekende POST-actie: batchMutations/);
   });
+
+  it('resolveCardmarketUrls stuurt ptcg-ID’s zonder bootstrap en geeft de gevonden productlinks terug', async () => {
+    fetchSpy.mockResolvedValueOnce(
+      jsonResponse({
+        ok: true,
+        result: { urls: { 'sv03.5-199': 'https://www.cardmarket.com/en/Pokemon/Products/Singles/151/Charizard-ex-V3-MEW199' } },
+      })
+    );
+    const urls = await adapter.resolveCardmarketUrls(validConfig, [{ cardId: 'sv03.5-199', ptcgId: 'sv3pt5-199' }]);
+    expect(urls['sv03.5-199']).toContain('/Singles/151/Charizard-ex-V3-MEW199');
+    const body = JSON.parse(String((fetchSpy.mock.calls.at(-1)![1] as RequestInit).body));
+    expect(body.action).toBe('resolveCardmarketUrls');
+    expect(body.skipBootstrap).toBe(true);
+    expect(body.payload.items[0]).toEqual({ cardId: 'sv03.5-199', ptcgId: 'sv3pt5-199' });
+  });
 });
+

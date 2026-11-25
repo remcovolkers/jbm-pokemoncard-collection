@@ -200,6 +200,34 @@ describe('CollectionStore (Signals, Optimistic UI & Offline Queue)', () => {
     expect(mockRepo.refreshPrices).toHaveBeenCalledTimes(1);
   });
 
+  it('zoekt exacte Cardmarket-links op via de repository (alleen live), onthoudt ze en slaat Aziatische talen over', async () => {
+    const resolve = vi.fn(async () => ({
+      'sv03.5-199': 'https://www.cardmarket.com/en/Pokemon/Products/Singles/151/Charizard-ex-V3-MEW199',
+    }));
+    (mockRepo as { resolveCardmarketUrls?: unknown }).resolveCardmarketUrls = resolve;
+
+    // Demo-modus: geen lookup
+    await store.ensureCardmarketUrls([{ cardId: 'sv03.5-199', language: 'EN' }]);
+    expect(resolve).not.toHaveBeenCalled();
+
+    store.updateConfig({
+      demoMode: false,
+      webAppUrl: 'https://script.google.com/macros/s/test/exec',
+      apiToken: 'tok',
+    });
+    await store.ensureCardmarketUrls([
+      { cardId: 'sv03.5-199', language: 'FR' },
+      { cardId: 'sv2a-006', language: 'JP' },
+    ]);
+    expect(resolve).toHaveBeenCalledTimes(1);
+    expect((resolve.mock.calls[0] as unknown[])[1]).toEqual([{ cardId: 'sv03.5-199', ptcgId: 'sv3pt5-199' }]);
+    expect(store.cardmarketUrls()['sv03.5-199']).toContain('Charizard-ex-V3-MEW199');
+
+    // Tweede keer: uit de cache, geen nieuwe aanroep
+    await store.ensureCardmarketUrls([{ cardId: 'sv03.5-199', language: 'EN' }]);
+    expect(resolve).toHaveBeenCalledTimes(1);
+  });
+
   it('begrenst toast-meldingen tot max 3 en staat handmatig sluiten toe', () => {
     store.showToast('Bericht 1', 'info');
     store.showToast('Bericht 2', 'success');

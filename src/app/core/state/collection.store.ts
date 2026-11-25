@@ -6,6 +6,7 @@ import {
   extractSetCodeFromNotes,
   getCardSetCode,
   getDisplaySetCode,
+  toPokemonTcgCardId,
   normalizeSetDisplayName,
   repairCorruptedCardNumber,
   inferCardIdFromSetAndNumber,
@@ -1594,6 +1595,71 @@ export class CollectionStore {
         payload as Record<string, unknown>,
         `Pokédex #${payload.dexNumber} bijwerken`
       );
+    }
+  }
+
+  // ==========================================================================
+  // CARDMARKET PRODUCTLINKS (exacte kaartpagina, server-side opgezocht en per apparaat onthouden)
+  // ==========================================================================
+
+  /** Kaart-ID (lowercase) -> kanonieke Cardmarket-productlink. */
+  readonly cardmarketUrls = signal<Record<string, string>>(this.loadCardmarketUrlCache());
+  private readonly cardmarketPending = new Set<string>();
+  private readonly cardmarketFailed = new Set<string>();
+
+  private loadCardmarketUrlCache(): Record<string, string> {
+    try {
+      const raw = typeof window !== 'undefined' ? window.localStorage.getItem('pokebinder_cardmarket_urls_v1') : null;
+      const parsed = raw ? (JSON.parse(raw) as unknown) : {};
+      return parsed && typeof parsed === 'object' ? (parsed as Record<string, string>) : {};
+    } catch {
+      return {};
+    }
+  }
+
+  /**
+   * Zoekt voor kaarten de exacte Cardmarket-productpagina op (alleen live gekoppeld én Code.gs >= 2.2.3).
+   * Anderstalige Aziatische kaarten (JP/KR/CHS/ZHT) en onbekende sets vallen terug op de zoeklink.
+   */
+  async ensureCardmarketUrls(cards: ReadonlyArray<{ cardId: string; language?: string }>): Promise<void> {
+    const cfg = this.config();
+    const live = !cfg.demoMode && Boolean(cfg.webAppUrl?.trim() && cfg.apiToken?.trim());
+    if (!live || !this.repo.resolveCardmarketUrls) return;
+
+    const known = this.cardmarketUrls();
+    const items: Array<{ cardId: string; ptcgId: string }> = [];
+    for (const card of cards) {
+      const key = (card.cardId ?? '').trim().toLowerCase();
+      if (!key || known[key] || this.cardmarketPending.has(key) || this.cardmarketFailed.has(key)) continue;
+      if (['JP', 'KR', 'CHS', 'ZHT'].includes(normalizeLanguageCode(card.language))) continue;
+      const ptcgId = toPokemonTcgCardId(card.cardId);
+      if (!ptcgId) continue;
+      items.push({ cardId: card.cardId, ptcgId });
+      if (items.length >= 8) break;
+    }
+    if (items.length === 0) return;
+
+    for (const item of items) this.cardmarketPending.add(item.cardId.toLowerCase());
+    try {
+      const resolved = await this.repo.resolveCardmarketUrls(cfg, items);
+      const next = { ...this.cardmarketUrls() };
+      for (const item of items) {
+        const key = item.cardId.toLowerCase();
+        const url = resolved[item.cardId] ?? resolved[key];
+        if (url) next[key] = url;
+        else this.cardmarketFailed.add(key);
+      }
+      this.cardmarketUrls.set(next);
+      try {
+        window.localStorage.setItem('pokebinder_cardmarket_urls_v1', JSON.stringify(next));
+      } catch {
+        // Opslag niet beschikbaar: link blijft in deze sessie bewaard
+      }
+    } catch {
+      // Oudere Code.gs of offline: zoeklink blijft als fallback actief (niet opnieuw proberen in deze sessie)
+      for (const item of items) this.cardmarketFailed.add(item.cardId.toLowerCase());
+    } finally {
+      for (const item of items) this.cardmarketPending.delete(item.cardId.toLowerCase());
     }
   }
 

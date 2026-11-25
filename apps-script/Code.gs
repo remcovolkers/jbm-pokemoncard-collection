@@ -33,7 +33,7 @@ var DEX_COUNT = 1025; // #0001 t/m #1025
 var TCGDEX_BASE_URL = 'https://api.tcgdex.net/v2/en';
 var TCGDEX_GRAPHQL_URL = 'https://api.tcgdex.net/v2/graphql';
 
-var SCRIPT_VERSION = '2.2.2';
+var SCRIPT_VERSION = '2.2.3';
 var SCRIPT_CHANGELOG = 'Kaartspot Binder Sync (server-side ophalen zonder CORS & razendsnelle bulk-import), script-versiecontrole & batch-sync.';
 var POKEBINDER_MANIFEST_URL = 'https://remcovolkers.github.io/jbm-pokemoncard-collection/version.json';
 var POKEBINDER_CODE_URL = 'https://github.com/remcovolkers/jbm-pokemoncard-collection/blob/main/apps-script/Code.gs';
@@ -705,11 +705,14 @@ function doPost(e) {
       return jsonResponse_({ ok: false, error: 'Ongeldig of ontbrekend API-token.' });
     }
 
-    lock.waitLock(20000);
-    acquired = true;
+    var action = body.action || '';
+    // Alleen-lezen opzoekactie: geen document-lock nodig (blokkeert schrijfacties van de app niet)
+    if (action !== 'resolveCardmarketUrls') {
+      lock.waitLock(20000);
+      acquired = true;
+    }
 
     var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var action = body.action || '';
     var payload = body.payload || {};
     var result;
 
@@ -758,6 +761,9 @@ function doPost(e) {
         break;
       case 'fetchKaartspotProfile':
         result = handleFetchKaartspotProfile_(payload);
+        break;
+      case 'resolveCardmarketUrls':
+        result = handleResolveCardmarketUrls_(payload);
         break;
       case 'applyKaartspotSync':
         result = handleApplyKaartspotSync_(ss, payload);
@@ -1708,6 +1714,51 @@ function handleBatchMutations_(ss, payload) {
 // ============================================================================
 // KAARTSPOT BINDER SYNC (SERVER-SIDE FETCH ZONDER CORS + BULK SHEETS IMPORT)
 // ============================================================================
+
+/**
+ * Zoekt de exacte Cardmarket-productpagina (kanonieke slug-URL) van kaarten op via de doorverwijzing van
+ * prices.pokemontcg.io (302 -> Cardmarket). De app kan die redirect zelf niet lezen (CORS), Apps Script wel.
+ * payload.items = [{ cardId: 'sv03.5-199', ptcgId: 'sv3pt5-199' }, ...] (max 8 per aanroep)
+ * Resultaat: { urls: { '<cardId>': 'https://www.cardmarket.com/en/Pokemon/Products/Singles/<Set>/<Kaart>' } }
+ */
+function handleResolveCardmarketUrls_(payload) {
+  var items = (payload && payload.items) || [];
+  var urls = {};
+  var max = Math.min(items.length, 8);
+  for (var i = 0; i < max; i++) {
+    var cardId = String((items[i] && items[i].cardId) || '').trim();
+    var ptcgId = String((items[i] && items[i].ptcgId) || '').trim();
+    if (!cardId || !/^[A-Za-z0-9.]+-[A-Za-z0-9]+$/.test(ptcgId)) continue;
+    var url = resolveCardmarketProductUrl_(ptcgId);
+    if (url) urls[cardId] = url;
+  }
+  return { urls: urls };
+}
+
+function resolveCardmarketProductUrl_(ptcgId) {
+  var endpoint = 'https://prices.pokemontcg.io/cardmarket/' + encodeURIComponent(ptcgId);
+  for (var attempt = 0; attempt < 2; attempt++) {
+    var res;
+    try {
+      res = UrlFetchApp.fetch(endpoint, { followRedirects: false, muteHttpExceptions: true });
+    } catch (e) {
+      continue;
+    }
+    var code = res.getResponseCode();
+    if (code === 301 || code === 302 || code === 303 || code === 307 || code === 308) {
+      var headers = (res.getHeaders && res.getHeaders()) || {};
+      var location = String(headers['Location'] || headers['location'] || '');
+      var m = location.match(/^https?:\/\/(?:www\.)?cardmarket\.com\/[a-z]{2}\/Pokemon\/Products\/Singles\/[^?#]+/i);
+      if (m) {
+        return m[0].replace(/^https?:\/\/(?:www\.)?cardmarket\.com\/[a-z]{2}\//i, 'https://www.cardmarket.com/en/');
+      }
+      return '';
+    }
+    if (code === 404) return '';
+    // 5xx (bijv. tijdelijke 502): één keer opnieuw proberen
+  }
+  return '';
+}
 
 function handleFetchKaartspotProfile_(payload) {
   var rawUser = String((payload && payload.username) || '').trim().replace(/^@+/, '');

@@ -57,6 +57,14 @@ export class WishlistComponent {
       }
       void this.hydrateWishlistRarities(items);
     });
+    // Exacte Cardmarket-productlinks opzoeken (batches van 8; loopt door tot alle open wensen zijn afgehandeld)
+    effect(() => {
+      this.store.cardmarketUrls();
+      const wishes = this.openItems()
+        .filter((w): w is typeof w & { cardId: string } => Boolean(w.cardId))
+        .map((w) => ({ cardId: w.cardId, language: w.language }));
+      void this.store.ensureCardmarketUrls(wishes);
+    });
   }
 
   // TCGdex lookup & nieuwe wens formulier
@@ -415,6 +423,7 @@ export class WishlistComponent {
       cardNumber: item.cardNumber,
       notes: item.notes,
       language: item.language,
+      resolvedUrl: item.cardId ? this.store.cardmarketUrls()[item.cardId.toLowerCase()] : undefined,
     });
   }
 }
