@@ -1605,7 +1605,10 @@ export class CollectionStore {
   /** Kaart-ID (lowercase) -> kanonieke Cardmarket-productlink. */
   readonly cardmarketUrls = signal<Record<string, string>>(this.loadCardmarketUrlCache());
   private readonly cardmarketPending = new Set<string>();
-  private readonly cardmarketFailed = new Set<string>();
+  /** Definitief onbekend bij de bron (404) of Code.gs te oud: in deze sessie niet opnieuw proberen. */
+  private readonly cardmarketGaveUp = new Set<string>();
+  /** Tijdelijke fout (bijv. 502 bij de bron): pas na dit tijdstip opnieuw proberen. */
+  private readonly cardmarketRetryAt = new Map<string, number>();
 
   private loadCardmarketUrlCache(): Record<string, string> {
     try {
@@ -1618,8 +1621,10 @@ export class CollectionStore {
   }
 
   /**
-   * Zoekt voor kaarten de exacte Cardmarket-productpagina op (alleen live gekoppeld én Code.gs >= 2.2.3).
-   * Anderstalige Aziatische kaarten (JP/KR/CHS/ZHT) en onbekende sets vallen terug op de zoeklink.
+   * Zoekt voor kaarten de exacte Cardmarket-productpagina op (alleen live gekoppeld én Code.gs >= 2.2.4).
+   * Code.gs bewaart de gevonden link ook in de notities van de Sheet, zodat elke kaart maar één keer wordt opgezocht.
+   * Aziatische talen (JP/KR/CHS/ZHT) en onbekende sets vallen terug op de zoeklink.
+   * Tijdelijke fouten worden na een minuut opnieuw geprobeerd; alleen een echte 404 geldt als definitief.
    */
   async ensureCardmarketUrls(cards: ReadonlyArray<{ cardId: string; language?: string }>): Promise<void> {
     const cfg = this.config();
@@ -1627,10 +1632,12 @@ export class CollectionStore {
     if (!live || !this.repo.resolveCardmarketUrls) return;
 
     const known = this.cardmarketUrls();
+    const now = Date.now();
     const items: Array<{ cardId: string; ptcgId: string }> = [];
     for (const card of cards) {
       const key = (card.cardId ?? '').trim().toLowerCase();
-      if (!key || known[key] || this.cardmarketPending.has(key) || this.cardmarketFailed.has(key)) continue;
+      if (!key || known[key] || this.cardmarketPending.has(key) || this.cardmarketGaveUp.has(key)) continue;
+      if ((this.cardmarketRetryAt.get(key) ?? 0) > now) continue;
       if (['JP', 'KR', 'CHS', 'ZHT'].includes(normalizeLanguageCode(card.language))) continue;
       const ptcgId = toPokemonTcgCardId(card.cardId);
       if (!ptcgId) continue;
@@ -1641,13 +1648,20 @@ export class CollectionStore {
 
     for (const item of items) this.cardmarketPending.add(item.cardId.toLowerCase());
     try {
-      const resolved = await this.repo.resolveCardmarketUrls(cfg, items);
+      const { urls, notFound } = await this.repo.resolveCardmarketUrls(cfg, items);
+      const missing = new Set(notFound.map((id) => id.toLowerCase()));
       const next = { ...this.cardmarketUrls() };
       for (const item of items) {
         const key = item.cardId.toLowerCase();
-        const url = resolved[item.cardId] ?? resolved[key];
-        if (url) next[key] = url;
-        else this.cardmarketFailed.add(key);
+        const url = urls[item.cardId] ?? urls[key];
+        if (url) {
+          next[key] = url;
+          this.cardmarketRetryAt.delete(key);
+        } else if (missing.has(key)) {
+          this.cardmarketGaveUp.add(key);
+        } else {
+          this.cardmarketRetryAt.set(key, Date.now() + 60_000);
+        }
       }
       this.cardmarketUrls.set(next);
       try {
@@ -1655,9 +1669,14 @@ export class CollectionStore {
       } catch {
         // Opslag niet beschikbaar: link blijft in deze sessie bewaard
       }
-    } catch {
-      // Oudere Code.gs of offline: zoeklink blijft als fallback actief (niet opnieuw proberen in deze sessie)
-      for (const item of items) this.cardmarketFailed.add(item.cardId.toLowerCase());
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '';
+      const outdatedScript = /Onbekende POST-actie/i.test(message);
+      for (const item of items) {
+        const key = item.cardId.toLowerCase();
+        if (outdatedScript) this.cardmarketGaveUp.add(key);
+        else this.cardmarketRetryAt.set(key, Date.now() + 120_000);
+      }
     } finally {
       for (const item of items) this.cardmarketPending.delete(item.cardId.toLowerCase());
     }

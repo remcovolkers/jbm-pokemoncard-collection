@@ -161,12 +161,13 @@ export interface CollectionRepository {
 
   /**
    * Zoekt exacte Cardmarket-productlinks op (server-side, via Apps Script). Optioneel: demo/offline heeft dit niet.
-   * Resultaat: map van kaart-ID naar kanonieke `…/Products/Singles/<Set>/<Kaart>`-URL.
+   * Resultaat: `urls` (kaart-ID -> kanonieke `…/Products/Singles/<Set>/<Kaart>`-URL) en `notFound` (definitief onbekende kaarten).
+   * Kaarten die in geen van beide staan, zijn tijdelijk mislukt en mogen later opnieuw geprobeerd worden.
    */
   resolveCardmarketUrls?(
     config: AppConnectionConfig,
     items: Array<{ cardId: string; ptcgId: string }>
-  ): Promise<Record<string, string>>;
+  ): Promise<{ urls: Record<string, string>; notFound: string[] }>;
 }
 
 export const COLLECTION_REPOSITORY = new InjectionToken<CollectionRepository>('COLLECTION_REPOSITORY');

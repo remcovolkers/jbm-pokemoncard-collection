@@ -30,7 +30,7 @@ export const APP_VERSION: AppVersionInfo = {
     'https://github.com/remcovolkers/jbm-pokemoncard-collection/releases/latest/download/pokebinder-release.apk',
   defaultReleasePageUrl:
     'https://github.com/remcovolkers/jbm-pokemoncard-collection/releases/latest',
-  latestScriptVersion: '2.2.3',
+  latestScriptVersion: '2.2.4',
   scriptChangelog:
     'Exacte Cardmarket-productlinks (server-side opgezocht), kaartnummers als platte tekst, Chinese setcodes, taalkolom op Verlanglijst en Holo Rare.',
   scriptCodeUrl: 'https://remcovolkers.github.io/jbm-pokemoncard-collection/apps-script/Code.gs',

@@ -193,11 +193,17 @@ describe('AppsScriptSheetsAdapter', () => {
     fetchSpy.mockResolvedValueOnce(
       jsonResponse({
         ok: true,
-        result: { urls: { 'sv03.5-199': 'https://www.cardmarket.com/en/Pokemon/Products/Singles/151/Charizard-ex-V3-MEW199' } },
+        result: {
+          urls: { 'sv03.5-199': 'https://www.cardmarket.com/en/Pokemon/Products/Singles/151/Charizard-ex-V3-MEW199' },
+          notFound: ['zzz-1'],
+        },
       })
     );
-    const urls = await adapter.resolveCardmarketUrls(validConfig, [{ cardId: 'sv03.5-199', ptcgId: 'sv3pt5-199' }]);
+    const { urls, notFound } = await adapter.resolveCardmarketUrls(validConfig, [
+      { cardId: 'sv03.5-199', ptcgId: 'sv3pt5-199' },
+    ]);
     expect(urls['sv03.5-199']).toContain('/Singles/151/Charizard-ex-V3-MEW199');
+    expect(notFound).toEqual(['zzz-1']);
     const body = JSON.parse(String((fetchSpy.mock.calls.at(-1)![1] as RequestInit).body));
     expect(body.action).toBe('resolveCardmarketUrls');
     expect(body.skipBootstrap).toBe(true);

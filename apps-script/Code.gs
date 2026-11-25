@@ -33,7 +33,7 @@ var DEX_COUNT = 1025; // #0001 t/m #1025
 var TCGDEX_BASE_URL = 'https://api.tcgdex.net/v2/en';
 var TCGDEX_GRAPHQL_URL = 'https://api.tcgdex.net/v2/graphql';
 
-var SCRIPT_VERSION = '2.2.3';
+var SCRIPT_VERSION = '2.2.4';
 var SCRIPT_CHANGELOG = 'Kaartspot Binder Sync (server-side ophalen zonder CORS & razendsnelle bulk-import), script-versiecontrole & batch-sync.';
 var POKEBINDER_MANIFEST_URL = 'https://remcovolkers.github.io/jbm-pokemoncard-collection/version.json';
 var POKEBINDER_CODE_URL = 'https://github.com/remcovolkers/jbm-pokemoncard-collection/blob/main/apps-script/Code.gs';
@@ -1718,26 +1718,55 @@ function handleBatchMutations_(ss, payload) {
 /**
  * Zoekt de exacte Cardmarket-productpagina (kanonieke slug-URL) van kaarten op via de doorverwijzing van
  * prices.pokemontcg.io (302 -> Cardmarket). De app kan die redirect zelf niet lezen (CORS), Apps Script wel.
- * payload.items = [{ cardId: 'sv03.5-199', ptcgId: 'sv3pt5-199' }, ...] (max 8 per aanroep)
- * Resultaat: { urls: { '<cardId>': 'https://www.cardmarket.com/en/Pokemon/Products/Singles/<Set>/<Kaart>' } }
+ * Die dienst geeft soms tijdelijk een 502; daarom wordt er meerdere keren met pauze opnieuw geprobeerd.
+ *
+ * payload.items = [{ cardId: 'sv05-177', ptcgId: 'sv5-177' }, ...] (max 8 per aanroep)
+ * Resultaat: {
+ *   urls:     { '<cardId>': 'https://www.cardmarket.com/en/Pokemon/Products/Singles/<Set>/<Kaart>' },
+ *   notFound: ['<cardId>', ...]   // definitief onbekend (404): niet opnieuw proberen
+ * }   (tijdelijk mislukt = in geen van beide: de app probeert het later opnieuw)
+ * De gevonden links worden ook in de notities van Collectie en Verlanglijst bewaard, zodat elke kaart
+ * maar één keer opgezocht hoeft te worden en alle apparaten dezelfde link gebruiken.
  */
 function handleResolveCardmarketUrls_(payload) {
   var items = (payload && payload.items) || [];
   var urls = {};
+  var notFound = [];
   var max = Math.min(items.length, 8);
   for (var i = 0; i < max; i++) {
     var cardId = String((items[i] && items[i].cardId) || '').trim();
     var ptcgId = String((items[i] && items[i].ptcgId) || '').trim();
     if (!cardId || !/^[A-Za-z0-9.]+-[A-Za-z0-9]+$/.test(ptcgId)) continue;
-    var url = resolveCardmarketProductUrl_(ptcgId);
-    if (url) urls[cardId] = url;
+    var outcome = resolveCardmarketProductUrl_(ptcgId);
+    if (outcome.url) urls[cardId] = outcome.url;
+    else if (outcome.notFound) notFound.push(cardId);
   }
-  return { urls: urls };
+
+  var hasUrls = false;
+  for (var k in urls) {
+    if (Object.prototype.hasOwnProperty.call(urls, k)) hasUrls = true;
+  }
+  if (hasUrls) {
+    var lock = LockService.getDocumentLock();
+    var locked = false;
+    try {
+      lock.waitLock(15000);
+      locked = true;
+      persistCardmarketUrls_(SpreadsheetApp.getActiveSpreadsheet(), urls);
+    } catch (e) {
+      // Opslaan in de Sheet is een extraatje: de app gebruikt de link sowieso al
+    } finally {
+      if (locked) lock.releaseLock();
+    }
+  }
+  return { urls: urls, notFound: notFound };
 }
 
+/** Eén opzoeking met meerdere pogingen. Geeft { url } bij succes, { notFound: true } bij 404, anders { } (tijdelijk). */
 function resolveCardmarketProductUrl_(ptcgId) {
   var endpoint = 'https://prices.pokemontcg.io/cardmarket/' + encodeURIComponent(ptcgId);
-  for (var attempt = 0; attempt < 2; attempt++) {
+  for (var attempt = 0; attempt < 4; attempt++) {
+    if (attempt > 0 && Utilities.sleep) Utilities.sleep(400 * attempt);
     var res;
     try {
       res = UrlFetchApp.fetch(endpoint, { followRedirects: false, muteHttpExceptions: true });
@@ -1750,14 +1779,52 @@ function resolveCardmarketProductUrl_(ptcgId) {
       var location = String(headers['Location'] || headers['location'] || '');
       var m = location.match(/^https?:\/\/(?:www\.)?cardmarket\.com\/[a-z]{2}\/Pokemon\/Products\/Singles\/[^?#]+/i);
       if (m) {
-        return m[0].replace(/^https?:\/\/(?:www\.)?cardmarket\.com\/[a-z]{2}\//i, 'https://www.cardmarket.com/en/');
+        return {
+          url: m[0].replace(/^https?:\/\/(?:www\.)?cardmarket\.com\/[a-z]{2}\//i, 'https://www.cardmarket.com/en/')
+        };
       }
-      return '';
+      return { notFound: true };
     }
-    if (code === 404) return '';
-    // 5xx (bijv. tijdelijke 502): één keer opnieuw proberen
+    if (code === 404) return { notFound: true };
+    // 5xx / 429 / netwerkfout: tijdelijk, opnieuw proberen
   }
-  return '';
+  return {};
+}
+
+/**
+ * Bewaart gevonden Cardmarket-links in de notities (Collectie kolom V, Verlanglijst kolom K) van alle rijen met dat Kaart-ID.
+ * Een oude Products?idProduct=-link wordt vervangen; een bestaande kanonieke link blijft staan. Schrijft alleen gewijzigde cellen.
+ */
+function persistCardmarketUrls_(ss, urlsByCardId) {
+  var byLower = {};
+  for (var id in urlsByCardId) {
+    if (Object.prototype.hasOwnProperty.call(urlsByCardId, id)) byLower[id.toLowerCase()] = urlsByCardId[id];
+  }
+  var slugRe = /cardmarket\.com\/[a-z]{2}\/Pokemon\/Products\/Singles\//i;
+  var oldRe = /https?:\/\/(?:www\.)?cardmarket\.com\/[a-z]{2}\/Pokemon\/Products\?idProduct=\d+/i;
+
+  var targets = [
+    { name: SHEET_NAMES.COLLECTION, idCol: 1, notesCol: 22 },
+    { name: SHEET_NAMES.WISHLIST, idCol: 13, notesCol: 11 }
+  ];
+  for (var t = 0; t < targets.length; t++) {
+    var sheet = ss.getSheetByName(targets[t].name);
+    if (!sheet) continue;
+    var lastRow = sheet.getLastRow();
+    if (lastRow < 2) continue;
+    if (sheet.getLastColumn && sheet.getLastColumn() < targets[t].idCol) continue;
+    var rows = lastRow - 1;
+    var ids = sheet.getRange(2, targets[t].idCol, rows, 1).getValues();
+    var notes = sheet.getRange(2, targets[t].notesCol, rows, 1).getValues();
+    for (var r = 0; r < rows; r++) {
+      var url = byLower[String(ids[r][0] || '').trim().toLowerCase()];
+      if (!url) continue;
+      var current = String(notes[r][0] === null || notes[r][0] === undefined ? '' : notes[r][0]).trim();
+      if (slugRe.test(current)) continue;
+      var next = oldRe.test(current) ? current.replace(oldRe, url) : (current ? current + ' ' + url : url);
+      sheet.getRange(r + 2, targets[t].notesCol).setValue(next);
+    }
+  }
 }
 
 function handleFetchKaartspotProfile_(payload) {

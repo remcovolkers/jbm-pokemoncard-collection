@@ -200,10 +200,17 @@ describe('CollectionStore (Signals, Optimistic UI & Offline Queue)', () => {
     expect(mockRepo.refreshPrices).toHaveBeenCalledTimes(1);
   });
 
-  it('zoekt exacte Cardmarket-links op via de repository (alleen live), onthoudt ze en slaat Aziatische talen over', async () => {
-    const resolve = vi.fn(async () => ({
-      'sv03.5-199': 'https://www.cardmarket.com/en/Pokemon/Products/Singles/151/Charizard-ex-V3-MEW199',
-    }));
+  it('zoekt exacte Cardmarket-links op (alleen live), onthoudt ze, probeert tijdelijke fouten later opnieuw en geeft 404 op', async () => {
+    const resolve = vi.fn(async (_cfg: unknown, items: Array<{ cardId: string }>) => {
+      const urls: Record<string, string> = {};
+      const notFound: string[] = [];
+      for (const item of items) {
+        if (item.cardId === 'sv03.5-199') urls[item.cardId] = 'https://www.cardmarket.com/en/Pokemon/Products/Singles/151/Charizard-ex-V3-MEW199';
+        else if (item.cardId === 'sv09-001') notFound.push(item.cardId);
+        // sv05-177: tijdelijk mislukt (in geen van beide)
+      }
+      return { urls, notFound };
+    });
     (mockRepo as { resolveCardmarketUrls?: unknown }).resolveCardmarketUrls = resolve;
 
     // Demo-modus: geen lookup
@@ -217,15 +224,37 @@ describe('CollectionStore (Signals, Optimistic UI & Offline Queue)', () => {
     });
     await store.ensureCardmarketUrls([
       { cardId: 'sv03.5-199', language: 'FR' },
-      { cardId: 'sv2a-006', language: 'JP' },
+      { cardId: 'sv05-177', language: 'EN' },
+      { cardId: 'sv09-001', language: 'EN' },
+      { cardId: 'sv2a-006', language: 'JP' }, // Aziatische taal: overgeslagen
     ]);
     expect(resolve).toHaveBeenCalledTimes(1);
-    expect((resolve.mock.calls[0] as unknown[])[1]).toEqual([{ cardId: 'sv03.5-199', ptcgId: 'sv3pt5-199' }]);
+    expect((resolve.mock.calls[0] as unknown[])[1]).toEqual([
+      { cardId: 'sv03.5-199', ptcgId: 'sv3pt5-199' },
+      { cardId: 'sv05-177', ptcgId: 'sv5-177' },
+      { cardId: 'sv09-001', ptcgId: 'sv9-1' },
+    ]);
     expect(store.cardmarketUrls()['sv03.5-199']).toContain('Charizard-ex-V3-MEW199');
 
-    // Tweede keer: uit de cache, geen nieuwe aanroep
-    await store.ensureCardmarketUrls([{ cardId: 'sv03.5-199', language: 'EN' }]);
+    // Direct opnieuw: niets nieuws (gevonden = cache, tijdelijk mislukt = wachttijd, 404 = opgegeven)
+    await store.ensureCardmarketUrls([
+      { cardId: 'sv03.5-199' },
+      { cardId: 'sv05-177' },
+      { cardId: 'sv09-001' },
+    ]);
     expect(resolve).toHaveBeenCalledTimes(1);
+
+    // Na de wachttijd wordt alleen de tijdelijk mislukte kaart opnieuw geprobeerd
+    vi.useFakeTimers();
+    vi.setSystemTime(Date.now() + 61_000);
+    await store.ensureCardmarketUrls([
+      { cardId: 'sv03.5-199' },
+      { cardId: 'sv05-177' },
+      { cardId: 'sv09-001' },
+    ]);
+    vi.useRealTimers();
+    expect(resolve).toHaveBeenCalledTimes(2);
+    expect((resolve.mock.calls[1] as unknown[])[1]).toEqual([{ cardId: 'sv05-177', ptcgId: 'sv5-177' }]);
   });
 
   it('begrenst toast-meldingen tot max 3 en staat handmatig sluiten toe', () => {

@@ -324,11 +324,11 @@ describe('apps-script/Code.gs Backend API & Formule-integriteit', () => {
     const ping = JSON.parse(sandbox.doGet({ parameter: { action: 'ping', token: 'test-secret-token' } }).getContent());
     assert.equal(ping.ok, true);
     assert.equal(ping.spreadsheetName, 'Pokémon Kaartencollectie Tracker');
-    assert.equal(ping.scriptVersion, '2.2.3');
+    assert.equal(ping.scriptVersion, '2.2.4');
 
     const boot = JSON.parse(sandbox.doGet({ parameter: { action: 'bootstrap', token: 'test-secret-token' } }).getContent());
     assert.equal(boot.ok, true);
-    assert.equal(boot.data.scriptVersion, '2.2.3');
+    assert.equal(boot.data.scriptVersion, '2.2.4');
     assert.equal(boot.data.binderSlotsPerPage, 9);
     assert.equal(boot.data.pokedex.length, 4);
   });
@@ -368,11 +368,11 @@ describe('apps-script/Code.gs Backend API & Formule-integriteit', () => {
 
     sandbox.checkScriptUpdateFromMenu();
     assert.equal(alerts.length, 1);
-    assert.match(alerts[0], /v2\.2\.3/);
+    assert.match(alerts[0], /v2\.2\.4/);
     assert.match(alerts[0], /v2\.3\.0/);
     assert.match(alerts[0], /Implementaties beheren/);
 
-    manifestResponse = { latestScriptVersion: '2.2.3' };
+    manifestResponse = { latestScriptVersion: '2.2.4' };
     sandbox.checkScriptUpdateFromMenu();
     assert.equal(alerts.length, 2);
     assert.match(alerts[1], /nieuwste PokéBinder Apps Script versie/);
@@ -478,21 +478,37 @@ describe('apps-script/Code.gs Backend API & Formule-integriteit', () => {
     assert.equal(machop.cardNumber, '5/11');
   });
 
-  it('resolveCardmarketUrls volgt de pokemontcg.io-redirect server-side en geeft kanonieke Cardmarket-slugs terug', () => {
-    const fetched = [];
-    const { sandbox } = createGasEnvironment({
+  it('resolveCardmarketUrls probeert 502 opnieuw, onthoudt 404 als onbekend en bewaart links in de notities', () => {
+    const calls = {};
+    const { sandbox, sheets } = createGasEnvironment({
       tcgdexMock: (url) => {
-        fetched.push(url);
-        const redirects = {
-          'sv3pt5-199': 'https://cardmarket.com/en/Pokemon/Products/Singles/151/Charizard-ex-V3-MEW199?utm_source=pokemontcgio',
-        };
         const id = decodeURIComponent(url.split('/cardmarket/')[1]);
-        if (redirects[id]) {
-          return { getResponseCode: () => 302, getHeaders: () => ({ Location: redirects[id] }), getContentText: () => '' };
+        calls[id] = (calls[id] || 0) + 1;
+        if (id === 'sv5-177') {
+          // eerste twee pogingen tijdelijk 502, daarna de redirect
+          if (calls[id] < 3) return { getResponseCode: () => 502, getHeaders: () => ({}), getContentText: () => '' };
+          return {
+            getResponseCode: () => 302,
+            getHeaders: () => ({
+              Location: 'https://cardmarket.com/en/Pokemon/Products/Singles/Temporal-Forces/Gastly-V2-TEF177?utm_source=pokemontcgio',
+            }),
+            getContentText: () => '',
+          };
         }
-        return { getResponseCode: () => 404, getHeaders: () => ({}), getContentText: () => '' };
+        if (id === 'sv3pt5-199') {
+          return { getResponseCode: () => 404, getHeaders: () => ({}), getContentText: () => '' };
+        }
+        // altijd tijdelijk kapot
+        return { getResponseCode: () => 502, getHeaders: () => ({}), getContentText: () => '' };
       },
     });
+
+    // Collectie-rij (V = notities) en Verlanglijst-rij (K = notities, M = Kaart-ID) die dezelfde kaart bevatten
+    sheets.Collectie._grid.push([
+      'sv05-177', 'Gastly', 'Temporal Forces', '177/162', 'EN', 'Darkness', 'Illustration Rare', 'Normal',
+      'Near Mint (NM)', 'Raw', '', 1, 'Hoofdbinder', '', '2026-11-25', 0, 1, '=F', '=F', '=F', false,
+      'Kaartspot sync https://www.cardmarket.com/en/Pokemon/Products?idProduct=760807',
+    ]);
 
     const res = JSON.parse(
       sandbox.doPost({
@@ -503,8 +519,9 @@ describe('apps-script/Code.gs Backend API & Formule-integriteit', () => {
             skipBootstrap: true,
             payload: {
               items: [
+                { cardId: 'sv05-177', ptcgId: 'sv5-177' },
                 { cardId: 'sv03.5-199', ptcgId: 'sv3pt5-199' },
-                { cardId: 'zht-x-1', ptcgId: 'nope-1' },
+                { cardId: 'sv09-001', ptcgId: 'sv9-1' },
                 { cardId: 'bad', ptcgId: '../etc' },
               ],
             },
@@ -515,10 +532,18 @@ describe('apps-script/Code.gs Backend API & Formule-integriteit', () => {
 
     assert.equal(res.ok, true);
     assert.deepEqual(res.result.urls, {
-      'sv03.5-199': 'https://www.cardmarket.com/en/Pokemon/Products/Singles/151/Charizard-ex-V3-MEW199',
+      'sv05-177': 'https://www.cardmarket.com/en/Pokemon/Products/Singles/Temporal-Forces/Gastly-V2-TEF177',
     });
-    // Ongeldige ID's worden niet eens opgehaald
-    assert.equal(fetched.some((u) => u.includes('etc')), false);
+    assert.deepEqual(res.result.notFound, ['sv03.5-199']); // 404 = definitief onbekend
+    assert.equal(calls['sv5-177'], 3); // 502, 502, 302
+    assert.equal(calls['sv9-1'], 4); // blijft tijdelijk kapot: 4 pogingen, geen uitkomst
+    assert.equal(calls['../etc'], undefined);
+
+    // Link is in de notities van de Collectie bewaard; de oude idProduct-link is vervangen
+    const notes = sheets.Collectie._grid.at(-1)[21];
+    assert.match(notes, /Gastly-V2-TEF177/);
+    assert.doesNotMatch(notes, /idProduct/);
+    assert.match(notes, /^Kaartspot sync /);
   });
 
   it('deleteCard wist alleen A:Q en U:V en laat R:T formules intact', () => {

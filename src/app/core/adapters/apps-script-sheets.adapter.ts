@@ -168,14 +168,14 @@ export class AppsScriptSheetsAdapter implements CollectionRepository {
   async resolveCardmarketUrls(
     config: AppConnectionConfig,
     items: Array<{ cardId: string; ptcgId: string }>
-  ): Promise<Record<string, string>> {
-    const res = await this.postAction<{ urls: Record<string, string> }>(
+  ): Promise<{ urls: Record<string, string>; notFound: string[] }> {
+    const res = await this.postAction<{ urls: Record<string, string>; notFound?: string[] }>(
       config,
       'resolveCardmarketUrls',
       { items },
       { skipBootstrap: true, requireData: false }
     );
-    return res.result?.urls ?? {};
+    return { urls: res.result?.urls ?? {}, notFound: res.result?.notFound ?? [] };
   }
 
   async batchMutations(
