@@ -1234,3 +1234,15 @@
     color: $color-primary;
   }
 }
+
+// Schakelaars in de kaartview: visueel compact, maar met >= 44px raakvlak (WCAG 2.5.5 / Apple HIG)
+.slot-toggle .pb-switch {
+  position: relative;
+  flex-shrink: 0;
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: -10px -6px;
+  }
+}

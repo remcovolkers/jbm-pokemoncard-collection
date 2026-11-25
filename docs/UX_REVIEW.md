@@ -86,3 +86,13 @@
    *Waarom:* Verzamelaars gebruiken geprinte checklists op ruilbeurzen waar mobiel bereik slecht kan zijn.
 10. **Tablet landscape split-view**  
     *Waarom:* Op tablets in liggende stand (`>= 768px` tot `1024px`) kan `/collectie` optioneel als master-detail (lijst links, kaartdetail rechts) renderen.
+
+---
+
+## 5. Addendum 2026-11-25 — Feedback-ronde Melli (talen, Pokédex-kaartview, scrollbehoud)
+
+- **Pokédex Binder kaartview:** gevulde vakjes openen een schone Hero Card (artwork + `360° 3D Showcase`, Cardmarket-waarde, `Bekijk op Cardmarket`) zonder invulvelden en zonder "Bevestig selectie". Alle schakelaars en de versie-kiezer slaan direct op; `Vorige/Volgende`, swipe en `←`/`→` bladeren door gevulde vakjes. Schakelaars hebben een ≥ 44 px raakvlak.
+- **Snel Toevoegen:** Kaarttaal-kiezer (44 px) staat direct boven het zoekveld; Taal is uit "Meer opties" verwijderd (geen dubbel toegangspunt).
+- **Kaartdetail:** taal aanpasbaar, Cardmarket-link volgt de taal.
+- **Scrollbehoud:** terugkeren vanuit Kaartdetail herstelt de scrollpositie van de overzichtspagina.
+- **Open adviezen:** op mobiel nemen header + Vorige/Volgende in de kaartview ~25% van het scherm in (overweeg stepper naast de titel); de taalkiezer heeft nog geen "laatst gebruikte talen"-snelkeuze.
