@@ -24,7 +24,6 @@ import {
 import { HapticsService } from '../../core/platform/haptics.service';
 import { isEditableEventTarget } from '../../core/platform/keyboard.utils';
 import { ModalScrollLockService } from '../../core/platform/modal-scroll-lock.service';
-import { CARD_CATALOG_PORT } from '../../core/ports/card-catalog.port';
 import { CollectionStore } from '../../core/state/collection.store';
 import { CardArtworkComponent } from '../../shared/card-artwork/card-artwork.component';
 import { CardShowcaseComponent } from '../../shared/card-showcase/card-showcase.component';
@@ -52,7 +51,6 @@ export class PokedexBinderComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly scrollLock = inject(ModalScrollLockService);
   private readonly haptics = inject(HapticsService);
-  private readonly catalog = inject(CARD_CATALOG_PORT, { optional: true });
 
   readonly generations = GENERATIONS;
   readonly formatDexNumber = formatDexNumber;
@@ -362,7 +360,6 @@ export class PokedexBinderComponent implements OnInit {
       name: card.name,
       setName: card.setName,
       cardNumber: card.cardNumber,
-      cardmarketProductId: this.catalog?.getCachedCardmarketProductId?.(card.cardId),
       notes: card.notes,
       language: card.language,
     });
@@ -570,8 +567,8 @@ export class PokedexBinderComponent implements OnInit {
         return 'UR';
       case 'Hyper Rare':
         return 'HR';
-      case 'Vintage Holo':
-        return 'VINTAGE';
+      case 'Holo Rare':
+        return 'HOLO';
       case 'Promo':
         return 'PROMO';
       default:

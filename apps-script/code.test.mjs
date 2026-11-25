@@ -773,7 +773,8 @@ describe('apps-script/Code.gs Backend API & Formule-integriteit', () => {
     assert.equal(row[11], 1);
     assert.equal(row[16], 24.75); // Holo-prijs gekozen i.p.v. normale prijs!
     assert.equal(row[17], '=FORMULA_TOTAL_VAL'); // R:T formules onaangeroerd
-    assert.equal(row[21], 'https://www.cardmarket.com/en/Pokemon/Products?idProduct=733794');
+    // Zoeklink i.p.v. Products?idProduct= (die geeft bij Cardmarket regelmatig een 401)
+    assert.equal(row[21], 'https://www.cardmarket.com/en/Pokemon/Products/Singles?searchString=Mew%20ex%20151');
     assert.equal(
       sandbox.buildCardmarketUrl_({ name: 'Dark Charizard', localId: '004' }),
       'https://www.cardmarket.com/en/Pokemon/Products/Singles?searchString=Dark%20Charizard%204'

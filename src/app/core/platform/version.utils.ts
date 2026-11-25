@@ -131,7 +131,7 @@ export function evaluateUpdateManifest(
     bundleChecksum: (remote.bundleChecksum || '').trim().toLowerCase(),
     apkDownloadUrl,
     releasePageUrl,
-    releaseNotes: remote.releaseNotes || '',
+    releaseNotes: summarizeReleaseNotes(remote.releaseNotes),
   };
 }
 
@@ -149,4 +149,19 @@ export function isScriptUpdateAvailable(
   const cleanConnected = (connectedVersion || '').trim();
   if (!cleanConnected) return true;
   return compareSemver(cleanLatest, cleanConnected) > 0;
+}
+
+/**
+ * Maakt van een (soms hele lange) commitbericht een korte, leesbare release-notitie voor de update-banner:
+ * alleen de onderwerpregel (tot de eerste opsomming), zonder `Co-Authored-By`/robot-regels, max. 140 tekens.
+ */
+export function summarizeReleaseNotes(raw?: string | null): string {
+  const cleaned = (raw ?? '')
+    .replace(/\r/g, '')
+    .replace(/\s*Co-Authored-By:[\s\S]*$/i, '')
+    .replace(/\s*🤖[\s\S]*$/, '')
+    .trim();
+  const firstLine = cleaned.split('\n').find((line) => line.trim()) ?? '';
+  const subject = firstLine.split(/\s+-\s+/)[0]?.trim() ?? '';
+  return subject.length > 140 ? `${subject.slice(0, 137).trimEnd()}…` : subject;
 }

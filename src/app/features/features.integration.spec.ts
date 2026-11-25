@@ -395,8 +395,9 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
         .componentInstance as CardDetailComponent;
       expect(detail.activeCard()?.cardId).toBe('sv03.5-198');
       await new Promise((r) => setTimeout(r, 0));
+      // Geen kale idProduct-link (401 bij Cardmarket) maar de zoeklink op naam + kaartnummer
       expect(detail.activeCardmarketUrl()).toBe(
-        'https://www.cardmarket.com/en/Pokemon/Products?idProduct=733794'
+        'https://www.cardmarket.com/en/Pokemon/Products/Singles?searchString=Venusaur%20ex%20198'
       );
 
       // Escape keert direct terug naar /collectie

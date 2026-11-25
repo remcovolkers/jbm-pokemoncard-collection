@@ -332,7 +332,7 @@ export const DEFAULT_DROPDOWN_SETTINGS: DropdownSettings = {
     'Special Illustration Rare',
     'Hyper Rare',
     'Promo',
-    'Vintage Holo',
+    'Holo Rare',
   ],
   variants: [
     'Normal',

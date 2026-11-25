@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   SET_CODE_ALIASES,
-  buildCardmarketProductUrl,
   buildCardmarketSearchUrl,
   buildPokemonTcgAssetUrl,
   buildTcgdexAssetUrl,
@@ -246,14 +245,11 @@ describe('card-id.utils', () => {
       );
     });
 
-    it('bouwt directe Cardmarket productlinks via idProduct en herkent geldige directe links in notities', () => {
-      expect(buildCardmarketProductUrl(274057)).toBe(
-        'https://www.cardmarket.com/en/Pokemon/Products?idProduct=274057'
-      );
-
+    it('gebruikt nooit de kale idProduct-link (401) maar de kanonieke slug uit notities of de zoeklink', () => {
+      // Oude Products?idProduct=-links in notities worden genegeerd (geven regelmatig een 401)
       expect(
         extractCardmarketUrlFromNotes('Sleeve: Dragon Shield · https://www.cardmarket.com/en/Pokemon/Products?idProduct=274057')
-      ).toBe('https://www.cardmarket.com/en/Pokemon/Products?idProduct=274057');
+      ).toBeNull();
 
       expect(
         extractCardmarketUrlFromNotes('https://www.cardmarket.com/en/Pokemon/Products/Singles/Team-Rocket/Dark-Charizard-TR4')
@@ -267,17 +263,7 @@ describe('card-id.utils', () => {
         extractCardmarketUrlFromNotes('https://www.cardmarket.com/en/Pokemon/Products/Singles?searchString=Charizard')
       ).toBeNull();
 
-      // Prioriteit: 1) cardmarketProductId -> 2) directe URL in notes -> 3) Singles-zoeklink
-      expect(
-        resolveCardmarketUrl({
-          name: 'Dark Charizard',
-          setName: 'Team Rocket',
-          cardNumber: '4/82',
-          cardmarketProductId: 274057,
-          notes: 'https://www.cardmarket.com/en/Pokemon/Products/Singles/Team-Rocket/Dark-Charizard-TR4',
-        })
-      ).toBe('https://www.cardmarket.com/en/Pokemon/Products?idProduct=274057');
-
+      // Prioriteit: 1) kanonieke slug in notes -> 2) Singles-zoeklink (naam + nummer)
       expect(
         resolveCardmarketUrl({
           name: 'Dark Charizard',
@@ -287,23 +273,25 @@ describe('card-id.utils', () => {
         })
       ).toBe('https://www.cardmarket.com/en/Pokemon/Products/Singles/Team-Rocket/Dark-Charizard-TR4');
 
-      expect(
-        resolveCardmarketUrl({
-          name: 'Dark Charizard',
-          setName: 'Team Rocket',
-          cardNumber: '4/82',
-          notes: 'https://www.cardmarket.com/en/Pokemon/Products/Search?searchString=Dark%20Charizard',
-        })
-      ).toBe('https://www.cardmarket.com/en/Pokemon/Products/Singles?searchString=Dark%20Charizard%204');
+      const withIdProductNote = resolveCardmarketUrl({
+        name: 'Dark Charizard',
+        setName: 'Team Rocket',
+        cardNumber: '4/82',
+        notes: 'https://www.cardmarket.com/en/Pokemon/Products?idProduct=274057',
+      });
+      expect(withIdProductNote).not.toContain('idProduct');
+      expect(withIdProductNote).toBe(
+        'https://www.cardmarket.com/en/Pokemon/Products/Singles?searchString=Dark%20Charizard%204'
+      );
     });
   });
 });
 
 describe('Taal, Cardmarket & titel-herstel (feedback-ronde)', () => {
   it('geeft Cardmarket-links de juiste language-filter mee en laat Engels ongemoeid', () => {
-    const base = { name: 'Dracaufeu', cardmarketProductId: 273699 };
+    const base = { name: 'Dracaufeu', cardNumber: '4/102' };
     expect(resolveCardmarketUrl({ ...base, language: 'FR' })).toBe(
-      'https://www.cardmarket.com/en/Pokemon/Products?idProduct=273699&language=2'
+      'https://www.cardmarket.com/en/Pokemon/Products/Singles?searchString=Dracaufeu%204&language=2'
     );
     expect(resolveCardmarketUrl({ ...base, language: 'CHS' })).toContain('language=6');
     expect(resolveCardmarketUrl({ ...base, language: 'NL' })).toContain('language=12');

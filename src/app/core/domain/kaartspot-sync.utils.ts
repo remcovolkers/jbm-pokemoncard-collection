@@ -404,7 +404,7 @@ export function mapKaartspotRarity(rawRarity: string | null | undefined): string
     return 'Promo';
   }
   if (r === 'rare holo' || r === 'holo rare' || r.includes('vintage holo')) {
-    return 'Vintage Holo';
+    return 'Holo Rare';
   }
   if (r.includes('uncommon') || r === 'two diamond') {
     return 'Uncommon';

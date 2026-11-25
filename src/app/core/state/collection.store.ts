@@ -14,6 +14,8 @@ import {
 import {
   calculateBinderPosition,
   calculatePortfolioSummary,
+  normalizeRarityLabel,
+  normalizeRarityOptions,
   roundCurrency,
 } from '../domain/card-math.utils';
 import {
@@ -135,6 +137,7 @@ export class CollectionStore {
       ...DEFAULT_DROPDOWN_SETTINGS,
       ...remote,
       languages: mergeLanguageOptions(remote?.languages),
+      rarities: normalizeRarityOptions(remote?.rarities ?? DEFAULT_DROPDOWN_SETTINGS.rarities),
       acquisitionMethods:
         remote?.acquisitionMethods && remote.acquisitionMethods.length > 0
           ? remote.acquisitionMethods
@@ -318,6 +321,7 @@ export class CollectionStore {
         ...c,
         cardNumber: repairCorruptedCardNumber(c.cardNumber, c.cardId),
         setName: normalizeSetDisplayName(c.setName),
+        rarity: normalizeRarityLabel(c.rarity),
         imageUrl:
           c.imageUrl ||
           extractArtworkUrlFromNotes(c.notes) ||

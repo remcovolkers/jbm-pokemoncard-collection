@@ -673,18 +673,13 @@ export function resolveCardArtworkUrl(
   return buildTcgdexAssetUrl(cardId, quality);
 }
 
-export function buildCardmarketProductUrl(productId: number): string {
-  return `https://www.cardmarket.com/en/Pokemon/Products?idProduct=${Math.floor(productId)}`;
-}
-
 /**
- * Haalt een eventueel al opgeslagen directe Cardmarket-productlink uit de kaartnotities
- * (negeert oude generieke /Search?searchString= of /Singles?searchString= links).
+ * Haalt een eventueel al opgeslagen kanonieke Cardmarket-productlink (`.../Products/Singles/<Set>/<Kaart>`) uit de notities.
+ * Oude `Products?idProduct=…`-links worden bewust genegeerd: die geven bij Cardmarket regelmatig een 401-fout.
+ * Generieke zoeklinks (`?searchString=`) worden ook genegeerd en live opnieuw opgebouwd.
  */
 export function extractCardmarketUrlFromNotes(notes?: string): string | null {
   if (!notes) return null;
-  const idMatch = notes.match(/https:\/\/(?:www\.)?cardmarket\.com\/[a-z]{2}\/Pokemon\/Products\?idProduct=\d+/i);
-  if (idMatch) return idMatch[0];
   const slugMatch = notes.match(/https:\/\/(?:www\.)?cardmarket\.com\/[a-z]{2}\/Pokemon\/Products\/Singles\/[^\s?#]+/i);
   return slugMatch ? slugMatch[0] : null;
 }
@@ -703,19 +698,14 @@ export function resolveCardmarketUrl(opts: {
   name: string;
   setName?: string;
   cardNumber?: string;
-  cardmarketProductId?: number;
   notes?: string;
   /** Kaarttaal (EN/FR/CHS…): opent Cardmarket direct gefilterd op die taal. */
   language?: string;
 }): string {
-  let base: string;
-  if (opts.cardmarketProductId && Number.isFinite(opts.cardmarketProductId) && opts.cardmarketProductId > 0) {
-    base = buildCardmarketProductUrl(opts.cardmarketProductId);
-  } else {
-    base =
-      extractCardmarketUrlFromNotes(opts.notes) ??
-      buildCardmarketSearchUrl(opts.name, opts.setName, opts.cardNumber);
-  }
+  // Kanonieke slug-link uit de notities, anders de zoeklink (naam + kaartnummer) die Cardmarket zelf naar de kaart doorstuurt.
+  // De kale `Products?idProduct=`-link wordt niet meer gebruikt: die geeft regelmatig een 401.
+  const base =
+    extractCardmarketUrlFromNotes(opts.notes) ?? buildCardmarketSearchUrl(opts.name, opts.setName, opts.cardNumber);
   return withCardmarketLanguage(base, opts.language);
 }
 

@@ -100,7 +100,7 @@ export function createDemoSnapshot(): AppSnapshot {
       cardNumber: '15/102',
       language: 'EN',
       type: 'Grass',
-      rarity: 'Vintage Holo',
+      rarity: 'Holo Rare',
       variant: 'Holo',
       condition: 'Excellent (EX)',
       grading: 'Raw',

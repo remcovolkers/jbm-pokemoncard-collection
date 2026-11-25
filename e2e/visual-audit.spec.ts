@@ -2,6 +2,22 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { expect, Page, test } from '@playwright/test';
 
+// Houd de e2e onafhankelijk van het live version.json op GitHub Pages (anders verschijnt een update-banner met
+// wisselende hoogte/tekst en verandert de verwachte Code.gs-versie na elke deploy).
+test.beforeEach(async ({ page }) => {
+  await page.route('**/version.json*', (route) =>
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        webVersion: '0.0.1',
+        latestNativeVersion: '0.0.1',
+        latestScriptVersion: '2.2.0',
+        releaseNotes: '',
+      }),
+    })
+  );
+});
+
 async function settleAndCapture(page: Page, screenshotPath: string): Promise<void> {
   await page.locator('.shell__main').waitFor({ state: 'visible' });
   await page.evaluate(async () => {

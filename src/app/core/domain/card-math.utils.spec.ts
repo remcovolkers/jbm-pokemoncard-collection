@@ -8,6 +8,8 @@ import {
   formatEur,
   formatInteger,
   formatPercent,
+  normalizeRarityLabel,
+  normalizeRarityOptions,
   parseCardNumberParts,
 } from './card-math.utils';
 import { CollectionCard, TradeEntry, WishlistItem } from './models';
@@ -231,3 +233,19 @@ describe('card-math.utils', () => {
     });
   });
 });
+
+describe('normalizeRarityLabel (Holo Rare i.p.v. Vintage Holo)', () => {
+  it('brengt Vintage Holo / Rare Holo terug op het Cardmarket-label "Holo Rare"', () => {
+    expect(normalizeRarityLabel('Vintage Holo')).toBe('Holo Rare');
+    expect(normalizeRarityLabel('rare holo')).toBe('Holo Rare');
+    expect(normalizeRarityLabel('Holo Rare')).toBe('Holo Rare');
+    expect(normalizeRarityLabel('Ultra Rare')).toBe('Ultra Rare');
+    expect(normalizeRarityLabel(undefined)).toBe('');
+  });
+
+  it('vervangt oude dropdownwaarde zonder dubbelen en voegt "Holo Rare" toe', () => {
+    expect(normalizeRarityOptions(['Common', 'Vintage Holo', 'Holo Rare'])).toEqual(['Common', 'Holo Rare']);
+    expect(normalizeRarityOptions(['Common'])).toEqual(['Common', 'Holo Rare']);
+  });
+});
+

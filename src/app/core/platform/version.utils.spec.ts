@@ -5,6 +5,7 @@ import {
   evaluateUpdateManifest,
   isNewerWebVersion,
   isScriptUpdateAvailable,
+  summarizeReleaseNotes,
 } from './version.utils';
 
 const BASE_REMOTE: RemoteVersionManifest = {
@@ -104,3 +105,16 @@ describe('version.utils (PWA + Capacitor OTA & APK evaluatie)', () => {
     expect(isScriptUpdateAvailable('2.1.0', '2.1.0', true)).toBe(true);
   });
 });
+
+describe('summarizeReleaseNotes', () => {
+  it('houdt alleen de onderwerpregel over en verwijdert Co-Authored-By', () => {
+    const raw =
+      'feat: echte Chinese setcode opslaan - Chinese Pikaqian-setcode (CS4.5C) uit het pad - Tests uitgebreid Co-Authored-By: Claude <noreply@anthropic.com>';
+    expect(summarizeReleaseNotes(raw)).toBe('feat: echte Chinese setcode opslaan');
+    expect(summarizeReleaseNotes('fix: iets\n\nlange uitleg\nCo-Authored-By: X <x@y.z>')).toBe('fix: iets');
+    expect(summarizeReleaseNotes('Snellere filters en bugfixes')).toBe('Snellere filters en bugfixes');
+    expect(summarizeReleaseNotes(undefined)).toBe('');
+    expect(summarizeReleaseNotes('x'.repeat(300)).length).toBe(138);
+  });
+});
+

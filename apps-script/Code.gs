@@ -845,7 +845,7 @@ function readCollection_(ss) {
       cardNumber: repairCardNumberCell_(row[3], cardId),
       language: String(row[4] || 'EN').trim(),
       type: String(row[5] || '').trim(),
-      rarity: String(row[6] || '').trim(),
+      rarity: normalizeRarityLabel_(row[6]),
       variant: String(row[7] || 'Normal').trim(),
       condition: String(row[8] || 'Near Mint (NM)').trim(),
       grading: String(row[9] || 'Raw').trim(),
@@ -1088,7 +1088,7 @@ function readSettings_(ss) {
     ],
     rarities: [
       'Common', 'Uncommon', 'Rare', 'Double Rare', 'Illustration Rare',
-      'Ultra Rare', 'Special Illustration Rare', 'Hyper Rare', 'Promo', 'Vintage Holo'
+      'Ultra Rare', 'Special Illustration Rare', 'Hyper Rare', 'Promo', 'Holo Rare'
     ],
     variants: [
       'Normal', 'Reverse Holo', 'Holo', 'Full Art', 'Alt Art', 'First Edition', 'Stamped / Promo'
@@ -1157,7 +1157,26 @@ function readSettings_(ss) {
   }
 
   defaults.languages = mergeLanguageOptions_(defaults.languages);
+  defaults.rarities = normalizeRarityOptions_(defaults.rarities);
   return defaults;
+}
+
+/** Eén label voor holo-zeldzaamheid zoals Cardmarket die noemt: "Vintage Holo"/"Rare Holo" -> "Holo Rare". */
+function normalizeRarityLabel_(raw) {
+  var text = String(raw === null || raw === undefined ? '' : raw).trim();
+  var lower = text.toLowerCase();
+  return lower === 'vintage holo' || lower === 'rare holo' || lower === 'holo rare' ? 'Holo Rare' : text;
+}
+
+function normalizeRarityOptions_(options) {
+  var result = [];
+  var list = options || [];
+  for (var i = 0; i < list.length; i++) {
+    var label = normalizeRarityLabel_(list[i]);
+    if (label && result.indexOf(label) === -1) result.push(label);
+  }
+  if (result.indexOf('Holo Rare') === -1) result.push('Holo Rare');
+  return result;
 }
 
 /** Vult een bestaande Taal-dropdown aan met ontbrekende standaardtalen (CHS, ZHT, ...). */
@@ -2617,11 +2636,7 @@ function fetchTcgdexCard_(rawInputOrId, ss) {
 }
 
 function buildCardmarketUrl_(card) {
-  var cm = card && card.pricing && card.pricing.cardmarket;
-  var productId = cm ? toNumber_(cm.idProduct, 0) : 0;
-  if (productId > 0) {
-    return 'https://www.cardmarket.com/en/Pokemon/Products?idProduct=' + Math.floor(productId);
-  }
+  // Zoeklink i.p.v. Products?idProduct=: die laatste geeft bij Cardmarket regelmatig een 401-fout.
   var rawLocal = String((card && card.localId) || '').trim();
   var cleanLocal = /^\d+$/.test(rawLocal) ? String(parseInt(rawLocal, 10)) : rawLocal;
   var query = encodeURIComponent((((card && card.name) || '') + ' ' + cleanLocal).trim());
@@ -2673,7 +2688,7 @@ function mapTcgdexRarity_(rarity) {
   }
   if (r.indexOf('double') !== -1 || r === 'four diamond') return 'Double Rare';
   if (r.indexOf('promo') !== -1) return 'Promo';
-  if (r.indexOf('holo') !== -1) return 'Vintage Holo';
+  if (r.indexOf('holo') !== -1) return 'Holo Rare';
   if (r.indexOf('uncommon') !== -1 || r === 'two diamond') return 'Uncommon';
   if (r.indexOf('common') !== -1 || r === 'one diamond') return 'Common';
   if (r.indexOf('rare') !== -1 || r === 'three diamond') return 'Rare';

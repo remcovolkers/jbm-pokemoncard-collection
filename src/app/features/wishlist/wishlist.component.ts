@@ -413,7 +413,6 @@ export class WishlistComponent {
       name: item.cardName,
       setName: item.setName,
       cardNumber: item.cardNumber,
-      cardmarketProductId: item.cardId ? this.catalog.getCachedCardmarketProductId?.(item.cardId) : undefined,
       notes: item.notes,
       language: item.language,
     });

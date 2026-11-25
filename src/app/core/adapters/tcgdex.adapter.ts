@@ -107,7 +107,7 @@ const RARITY_NORMALIZATION: Record<string, string> = {
   'two diamond': 'Uncommon',
   rare: 'Rare',
   'three diamond': 'Rare',
-  'rare holo': 'Rare',
+  'rare holo': 'Holo Rare',
   'double rare': 'Double Rare',
   'four diamond': 'Double Rare',
   'illustration rare': 'Illustration Rare',
@@ -129,7 +129,7 @@ const RARITY_NORMALIZATION: Record<string, string> = {
   'rare holo vstar': 'Ultra Rare',
   'rare ultra': 'Ultra Rare',
   'rare secret': 'Special Illustration Rare',
-  'holo rare': 'Vintage Holo',
+  'holo rare': 'Holo Rare',
 };
 
 @Injectable({ providedIn: 'root' })

@@ -230,3 +230,24 @@ export function formatInteger(value: number): string {
 export function formatDexNumber(dexNumber: number): string {
   return `#${String(Math.max(1, Math.floor(dexNumber))).padStart(4, '0')}`;
 }
+
+/**
+ * Eén label voor holo-zeldzaamheid zoals Cardmarket die noemt ("Holo Rare").
+ * Oude/afwijkende labels ("Vintage Holo", "Rare Holo") worden hierop teruggebracht.
+ */
+export function normalizeRarityLabel(raw?: string | null): string {
+  const text = (raw ?? '').trim();
+  const lower = text.toLowerCase();
+  return lower === 'vintage holo' || lower === 'rare holo' || lower === 'holo rare' ? 'Holo Rare' : text;
+}
+
+/** Normaliseert een zeldzaamheden-dropdown: oude labels vervangen, dubbelen weg en "Holo Rare" altijd aanwezig. */
+export function normalizeRarityOptions(options?: readonly string[] | null): string[] {
+  const result: string[] = [];
+  for (const item of options ?? []) {
+    const label = normalizeRarityLabel(item);
+    if (label && !result.includes(label)) result.push(label);
+  }
+  if (!result.includes('Holo Rare')) result.push('Holo Rare');
+  return result;
+}

@@ -3,7 +3,7 @@ import { ChangeDetectionStrategy, Component, HostListener, computed, effect, inj
 import { toSignal } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { extractCardmarketUrlFromNotes, getCardSetCode, getDisplaySetCode, resolveCardmarketUrl } from '../../core/domain/card-id.utils';
+import { getCardSetCode, getDisplaySetCode, resolveCardmarketUrl } from '../../core/domain/card-id.utils';
 import { calculateCardMetrics, formatEur, formatPercent } from '../../core/domain/card-math.utils';
 import {
   buildShowcaseFromCollectionCard,
@@ -13,7 +13,6 @@ import { CollectionCard, DEFAULT_DROPDOWN_SETTINGS } from '../../core/domain/mod
 import { HapticsService } from '../../core/platform/haptics.service';
 import { isEditableEventTarget } from '../../core/platform/keyboard.utils';
 import { PlatformService } from '../../core/platform/platform.service';
-import { CARD_CATALOG_PORT } from '../../core/ports/card-catalog.port';
 import { CollectionStore } from '../../core/state/collection.store';
 import { CardArtworkComponent } from '../../shared/card-artwork/card-artwork.component';
 import { CardShowcaseComponent } from '../../shared/card-showcase/card-showcase.component';
@@ -33,7 +32,6 @@ export class CardDetailComponent {
   private readonly router = inject(Router);
   readonly store = inject(CollectionStore);
   private readonly viewState = inject(CollectionViewStateService);
-  private readonly catalog = inject(CARD_CATALOG_PORT);
   private readonly haptics = inject(HapticsService);
   private readonly platform = inject(PlatformService);
 
@@ -109,7 +107,6 @@ export class CardDetailComponent {
   });
 
   readonly editDraft = signal<CollectionCard | null>(null);
-  readonly activeCardmarketProductId = signal<number | undefined>(undefined);
   readonly confirmDelete = signal(false);
   readonly isLightboxOpen = signal(false);
 
@@ -123,7 +120,6 @@ export class CardDetailComponent {
         this.loadedCardKey = null;
         this.keepLightboxOnNextLoad = false;
         this.editDraft.set(null);
-        this.activeCardmarketProductId.set(undefined);
         this.confirmDelete.set(false);
         this.isLightboxOpen.set(false);
         return;
@@ -158,13 +154,6 @@ export class CardDetailComponent {
         this.isLightboxOpen.set(false);
       }
       this.keepLightboxOnNextLoad = false;
-
-      const cachedId = this.catalog.getCachedCardmarketProductId?.(card.cardId);
-      this.activeCardmarketProductId.set(cachedId);
-
-      if (!cachedId && card.cardId && !extractCardmarketUrlFromNotes(card.notes)) {
-        void this.resolveProductIdForDetail(card.cardId, card.language);
-      }
     });
   }
 
@@ -198,7 +187,6 @@ export class CardDetailComponent {
       name: d.name,
       setName: d.setName,
       cardNumber: d.cardNumber,
-      cardmarketProductId: this.activeCardmarketProductId(),
       notes: d.notes,
       language: d.language,
     });
@@ -212,19 +200,6 @@ export class CardDetailComponent {
   readonly acquisitionMethods = computed(
     () => this.store.settings().acquisitionMethods ?? DEFAULT_DROPDOWN_SETTINGS.acquisitionMethods ?? []
   );
-
-  private async resolveProductIdForDetail(cardId: string, language = 'EN'): Promise<void> {
-    try {
-      const found =
-        (await this.catalog.getCardByExactId(cardId, language)) ??
-        (await this.catalog.lookupByCardId(cardId, language));
-      if (found?.cardmarketProductId && this.activeCard()?.cardId === cardId) {
-        this.activeCardmarketProductId.set(found.cardmarketProductId);
-      }
-    } catch {
-      // Offline of onbekend ID: Singles-zoeklink blijft als fallback actief
-    }
-  }
 
   readonly isShowcaseEligible = computed(() =>
     isCollectionCardShowcaseEligible(this.editDraft())
