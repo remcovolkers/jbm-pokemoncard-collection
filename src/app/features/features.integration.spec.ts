@@ -1522,5 +1522,76 @@ describe('PokéBinder Feature Integratietests (Demo-modus)', () => {
       expect(document.documentElement.classList.contains('pb-modal-open')).toBe(false);
       hubFix.destroy();
     });
+
+    it('synchroniseert Kaartspot Pokédex-binder vanuit Instellingen (nogNodig=0 naar Collectie/Pokédex, Treecko nogNodig=1 naar Verlanglijst, idempotent & per-profiel)', async () => {
+      const store = TestBed.inject(CollectionStore);
+      const fixture = TestBed.createComponent(SettingsComponent);
+      const comp = fixture.componentInstance;
+      fixture.detectChanges();
+
+      const kaartspotPayload = JSON.stringify({
+        formaat: 2,
+        berekendOp: '2026-11-25T10:39:57.268Z',
+        eigenaar: { username: 'jellybeanmels' },
+        binders: [
+          { id: 'c4c1bf4b-b193-4b0d-a9b3-8e0b3390b0f8', name: 'Pokedex', grid_size: 20 },
+          { id: 'a8df6b01-9f25-471a-910c-6199f8a07933', name: 'Shrouded Fable Masterset', grid_size: 9 },
+        ],
+        teksten: [
+          'https://images.scrydex.com/pokemon/',
+          'Stellar Crown',
+          'Illustration Rare',
+          'NM',
+          'holofoil',
+          'EN',
+          'Mega Evolution Black Star Promos',
+          'Promo',
+        ],
+        kolommen: [
+          'id', 'binder', 'soort', 'spel', 'kaartId', 'naam', 'fotoBegin', 'fotoRest',
+          'set', 'nummer', 'zeldzaamheid', 'conditie', 'druk', 'grader', 'cijfer',
+          'blackLabel', 'taal', 'aantal', 'bod', 'nogNodig', 'volgorde', 'vakje',
+          'waardeCents', 'eigenSoort', 'eigenWaarde',
+        ],
+        items: [
+          [
+            '2c69167c-dd1a-476d-9eca-33c7cc4504b9', 0, 0, 0, 'c1', 'Bulbasaur',
+            0, 'sv7-143/small', 1, '143', 2, 3, 4, null, null, 0, 5, 1, 0, 0, 1, 0, 7499, null, 0,
+          ],
+          [
+            '5fec1c84-935a-40e6-bc82-bd644f6e0ede', 0, 0, 0, 'c2', 'Treecko',
+            0, 'mep-55/small', 6, '55', 7, 3, 4, null, null, 0, 5, 1, 0, 1, 252, 251, 1102, null, 0,
+          ],
+        ],
+      });
+
+      comp.ksSourceInput.set(
+        'https://kaartspot.nl/wrapped/jellybeanmels?cat=c4c1bf4b-b193-4b0d-a9b3-8e0b3390b0f8'
+      );
+      comp.ksPastedJson.set(kaartspotPayload);
+
+      const loaded = await comp.loadKaartspotPreview(true);
+      expect(loaded).toBe(true);
+      expect(comp.ksSelectedBinderIds()).toEqual(['c4c1bf4b-b193-4b0d-a9b3-8e0b3390b0f8']);
+      expect(comp.ksSyncPlan()?.summary.newCollectionCount).toBe(1);
+      expect(comp.ksSyncPlan()?.summary.newWishlistCount).toBe(1);
+
+      await comp.applyKaartspotSync();
+
+      // Bulbasaur (nogNodig=0) in Collectie + gekoppeld op Pokédex #1 + indeling op 20
+      expect(store.collection().some((c) => c.cardId === 'sv07-143' && c.name === 'Bulbasaur')).toBe(true);
+      expect(store.pokedex().find((s) => s.dexNumber === 1)?.inBinder).toBe(true);
+      expect(store.pokedex().find((s) => s.dexNumber === 1)?.selectedCard).toContain('sv07-143');
+      expect(store.binderSlotsPerPage()).toBe(20);
+
+      // Treecko (nogNodig=1) NIET in Collectie of In Binder, WEL op Verlanglijst
+      expect(store.collection().some((c) => c.name === 'Treecko')).toBe(false);
+      expect(store.pokedex().find((s) => s.dexNumber === 252)?.inBinder).toBe(false);
+      expect(store.wishlist().some((w) => w.cardName === 'Treecko' && w.cardId === 'mep-055')).toBe(true);
+
+      // Direct nogmaals preview: 0 nieuwe wijzigingen (idempotent)
+      expect(comp.ksSyncPlan()?.summary.hasAnyChanges).toBe(false);
+      expect(store.activeKaartspotConfig()?.username).toBe('jellybeanmels');
+    });
   });
 });

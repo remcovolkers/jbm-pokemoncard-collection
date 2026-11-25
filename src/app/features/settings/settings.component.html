@@ -567,6 +567,322 @@
     </details>
   </section>
 
+  <!-- Kaartspot Binder Sync (centraal per Sheet-profiel) -->
+  <section id="kaartspot-sync" class="pb-card ks-card">
+    <div class="ks-head">
+      <div class="card-head ks-head__main">
+        <span class="material-symbols-outlined card-head__icon card-head__icon--amber">sync_saved_locally</span>
+        <div>
+          <div class="ks-head__title-row">
+            <h2>Kaartspot Binder Sync</h2>
+            @if (store.activeKaartspotConfig(); as savedKs) {
+              <span class="pb-pill pb-pill--secondary mono">@{{ savedKs.username }}</span>
+            } @else {
+              <span class="pb-pill pb-pill--neutral">Externe sync</span>
+            }
+          </div>
+          <p>
+            Neem publieke Kaartspot-mappen (zoals je Pokédex Binder of Mastersets) over naar Collectie, Pokédex
+            Binder en Verlanglijst — veilig gekoppeld aan je huidige profiel zonder duplicaten.
+          </p>
+          @if (ksLastSyncedLabel(); as lastSync) {
+            <p class="ks-head__stamp mono">Laatste Kaartspot-sync: {{ lastSync }}</p>
+          }
+        </div>
+      </div>
+
+      @if (store.activeKaartspotConfig() && !ksLoadedProfile()) {
+        <div class="ks-head__quick">
+          <button
+            type="button"
+            class="pb-btn pb-btn--emerald"
+            [disabled]="ksIsFetching() || ksIsSyncing() || store.isSyncing()"
+            (click)="quickResyncSavedKaartspot()"
+          >
+            <span class="material-symbols-outlined" [class.pb-spin]="ksIsFetching() || ksIsSyncing()">
+              {{ ksIsFetching() || ksIsSyncing() ? 'progress_activity' : 'sync' }}
+            </span>
+            <span>Nu bijwerken</span>
+          </button>
+
+          <button
+            type="button"
+            class="pb-btn pb-btn--surface ks-unlink-btn"
+            aria-label="Kaartspot-koppeling verwijderen"
+            [disabled]="ksIsFetching() || ksIsSyncing()"
+            (click)="unlinkKaartspot()"
+          >
+            <span class="material-symbols-outlined">link_off</span>
+          </button>
+        </div>
+      }
+    </div>
+
+    <div class="ks-form">
+      <div class="pb-field">
+        <label class="pb-label" for="ks-source-input">Kaartspot wrapped-link, profiellink of @gebruikersnaam</label>
+        <div class="ks-input-row">
+          <input
+            id="ks-source-input"
+            name="ksSourceInput"
+            type="text"
+            class="pb-input mono"
+            placeholder="https://kaartspot.nl/wrapped/jellybeanmels?cat=… of @jellybeanmels"
+            [ngModel]="ksSourceInput()"
+            (ngModelChange)="ksSourceInput.set($event)"
+            (keydown.enter)="loadKaartspotPreview(false)"
+          />
+          <button
+            type="button"
+            class="pb-btn pb-btn--primary ks-input-row__btn"
+            [disabled]="ksIsFetching() || ksIsSyncing() || !ksSourceInput().trim()"
+            (click)="loadKaartspotPreview(false)"
+          >
+            <span class="material-symbols-outlined" [class.pb-spin]="ksIsFetching()">
+              {{ ksIsFetching() ? 'progress_activity' : 'travel_explore' }}
+            </span>
+            <span>{{ ksIsFetching() ? 'Ophalen…' : 'Binders ophalen' }}</span>
+          </button>
+        </div>
+      </div>
+
+      @if (ksError(); as errText) {
+        <div class="update-notice" [class.update-notice--amber]="ksNeedsScriptUpdate() || ksShowJsonFallback()" [class.update-notice--error]="!ksNeedsScriptUpdate() && !ksShowJsonFallback()">
+          <span class="material-symbols-outlined">
+            {{ ksNeedsScriptUpdate() || ksShowJsonFallback() ? 'info' : 'error' }}
+          </span>
+          <div class="ks-notice-body">
+            <strong>
+              @if (ksNeedsScriptUpdate()) {
+                Code.gs update (v{{ latestScriptVersion() }}) vereist voor directe link-sync
+              } @else if (ksShowJsonFallback()) {
+                Demo-modus / Browser-beveiliging
+              } @else {
+                Kon Kaartspot-profiel niet laden
+              }
+            </strong>
+            <p>{{ errText }}</p>
+
+            @if (ksNeedsScriptUpdate()) {
+              <div class="ks-notice-actions">
+                <button type="button" class="pb-btn pb-btn--emerald" (click)="jumpToScriptUpdate()">
+                  <span class="material-symbols-outlined">content_copy</span>
+                  <span>Kopieer Code.gs v{{ latestScriptVersion() }} &amp; toon stappen</span>
+                </button>
+                <button
+                  type="button"
+                  class="pb-btn pb-btn--surface"
+                  (click)="ksShowJsonFallback.set(!ksShowJsonFallback())"
+                >
+                  <span class="material-symbols-outlined">data_object</span>
+                  <span>Of plak tijdelijk JSON</span>
+                </button>
+              </div>
+            }
+          </div>
+        </div>
+      }
+
+      @if (ksShowJsonFallback()) {
+        <div class="ks-fallback-box">
+          <div class="ks-fallback-box__head">
+            <strong>Handmatig JSON plakken (voor Demo-modus of zonder bijgewerkte Sheet)</strong>
+            <p>
+              Met een gekoppelde Google Sheet (v{{ latestScriptVersion() }}) gaat dit volledig automatisch in 1 klik.
+              Zonder Sheet kun je de publieke Kaartspot-data hier direct inplakken:
+            </p>
+          </div>
+
+          <div class="ks-fallback-box__actions">
+            <button
+              type="button"
+              class="pb-btn pb-btn--secondary"
+              [disabled]="!ksParsedInput()"
+              (click)="openKaartspotPublicDataTab()"
+            >
+              <span class="material-symbols-outlined">open_in_new</span>
+              <span>
+                1. Open Kaartspot-data{{ ksParsedInput() ? ' (@' + ksParsedInput()!.username + ')' : '' }}
+              </span>
+            </button>
+          </div>
+
+          <div class="pb-field">
+            <label class="pb-label" for="ks-json-paste">2. Kopieer alles uit dat tabblad (Ctrl+A → Ctrl+C) en plak hieronder</label>
+            <textarea
+              id="ks-json-paste"
+              rows="3"
+              class="pb-input mono ks-fallback-box__textarea"
+              placeholder='{"formaat":2,"eigenaar":{"username":"…"},"binders":[…]}'
+              [ngModel]="ksPastedJson()"
+              (ngModelChange)="ksPastedJson.set($event)"
+            ></textarea>
+          </div>
+
+          <button
+            type="button"
+            class="pb-btn pb-btn--primary"
+            [disabled]="!ksPastedJson().trim() || ksIsFetching()"
+            (click)="loadKaartspotPreview(true)"
+          >
+            <span class="material-symbols-outlined">check</span>
+            <span>Verwerk geplakte Kaartspot-data</span>
+          </button>
+        </div>
+      }
+
+      @if (ksLoadedProfile(); as prof) {
+        <div class="ks-preview">
+          <div class="ks-preview__head">
+            <div>
+              <strong>Gevonden mappen van @{{ prof.username }}</strong>
+              <span class="mono">{{ ksSelectableBinders().length }} kaarten-mappen beschikbaar</span>
+            </div>
+            @if (store.activeKaartspotConfig()) {
+              <button type="button" class="pb-btn pb-btn--surface ks-unlink-text" (click)="unlinkKaartspot()">
+                <span class="material-symbols-outlined">link_off</span>
+                <span>Ontkoppel</span>
+              </button>
+            }
+          </div>
+
+          <div class="ks-binder-list" role="group" aria-label="Selecteer Kaartspot binders">
+            @for (b of ksSelectableBinders(); track b.id) {
+              <label class="ks-binder-row" [class.is-selected]="isKaartspotBinderSelected(b.id)">
+                <input
+                  type="checkbox"
+                  class="ks-binder-row__check"
+                  [checked]="isKaartspotBinderSelected(b.id)"
+                  (change)="toggleKaartspotBinder(b.id)"
+                />
+                <span class="ks-binder-row__info">
+                  <span class="ks-binder-row__title">
+                    <strong>{{ b.name }}</strong>
+                    @if (b.isPokedexBinder) {
+                      <span class="pb-pill pb-pill--secondary">Pokédex · {{ formatGridLabel(b.gridSize) }}</span>
+                    }
+                  </span>
+                  <span class="ks-binder-row__stats mono">
+                    <span class="ks-stat ks-stat--owned">{{ b.ownedCardCount }} in bezit</span>
+                    @if (b.wantedCardCount > 0) {
+                      <span class="ks-stat ks-stat--wanted">{{ b.wantedCardCount }} greyed-out (nog nodig)</span>
+                    }
+                    <span class="ks-stat ks-stat--val">{{ formatEur(b.ownedValueEur) }}</span>
+                  </span>
+                </span>
+              </label>
+            }
+          </div>
+
+          @if (prof.totalSealedSkipped > 0) {
+            <p class="ks-sealed-note mono">
+              Let op: {{ prof.totalSealedSkipped }} sealed product(en) op dit profiel worden automatisch overgeslagen.
+            </p>
+          }
+
+          <div class="ks-toggles">
+            <div class="ks-toggle-row">
+              <div class="ks-toggle-row__copy">
+                <strong>Greyed-out kaarten ("nog nodig") op Verlanglijst zetten</strong>
+                <p>
+                  Kaarten die op Kaartspot nog grijs staan (zoals nog niet verkregen vakjes) komen nooit in Collectie
+                  of In Binder, maar direct als doelkaart op je Verlanglijst.
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                class="pb-switch is-amber"
+                [class.is-checked]="ksWishlistWanted()"
+                [attr.aria-checked]="ksWishlistWanted()"
+                aria-label="Greyed-out kaarten op Verlanglijst zetten"
+                (click)="ksWishlistWanted.set(!ksWishlistWanted())"
+              >
+                <span class="pb-switch__thumb"></span>
+              </button>
+            </div>
+
+            @if (ksSelectedDexLayout(); as targetSpp) {
+              <div class="ks-toggle-row">
+                <div class="ks-toggle-row__copy">
+                  <strong>Pokédex-binder formaat overnemen — {{ formatGridLabel(targetSpp) }}</strong>
+                  <p>Zet je Pokédex Binder in PokéBinder op dezelfde vakjes-indeling als op Kaartspot.</p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  class="pb-switch"
+                  [class.is-checked]="ksSyncLayout()"
+                  [attr.aria-checked]="ksSyncLayout()"
+                  aria-label="Pokédex-binder formaat overnemen"
+                  (click)="ksSyncLayout.set(!ksSyncLayout())"
+                >
+                  <span class="pb-switch__thumb"></span>
+                </button>
+              </div>
+            }
+          </div>
+
+          @if (ksSyncPlan(); as plan) {
+            <div class="ks-summary" [class.ks-summary--clean]="!plan.summary.hasAnyChanges">
+              <div class="ks-summary__chips mono">
+                <span class="pb-pill pb-pill--secondary">+{{ plan.summary.newCollectionCount }} nieuw in Collectie</span>
+                @if (plan.summary.pokedexSlotsUpdatedCount > 0) {
+                  <span class="pb-pill pb-pill--secondary">
+                    {{ plan.summary.pokedexSlotsUpdatedCount }} Pokédex-vakjes vullen
+                  </span>
+                }
+                @if (ksWishlistWanted() && plan.summary.newWishlistCount > 0) {
+                  <span class="pb-pill pb-pill--tertiary">
+                    +{{ plan.summary.newWishlistCount }} op Verlanglijst
+                  </span>
+                }
+                @if (plan.summary.promotedFromWishlistCount > 0) {
+                  <span class="pb-pill pb-pill--primary">
+                    {{ plan.summary.promotedFromWishlistCount }} wens(en) nu verkregen!
+                  </span>
+                }
+                @if (plan.summary.skippedExistingCollectionCount > 0) {
+                  <span class="pb-pill pb-pill--neutral">
+                    {{ plan.summary.skippedExistingCollectionCount }} al aanwezig (overgeslagen)
+                  </span>
+                }
+              </div>
+
+              @if (!plan.summary.hasAnyChanges && ksSelectedBinderIds().length > 0) {
+                <p class="ks-summary__hint">
+                  Alles uit de geselecteerde map(pen) staat al synchroon in PokéBinder — 0 duplicaten.
+                </p>
+              }
+            </div>
+
+            <div class="ks-commit-row">
+              <button
+                type="button"
+                class="pb-btn pb-btn--primary ks-commit-btn"
+                [disabled]="ksIsSyncing() || store.isSyncing() || ksSelectedBinderIds().length === 0"
+                (click)="applyKaartspotSync()"
+              >
+                <span class="material-symbols-outlined" [class.pb-spin]="ksIsSyncing()">
+                  {{ ksIsSyncing() ? 'progress_activity' : 'cloud_done' }}
+                </span>
+                <span>
+                  @if (ksIsSyncing()) {
+                    Bezig met synchroniseren…
+                  } @else if (plan.summary.hasAnyChanges) {
+                    Synchroniseer met PokéBinder
+                  } @else {
+                    Koppeling opslaan (alles al synchroon)
+                  }
+                </span>
+              </button>
+            </div>
+          }
+        </div>
+      }
+    </div>
+  </section>
+
   <!-- Synchronisatie, Prijzen & Offline Cache -->
   <section class="pb-card tools-card">
     <div class="card-head">

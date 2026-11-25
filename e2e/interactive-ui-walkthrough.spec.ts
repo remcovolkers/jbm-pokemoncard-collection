@@ -300,6 +300,10 @@ test('Instellingen: barebones template-sectie, token generator & Code.gs kopiër
   await context.grantPermissions(['clipboard-read', 'clipboard-write']).catch(() => undefined);
 
   let mockedScriptVersion: string | undefined = undefined;
+  let syncedCollection: Array<Record<string, unknown>> = [];
+  let syncedWishlist: Array<Record<string, unknown>> = [];
+  let syncedSlotsPerPage = 9;
+
   await page.route('https://script.google.com/macros/s/**', async (route) => {
     const reqUrl = route.request().url();
     if (reqUrl.includes('action=ping')) {
@@ -310,11 +314,137 @@ test('Instellingen: barebones template-sectie, token generator & Code.gs kopiër
           ok: true,
           spreadsheetName: 'Live Pokemon Kaarten Collectie',
           ...(mockedScriptVersion ? { scriptVersion: mockedScriptVersion } : {}),
-          syncedAt: '2026-11-24T22:35:00Z',
+          syncedAt: '2026-11-25T11:35:00Z',
         }),
       });
       return;
     }
+
+    if (route.request().method() === 'POST') {
+      const postBody = JSON.parse(route.request().postData() || '{}') as {
+        action?: string;
+        payload?: Record<string, unknown>;
+      };
+
+      if (postBody.action === 'fetchKaartspotProfile') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            ok: true,
+            result: {
+              profile: {
+                formaat: 2,
+                berekendOp: '2026-11-25T10:39:57.268Z',
+                eigenaar: { username: 'jellybeanmels' },
+                binders: [
+                  { id: 'c4c1bf4b-b193-4b0d-a9b3-8e0b3390b0f8', name: 'Pokedex', grid_size: 20 },
+                  { id: 'a8df6b01-9f25-471a-910c-6199f8a07933', name: 'Shrouded Fable Masterset', grid_size: 9 },
+                ],
+                teksten: [
+                  'https://images.scrydex.com/pokemon/',
+                  'Stellar Crown',
+                  'Illustration Rare',
+                  'NM',
+                  'holofoil',
+                  'EN',
+                  'Mega Evolution Black Star Promos',
+                  'Promo',
+                ],
+                kolommen: [
+                  'id', 'binder', 'soort', 'spel', 'kaartId', 'naam', 'fotoBegin', 'fotoRest',
+                  'set', 'nummer', 'zeldzaamheid', 'conditie', 'druk', 'grader', 'cijfer',
+                  'blackLabel', 'taal', 'aantal', 'bod', 'nogNodig', 'volgorde', 'vakje',
+                  'waardeCents', 'eigenSoort', 'eigenWaarde',
+                ],
+                items: [
+                  [
+                    '2c69167c-dd1a-476d-9eca-33c7cc4504b9', 0, 0, 0, 'c1', 'Bulbasaur',
+                    0, 'sv7-143/small', 1, '143', 2, 3, 4, null, null, 0, 5, 1, 0, 0, 1, 0, 7499, null, 0,
+                  ],
+                  [
+                    '5fec1c84-935a-40e6-bc82-bd644f6e0ede', 0, 0, 0, 'c2', 'Treecko',
+                    0, 'mep-55/small', 6, '55', 7, 3, 4, null, null, 0, 5, 1, 0, 1, 252, 251, 1102, null, 0,
+                  ],
+                ],
+              },
+            },
+          }),
+        });
+        return;
+      }
+
+      if (postBody.action === 'applyKaartspotSync') {
+        const p = (postBody.payload ?? {}) as {
+          cardsToAdd?: Array<Record<string, unknown>>;
+          wishlistToAdd?: Array<Record<string, unknown>>;
+          slotsPerPage?: number;
+        };
+        syncedCollection = (p.cardsToAdd ?? []).map((c, idx) => ({ ...c, rowIndex: idx + 2 }));
+        syncedWishlist = (p.wishlistToAdd ?? []).map((w, idx) => ({ ...w, rowIndex: idx + 2, found: false }));
+        syncedSlotsPerPage = p.slotsPerPage || 9;
+
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            ok: true,
+            result: {
+              addedCards: syncedCollection.length,
+              addedWishlist: syncedWishlist.length,
+              promotedWishlist: 0,
+              updatedPokedexSlots: syncedCollection.length,
+            },
+            data: {
+              scriptVersion: mockedScriptVersion || '2.2.0',
+              collection: syncedCollection,
+              setProgress: [],
+              pokedex: [
+                {
+                  rowIndex: 8,
+                  generation: 'Gen 1',
+                  dexNumber: 1,
+                  pokemonName: 'Bulbasaur',
+                  inBinder: true,
+                  inCollectionCount: 1,
+                  status: 'In Binder',
+                  page: 1,
+                  position: 'Vakje 1',
+                  selectedCard: 'sv07-143 | Stellar Crown (Holo)',
+                  upgradeWanted: false,
+                },
+                {
+                  rowIndex: 259,
+                  generation: 'Gen 3',
+                  dexNumber: 252,
+                  pokemonName: 'Treecko',
+                  inBinder: false,
+                  inCollectionCount: 0,
+                  status: 'Ontbrekend',
+                  page: 13,
+                  position: 'Vakje 12',
+                  selectedCard: '',
+                  upgradeWanted: false,
+                },
+              ],
+              binderSlotsPerPage: syncedSlotsPerPage,
+              wishlist: syncedWishlist,
+              trades: [],
+              feedback: [],
+              settings: {
+                variants: ['Normal', 'Reverse Holo', 'Holo'],
+                conditions: ['Near Mint (NM)'],
+                gradings: ['Raw'],
+                binders: ['Hoofdbinder'],
+              },
+              syncedAt: '2026-11-25T11:36:00Z',
+            },
+          }),
+        });
+        return;
+      }
+    }
+
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -322,11 +452,11 @@ test('Instellingen: barebones template-sectie, token generator & Code.gs kopiër
         ok: true,
         data: {
           ...(mockedScriptVersion ? { scriptVersion: mockedScriptVersion } : {}),
-          collection: [],
+          collection: syncedCollection,
           setProgress: [],
           pokedex: [],
-          binderSlotsPerPage: 9,
-          wishlist: [],
+          binderSlotsPerPage: syncedSlotsPerPage,
+          wishlist: syncedWishlist,
           trades: [],
           feedback: [],
           settings: {
@@ -335,7 +465,7 @@ test('Instellingen: barebones template-sectie, token generator & Code.gs kopiër
             gradings: ['Raw'],
             binders: ['Hoofdbinder'],
           },
-          syncedAt: '2026-11-24T22:35:00Z',
+          syncedAt: '2026-11-25T11:35:00Z',
         },
       }),
     });
@@ -354,7 +484,7 @@ test('Instellingen: barebones template-sectie, token generator & Code.gs kopiër
   await page.locator('button:has-text("Kopieer nieuwste Code.gs")').click();
   await expect(page.locator('.toast--success').last()).toBeVisible();
 
-  // Simuleer gekoppelde v1.x Sheet -> toont Deployment ID hint & Controleer script-versie knop -> upgrade naar v2.1.0
+  // Simuleer gekoppelde v1.x Sheet -> toont Deployment ID hint & Controleer script-versie knop -> upgrade naar v2.2.0
   await page
     .locator('#cfg-url')
     .fill(
@@ -364,9 +494,34 @@ test('Instellingen: barebones template-sectie, token generator & Code.gs kopiër
   await expect(page.locator('#sheet-setup')).toContainText('AKfycbw9HJg8tJQe…LavxZQ');
   await expect(page.locator('button:has-text("Controleer script-versie")')).toBeVisible();
 
-  mockedScriptVersion = '2.1.0';
+  mockedScriptVersion = '2.2.0';
   await page.locator('button:has-text("Controleer script-versie")').click();
-  await expect(page.locator('#sheet-setup')).toContainText('Je Google Sheet script is up-to-date (v2.1.0)');
+  await expect(page.locator('#sheet-setup')).toContainText('Je Google Sheet script is up-to-date (v2.2.0)');
+
+  // Test centrale Kaartspot Binder Sync flow (wrapped-link plakken -> preview -> sync -> 0 duplicaten)
+  const ksSection = page.locator('#kaartspot-sync');
+  await ksSection.scrollIntoViewIfNeeded();
+  await expect(ksSection).toBeVisible();
+
+  await page
+    .locator('#ks-source-input')
+    .fill('https://kaartspot.nl/wrapped/jellybeanmels?cat=c4c1bf4b-b193-4b0d-a9b3-8e0b3390b0f8');
+  const fetchBtn = ksSection.locator('button:has-text("Binders ophalen")');
+  const fetchBox = await fetchBtn.boundingBox();
+  expect(fetchBox?.height ?? 0).toBeGreaterThanOrEqual(44);
+  await fetchBtn.click();
+
+  await expect(ksSection.locator('.ks-preview')).toBeVisible();
+  await expect(ksSection).toContainText('1 in bezit');
+  await expect(ksSection).toContainText('1 greyed-out (nog nodig)');
+
+  const commitBtn = ksSection.locator('.ks-commit-btn');
+  const commitBox = await commitBtn.boundingBox();
+  expect(commitBox?.height ?? 0).toBeGreaterThanOrEqual(44);
+  await commitBtn.click();
+
+  await expect(ksSection).toContainText('Alles uit de geselecteerde map(pen) staat al synchroon');
+  await expect(ksSection).toContainText('@jellybeanmels');
 
   const overflowOk = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
   expect(overflowOk, 'Horizontale overflow op Instellingen').toBe(true);

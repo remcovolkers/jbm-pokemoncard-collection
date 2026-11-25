@@ -206,11 +206,18 @@ test('mobiele Pokédex 3x3 binder past volledig in één schermhoogte boven bott
 
   await page.goto('/pokedex', { waitUntil: 'domcontentloaded' });
   await page.locator('.binder-sheet .pocket').nth(8).waitFor({ state: 'visible' });
+  await page.evaluate(async () => {
+    if (document.fonts?.ready) {
+      await document.fonts.ready;
+    }
+  });
+  await page.waitForTimeout(250);
 
   // Eventuele update-banner sluiten zodat we de normale dagelijkse binderweergave meten
   const bannerClose = page.locator('.update-banner__close');
   if (await bannerClose.isVisible().catch(() => false)) {
     await bannerClose.click();
+    await page.waitForTimeout(100);
   }
 
   const metrics = await page.evaluate(() => {

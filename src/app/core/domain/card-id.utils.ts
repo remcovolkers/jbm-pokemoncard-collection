@@ -666,6 +666,16 @@ export function extractCardmarketUrlFromNotes(notes?: string): string | null {
   return slugMatch ? slugMatch[0] : null;
 }
 
+/**
+ * Haalt een eventueel ingesloten externe kaartafbeelding (`[IMG:https://...]`) uit de notities
+ * (bijv. voor niet-Engelse/Chinese exclusives of sets zonder TCGdex-scan uit Kaartspot Sync).
+ */
+export function extractArtworkUrlFromNotes(notes?: string): string | null {
+  if (!notes) return null;
+  const match = notes.match(/\[IMG:(https:\/\/[^\s\]]+)\]/i);
+  return match?.[1] ? match[1].trim() : null;
+}
+
 export function resolveCardmarketUrl(opts: {
   name: string;
   setName?: string;

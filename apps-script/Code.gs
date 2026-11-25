@@ -33,8 +33,8 @@ var DEX_COUNT = 1025; // #0001 t/m #1025
 var TCGDEX_BASE_URL = 'https://api.tcgdex.net/v2/en';
 var TCGDEX_GRAPHQL_URL = 'https://api.tcgdex.net/v2/graphql';
 
-var SCRIPT_VERSION = '2.1.0';
-var SCRIPT_CHANGELOG = 'Snellere batch-sync, script-versiecontrole in Instellingen & menu-updatecheck.';
+var SCRIPT_VERSION = '2.2.0';
+var SCRIPT_CHANGELOG = 'Kaartspot Binder Sync (server-side ophalen zonder CORS & razendsnelle bulk-import), script-versiecontrole & batch-sync.';
 var POKEBINDER_MANIFEST_URL = 'https://remcovolkers.github.io/jbm-pokemoncard-collection/version.json';
 var POKEBINDER_CODE_URL = 'https://github.com/remcovolkers/jbm-pokemoncard-collection/blob/main/apps-script/Code.gs';
 
@@ -755,6 +755,12 @@ function doPost(e) {
         break;
       case 'batchMutations':
         result = handleBatchMutations_(ss, payload);
+        break;
+      case 'fetchKaartspotProfile':
+        result = handleFetchKaartspotProfile_(payload);
+        break;
+      case 'applyKaartspotSync':
+        result = handleApplyKaartspotSync_(ss, payload);
         break;
       default:
         return jsonResponse_({ ok: false, error: 'Onbekende POST-actie: ' + action });
@@ -1628,6 +1634,262 @@ function handleBatchMutations_(ss, payload) {
   }
 
   return { results: results };
+}
+
+// ============================================================================
+// KAARTSPOT BINDER SYNC (SERVER-SIDE FETCH ZONDER CORS + BULK SHEETS IMPORT)
+// ============================================================================
+
+function handleFetchKaartspotProfile_(payload) {
+  var rawUser = String((payload && payload.username) || '').trim().replace(/^@+/, '');
+  if (!/^[a-zA-Z0-9_.-]{1,60}$/.test(rawUser)) {
+    throw new Error('Ongeldige Kaartspot-gebruikersnaam.');
+  }
+
+  var url = 'https://kaartspot.nl/api/binder-publiek/' + encodeURIComponent(rawUser);
+  var res = UrlFetchApp.fetch(url, {
+    muteHttpExceptions: true,
+    headers: { Accept: 'application/json' }
+  });
+  var code = res.getResponseCode();
+  if (code === 404) {
+    throw new Error('Kaartspot-profiel "@' + rawUser + '" niet gevonden of heeft geen publieke binders.');
+  }
+  if (code !== 200) {
+    throw new Error('Kaartspot gaf HTTP ' + code + ' terug bij het ophalen van "@' + rawUser + '".');
+  }
+
+  var parsed;
+  try {
+    parsed = JSON.parse(res.getContentText() || '{}');
+  } catch (e) {
+    throw new Error('Kon Kaartspot-response niet lezen als JSON.');
+  }
+  return { profile: parsed };
+}
+
+function findBulkAppendStartRow_(sheet, startRow, checkCols) {
+  var lastRow = sheet.getLastRow();
+  if (lastRow < startRow) return startRow;
+  var maxCol = Math.max.apply(null, checkCols);
+  var values = sheet.getRange(startRow, 1, lastRow - startRow + 1, maxCol).getValues();
+  for (var i = values.length - 1; i >= 0; i--) {
+    for (var c = 0; c < checkCols.length; c++) {
+      if (String(values[i][checkCols[c] - 1] || '').trim() !== '') {
+        return startRow + i + 1;
+      }
+    }
+  }
+  return startRow;
+}
+
+function propagateFormulaColumns_(sheet, templateRow, targetStartRow, numRows, formulaStartCol, numFormulaCols) {
+  if (numRows <= 0 || !sheet.getRange) return;
+  try {
+    var tplRange = sheet.getRange(templateRow, formulaStartCol, 1, numFormulaCols);
+    if (!tplRange.getFormulas || !tplRange.copyTo) return;
+    var tplFormulas = tplRange.getFormulas()[0] || [];
+    var hasFormula = tplFormulas.some(function (f) {
+      return String(f || '').indexOf('=') === 0;
+    });
+    if (!hasFormula) return;
+
+    for (var offset = 0; offset < numRows; offset++) {
+      var rowNum = targetStartRow + offset;
+      if (rowNum <= templateRow) continue;
+      var destRange = sheet.getRange(rowNum, formulaStartCol, 1, numFormulaCols);
+      var destVals = destRange.getValues ? destRange.getValues()[0] : [];
+      var destForms = destRange.getFormulas ? destRange.getFormulas()[0] : [];
+      var isBlank = destVals.every(function (v, idx) {
+        return String(v || '').trim() === '' && String(destForms[idx] || '').trim() === '';
+      });
+      if (isBlank) {
+        if (SpreadsheetApp.CopyPasteType && SpreadsheetApp.CopyPasteType.PASTE_FORMULA) {
+          tplRange.copyTo(destRange, SpreadsheetApp.CopyPasteType.PASTE_FORMULA, false);
+        } else {
+          tplRange.copyTo(destRange);
+        }
+      }
+    }
+  } catch (e) {
+    // Negeer als getFormulas/copyTo niet beschikbaar is
+  }
+}
+
+function handleApplyKaartspotSync_(ss, payload) {
+  var cardsToAdd = (payload && payload.cardsToAdd) || [];
+  var wishlistToAdd = (payload && payload.wishlistToAdd) || [];
+  var wishlistRowsToMarkFound = (payload && payload.wishlistRowsToMarkFound) || [];
+  var pokedexUpdates = (payload && payload.pokedexUpdates) || [];
+  var slotsPerPage = payload && payload.slotsPerPage;
+
+  var today = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || 'Europe/Amsterdam', 'yyyy-MM-dd');
+  var touchedCardNames = [];
+  var pushTouchedName = function (name) {
+    var clean = String(name || '').trim();
+    if (clean && touchedCardNames.indexOf(clean) === -1) {
+      touchedCardNames.push(clean);
+    }
+  };
+
+  var addedCards = 0;
+  var addedWishlist = 0;
+  var promotedWishlist = 0;
+  var updatedPokedexSlots = 0;
+
+  // 1. Bulk toevoegen aan Collectie (uitsluitend A:Q, U:V en W; formules R:T blijven 100% intact!)
+  if (cardsToAdd.length > 0) {
+    var colSheet = ss.getSheetByName(SHEET_NAMES.COLLECTION);
+    if (!colSheet) throw new Error('Tabblad "' + SHEET_NAMES.COLLECTION + '" niet gevonden.');
+
+    var colStartRow = findBulkAppendStartRow_(colSheet, 2, [1, 2]);
+    var rowsAQ = [];
+    var rowsUV = [];
+    var rowsW = [];
+    var uniqueSets = {};
+
+    for (var c = 0; c < cardsToAdd.length; c++) {
+      var item = cardsToAdd[c] || {};
+      var cardId = String(item.cardId || '').trim();
+      var cardName = String(item.name || '').trim();
+      var setName = String(item.setName || '').trim();
+      pushTouchedName(cardName);
+
+      rowsAQ.push([
+        cardId,
+        cardName,
+        setName,
+        String(item.cardNumber || '').trim(),
+        String(item.language || 'EN').trim(),
+        String(item.type || '').trim(),
+        String(item.rarity || 'Rare').trim(),
+        String(item.variant || 'Normal').trim(),
+        String(item.condition || 'Near Mint (NM)').trim(),
+        String(item.grading || 'Raw').trim(),
+        item.grade === '' || item.grade === null || item.grade === undefined ? '' : item.grade,
+        Math.max(1, toNumber_(item.quantity, 1)),
+        String(item.storageLocation || 'Hoofdbinder').trim(),
+        String(item.binderDetail || '').trim(),
+        String(item.purchaseDate || today).trim(),
+        toNumber_(item.purchasePrice, 0),
+        toNumber_(item.marketPrice, 0)
+      ]);
+
+      rowsUV.push([Boolean(item.forTrade), String(item.notes || '').trim()]);
+      rowsW.push([String(item.acquisitionMethod || 'Kaartspot Sync').trim()]);
+
+      if (setName) {
+        var setKey = setName.toLowerCase();
+        if (!uniqueSets[setKey]) {
+          uniqueSets[setKey] = {
+            setName: setName,
+            seriesName: String(item.seriesName || '').trim(),
+            setTotalCards: toNumber_(item.setTotalCards, 0),
+            setId: String(item.setId || '').trim()
+          };
+        }
+      }
+    }
+
+    colSheet.getRange(colStartRow, 1, rowsAQ.length, 17).setValues(rowsAQ);
+    colSheet.getRange(colStartRow, 21, rowsUV.length, 2).setValues(rowsUV);
+    ensureCollectionAcquisitionColumn_(colSheet);
+    colSheet.getRange(colStartRow, 23, rowsW.length, 1).setValues(rowsW);
+    propagateFormulaColumns_(colSheet, 2, colStartRow, rowsAQ.length, 18, 3);
+    addedCards = rowsAQ.length;
+
+    for (var sk in uniqueSets) {
+      if (Object.prototype.hasOwnProperty.call(uniqueSets, sk)) {
+        var sMeta = uniqueSets[sk];
+        ensureSetInProgress_(ss, sMeta.setName, sMeta.seriesName, sMeta.setTotalCards, sMeta.setId);
+      }
+    }
+  }
+
+  // 2. Verlanglijst promoties (nogNodig 1 -> 0) & bulk toevoegen (sla formules I:J over!)
+  if (wishlistRowsToMarkFound.length > 0 || wishlistToAdd.length > 0) {
+    var wlSheet = ss.getSheetByName(SHEET_NAMES.WISHLIST);
+    if (!wlSheet) throw new Error('Tabblad "' + SHEET_NAMES.WISHLIST + '" niet gevonden.');
+
+    for (var f = 0; f < wishlistRowsToMarkFound.length; f++) {
+      var foundRow = toNumber_(wishlistRowsToMarkFound[f], 0);
+      if (foundRow >= 2) {
+        wlSheet.getRange(foundRow, 12).setValue(true);
+        promotedWishlist++;
+      }
+    }
+
+    if (wishlistToAdd.length > 0) {
+      var wlStartRow = findBulkAppendStartRow_(wlSheet, 2, [1]);
+      var wlRowsAH = [];
+      var wlRowsKL = [];
+      var wlRowsM = [];
+
+      for (var w = 0; w < wishlistToAdd.length; w++) {
+        var wItem = wishlistToAdd[w] || {};
+        wlRowsAH.push([
+          String(wItem.cardName || '').trim(),
+          String(wItem.setName || '').trim(),
+          String(wItem.cardNumber || '').trim(),
+          String(wItem.desiredVariant || 'Normal').trim(),
+          String(wItem.minCondition || 'Near Mint (NM)').trim(),
+          String(wItem.priority || 'Hoog').trim(),
+          toNumber_(wItem.maxBudget, 0),
+          toNumber_(wItem.marketPrice, 0)
+        ]);
+        wlRowsKL.push([String(wItem.notes || '').trim(), false]);
+        wlRowsM.push([String(wItem.cardId || '').trim()]);
+      }
+
+      wlSheet.getRange(wlStartRow, 1, wlRowsAH.length, 8).setValues(wlRowsAH);
+      wlSheet.getRange(wlStartRow, 11, wlRowsKL.length, 2).setValues(wlRowsKL);
+      ensureWishlistCardIdColumn_(wlSheet);
+      wlSheet.getRange(wlStartRow, 13, wlRowsM.length, 1).setValues(wlRowsM);
+      propagateFormulaColumns_(wlSheet, 2, wlStartRow, wlRowsAH.length, 9, 2);
+      addedWishlist = wlRowsAH.length;
+    }
+  }
+
+  // 3. Pokédex Binder layout + automatische sync + expliciete Kaartspot slot-voorkeurskaarten (sla formules E:H over!)
+  if (slotsPerPage === 4 || slotsPerPage === 9 || slotsPerPage === 12 || slotsPerPage === 16 || slotsPerPage === 20) {
+    handleUpdatePokedexSlot_(ss, { slotsPerPage: slotsPerPage });
+  }
+
+  if (touchedCardNames.length > 0) {
+    syncPokedexBinder_(ss, touchedCardNames);
+  }
+
+  if (pokedexUpdates.length > 0) {
+    var dexSheet = ss.getSheetByName(SHEET_NAMES.POKEDEX);
+    if (dexSheet) {
+      for (var p = 0; p < pokedexUpdates.length; p++) {
+        var upd = pokedexUpdates[p] || {};
+        var dexNum = toNumber_(upd.dexNumber, 0);
+        if (dexNum < 1) continue;
+        var dexRow = findPokedexRowByNumber_(dexSheet, dexNum);
+        if (dexRow >= 8) {
+          var changedSlot = false;
+          if (Boolean(dexSheet.getRange(dexRow, 4).getValue()) !== true) {
+            dexSheet.getRange(dexRow, 4).setValue(true);
+            changedSlot = true;
+          }
+          var cleanChoice = String(upd.selectedCard || '').trim();
+          if (cleanChoice && String(dexSheet.getRange(dexRow, 9).getValue() || '').trim() !== cleanChoice) {
+            dexSheet.getRange(dexRow, 9).setValue(cleanChoice);
+            changedSlot = true;
+          }
+          if (changedSlot) updatedPokedexSlots++;
+        }
+      }
+    }
+  }
+
+  return {
+    addedCards: addedCards,
+    addedWishlist: addedWishlist,
+    promotedWishlist: promotedWishlist,
+    updatedPokedexSlots: updatedPokedexSlots
+  };
 }
 
 function handleLogTrade_(ss, payload) {

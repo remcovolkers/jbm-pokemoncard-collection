@@ -9,6 +9,9 @@ import {
 } from '../domain/models';
 import {
   AddCardPayload,
+  ApplyKaartspotSyncCounts,
+  ApplyKaartspotSyncPayload,
+  ApplyKaartspotSyncResult,
   BatchMutationItem,
   BatchMutationItemResult,
   BatchMutationResponse,
@@ -177,6 +180,36 @@ export class AppsScriptSheetsAdapter implements CollectionRepository {
     return {
       results: res.result?.results ?? [],
       snapshot: res.data,
+    };
+  }
+
+  async fetchKaartspotProfile(config: AppConnectionConfig, username: string): Promise<unknown> {
+    const res = await this.postAction<{ profile: unknown }>(
+      config,
+      'fetchKaartspotProfile',
+      { username },
+      { skipBootstrap: true, requireData: false }
+    );
+    return res.result?.profile;
+  }
+
+  async applyKaartspotSync(
+    config: AppConnectionConfig,
+    payload: ApplyKaartspotSyncPayload
+  ): Promise<ApplyKaartspotSyncResult> {
+    const res = await this.postAction<ApplyKaartspotSyncCounts>(
+      config,
+      'applyKaartspotSync',
+      payload as unknown as Record<string, unknown>
+    );
+    return {
+      counts: res.result ?? {
+        addedCards: 0,
+        addedWishlist: 0,
+        promotedWishlist: 0,
+        updatedPokedexSlots: 0,
+      },
+      snapshot: res.data!,
     };
   }
 

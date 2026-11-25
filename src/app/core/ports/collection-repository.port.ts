@@ -1,5 +1,10 @@
 import { InjectionToken } from '@angular/core';
 import {
+  KaartspotCardInsertPayload,
+  KaartspotPokedexSlotUpdate,
+  KaartspotWishlistInsertPayload,
+} from '../domain/kaartspot-sync.utils';
+import {
   AppConnectionConfig,
   AppSnapshot,
   BinderSlotsPerPage,
@@ -102,6 +107,26 @@ export interface BatchMutationResponse {
   snapshot?: AppSnapshot;
 }
 
+export interface ApplyKaartspotSyncPayload {
+  cardsToAdd: KaartspotCardInsertPayload[];
+  wishlistToAdd: KaartspotWishlistInsertPayload[];
+  wishlistRowsToMarkFound: number[];
+  pokedexUpdates: KaartspotPokedexSlotUpdate[];
+  slotsPerPage?: BinderSlotsPerPage | null;
+}
+
+export interface ApplyKaartspotSyncCounts {
+  addedCards: number;
+  addedWishlist: number;
+  promotedWishlist: number;
+  updatedPokedexSlots: number;
+}
+
+export interface ApplyKaartspotSyncResult {
+  counts: ApplyKaartspotSyncCounts;
+  snapshot: AppSnapshot;
+}
+
 /**
  * Hexagonale port voor het lezen en schrijven van de volledige collectiestatus (Google Sheets / Demo / Cache).
  */
@@ -125,6 +150,11 @@ export interface CollectionRepository {
     mutations: BatchMutationItem[],
     options?: MutationWriteOptions
   ): Promise<BatchMutationResponse>;
+  fetchKaartspotProfile?(config: AppConnectionConfig, username: string): Promise<unknown>;
+  applyKaartspotSync?(
+    config: AppConnectionConfig,
+    payload: ApplyKaartspotSyncPayload
+  ): Promise<ApplyKaartspotSyncResult>;
   refreshPrices(config: AppConnectionConfig): Promise<RefreshPricesResult>;
 }
 

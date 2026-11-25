@@ -2,6 +2,13 @@ import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { formatEur } from '../../core/domain/card-math.utils';
+import {
+  KaartspotBinderSummary,
+  KaartspotProfileData,
+  computeKaartspotSyncPlan,
+  parseKaartspotInput,
+  selectDefaultBinderIds,
+} from '../../core/domain/kaartspot-sync.utils';
 import { SheetProfileRole } from '../../core/domain/models';
 import { AppUpdateService } from '../../core/platform/app-update.service';
 import { PlatformService } from '../../core/platform/platform.service';
@@ -48,6 +55,61 @@ export class SettingsComponent implements OnInit, OnDestroy {
   readonly copiedScriptLines = signal<number | null>(null);
   readonly manualSetupOpen = signal<boolean | null>(null);
   private lastAutoVerifyAt = 0;
+
+  // Kaartspot Sync state (centraal in Instellingen & Sync, gekoppeld per Sheet-profiel)
+  readonly ksSourceInput = signal<string>(this.store.activeKaartspotConfig()?.sourceInput ?? '');
+  readonly ksLoadedProfile = signal<KaartspotProfileData | null>(null);
+  readonly ksSelectedBinderIds = signal<string[]>(
+    this.store.activeKaartspotConfig()?.selectedBinderIds ?? []
+  );
+  readonly ksWishlistWanted = signal<boolean>(
+    this.store.activeKaartspotConfig()?.wishlistWanted ?? true
+  );
+  readonly ksSyncLayout = signal<boolean>(
+    this.store.activeKaartspotConfig()?.syncLayout ?? true
+  );
+  readonly ksIsFetching = signal<boolean>(false);
+  readonly ksIsSyncing = signal<boolean>(false);
+  readonly ksError = signal<string | null>(null);
+  readonly ksNeedsScriptUpdate = signal<boolean>(false);
+  readonly ksShowJsonFallback = signal<boolean>(false);
+  readonly ksPastedJson = signal<string>('');
+
+  readonly ksParsedInput = computed(() => parseKaartspotInput(this.ksSourceInput()));
+  readonly ksSelectableBinders = computed<KaartspotBinderSummary[]>(() => {
+    const prof = this.ksLoadedProfile();
+    if (!prof) return [];
+    return prof.binders.filter((b) => b.ownedCardCount + b.wantedCardCount > 0);
+  });
+  readonly ksSelectedDexLayout = computed(() => {
+    const prof = this.ksLoadedProfile();
+    if (!prof) return null;
+    const selected = new Set(this.ksSelectedBinderIds());
+    const dex = prof.binders.find(
+      (b) => selected.has(b.id) && b.isPokedexBinder && b.supportedSlotsPerPage !== null
+    );
+    if (!dex?.supportedSlotsPerPage) return null;
+    return dex.supportedSlotsPerPage !== this.store.binderSlotsPerPage()
+      ? dex.supportedSlotsPerPage
+      : null;
+  });
+  readonly ksSyncPlan = computed(() => {
+    const prof = this.ksLoadedProfile();
+    if (!prof) return null;
+    return computeKaartspotSyncPlan(
+      prof,
+      {
+        selectedBinderIds: this.ksSelectedBinderIds(),
+        wishlistWanted: this.ksWishlistWanted(),
+        syncLayout: this.ksSyncLayout(),
+      },
+      this.store.snapshot()
+    );
+  });
+  readonly ksLastSyncedLabel = computed(() => {
+    const iso = this.store.activeKaartspotConfig()?.lastSyncedAt;
+    return iso ? new Date(iso).toLocaleString('nl-NL') : null;
+  });
 
   private readonly onWindowFocus = (): void => {
     this.maybeAutoVerifyScriptOnReturn();
@@ -275,6 +337,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
       webAppUrl: this.webAppUrl().trim(),
       apiToken: this.apiToken().trim(),
     });
+    this.syncKaartspotSignalsFromActiveProfile();
   }
 
   async onProfileSelect(profileId: string): Promise<void> {
@@ -293,6 +356,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
     this.testResult.set(null);
 
     await this.store.switchSheetProfile(found.id);
+    this.syncKaartspotSignalsFromActiveProfile();
     this.cacheSizeKb.set(this.store.getEstimatedCacheKb());
   }
 
@@ -320,6 +384,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
     this.webAppUrl.set('');
     this.apiToken.set('');
     this.testResult.set(null);
+    this.resetKaartspotDraft();
   }
 
   deleteSelectedProfile(): void {
@@ -341,6 +406,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
       this.webAppUrl.set('');
       this.apiToken.set('');
     }
+    this.syncKaartspotSignalsFromActiveProfile();
     this.cacheSizeKb.set(this.store.getEstimatedCacheKb());
     this.store.showToast('Spreadsheet-profiel verwijderd.', 'info');
   }
@@ -432,5 +498,172 @@ export class SettingsComponent implements OnInit, OnDestroy {
   clearCache(): void {
     this.store.clearOfflineCache();
     this.cacheSizeKb.set(this.store.getEstimatedCacheKb());
+  }
+
+  // ==========================================================================
+  // KAARTSPOT BINDER SYNC ACTIES
+  // ==========================================================================
+
+  private syncKaartspotSignalsFromActiveProfile(): void {
+    const saved = this.store.activeKaartspotConfig();
+    this.ksSourceInput.set(saved?.sourceInput ?? '');
+    this.ksSelectedBinderIds.set(saved?.selectedBinderIds ?? []);
+    this.ksWishlistWanted.set(saved?.wishlistWanted ?? true);
+    this.ksSyncLayout.set(saved?.syncLayout ?? true);
+    this.ksLoadedProfile.set(null);
+    this.ksError.set(null);
+    this.ksNeedsScriptUpdate.set(false);
+    this.ksShowJsonFallback.set(false);
+    this.ksPastedJson.set('');
+  }
+
+  private resetKaartspotDraft(): void {
+    this.ksSourceInput.set('');
+    this.ksSelectedBinderIds.set([]);
+    this.ksWishlistWanted.set(true);
+    this.ksSyncLayout.set(true);
+    this.ksLoadedProfile.set(null);
+    this.ksError.set(null);
+    this.ksNeedsScriptUpdate.set(false);
+    this.ksShowJsonFallback.set(false);
+    this.ksPastedJson.set('');
+  }
+
+  async loadKaartspotPreview(usePastedJson = false): Promise<boolean> {
+    if (this.ksIsFetching() || this.ksIsSyncing()) return false;
+    const raw = this.ksSourceInput().trim();
+    if (!raw) {
+      this.ksError.set('Plak eerst je Kaartspot wrapped-link of @gebruikersnaam.');
+      return false;
+    }
+
+    this.ksIsFetching.set(true);
+    this.ksError.set(null);
+    this.ksNeedsScriptUpdate.set(false);
+
+    try {
+      const { input, profile } = await this.store.fetchKaartspotProfileData(
+        raw,
+        usePastedJson ? this.ksPastedJson() : undefined
+      );
+      this.ksLoadedProfile.set(profile);
+
+      // Behoud eerder opgeslagen mapselectie als die voor ditzelfde account geldig is, anders kies op basis van ?cat= / Pokedex
+      const saved = this.store.activeKaartspotConfig();
+      const validIds = new Set(
+        profile.binders
+          .filter((b) => b.ownedCardCount + b.wantedCardCount > 0)
+          .map((b) => b.id)
+      );
+
+      if (input.targetBinderId && validIds.has(input.targetBinderId)) {
+        this.ksSelectedBinderIds.set([input.targetBinderId]);
+      } else if (
+        saved &&
+        saved.username.toLowerCase() === profile.username.toLowerCase() &&
+        saved.selectedBinderIds.some((id) => validIds.has(id))
+      ) {
+        this.ksSelectedBinderIds.set(saved.selectedBinderIds.filter((id) => validIds.has(id)));
+      } else {
+        this.ksSelectedBinderIds.set(selectDefaultBinderIds(profile, input.targetBinderId));
+      }
+
+      if (usePastedJson) {
+        this.ksShowJsonFallback.set(false);
+      }
+      return true;
+    } catch (err) {
+      const rawMsg = err instanceof Error ? err.message : String(err);
+      if (rawMsg.startsWith('SCRIPT_UPDATE_REQUIRED:')) {
+        this.ksNeedsScriptUpdate.set(true);
+        this.ksError.set(rawMsg.replace(/^SCRIPT_UPDATE_REQUIRED:\s*/, ''));
+      } else if (rawMsg.startsWith('CORS_PASTE_NEEDED:')) {
+        this.ksShowJsonFallback.set(true);
+        this.ksError.set(rawMsg.replace(/^CORS_PASTE_NEEDED:\s*/, ''));
+      } else {
+        this.ksError.set(rawMsg);
+      }
+      return false;
+    } finally {
+      this.ksIsFetching.set(false);
+    }
+  }
+
+  toggleKaartspotBinder(binderId: string): void {
+    const current = this.ksSelectedBinderIds();
+    if (current.includes(binderId)) {
+      this.ksSelectedBinderIds.set(current.filter((id) => id !== binderId));
+    } else {
+      this.ksSelectedBinderIds.set([...current, binderId]);
+    }
+  }
+
+  isKaartspotBinderSelected(binderId: string): boolean {
+    return this.ksSelectedBinderIds().includes(binderId);
+  }
+
+  formatGridLabel(spp: number): string {
+    if (spp === 4) return '2×2 (4 vakjes)';
+    if (spp === 9) return '3×3 (9 vakjes)';
+    if (spp === 12) return '4×3 (12 vakjes)';
+    if (spp === 16) return '4×4 (16 vakjes)';
+    if (spp === 20) return '5×4 (20 vakjes)';
+    return `${spp} vakjes`;
+  }
+
+  async applyKaartspotSync(): Promise<void> {
+    const plan = this.ksSyncPlan();
+    const prof = this.ksLoadedProfile();
+    if (!plan || !prof || this.ksIsSyncing()) return;
+
+    this.ksIsSyncing.set(true);
+    this.ksError.set(null);
+    try {
+      const ok = await this.store.executeKaartspotSync(plan, {
+        sourceInput: this.ksSourceInput().trim(),
+        username: prof.username,
+        selectedBinderIds: this.ksSelectedBinderIds(),
+        wishlistWanted: this.ksWishlistWanted(),
+        syncLayout: this.ksSyncLayout(),
+      });
+      if (ok) {
+        this.cacheSizeKb.set(this.store.getEstimatedCacheKb());
+      }
+    } finally {
+      this.ksIsSyncing.set(false);
+    }
+  }
+
+  async quickResyncSavedKaartspot(): Promise<void> {
+    const saved = this.store.activeKaartspotConfig();
+    if (!saved || this.ksIsFetching() || this.ksIsSyncing()) return;
+    this.ksSourceInput.set(saved.sourceInput);
+    this.ksWishlistWanted.set(saved.wishlistWanted);
+    this.ksSyncLayout.set(saved.syncLayout);
+    const loaded = await this.loadKaartspotPreview(false);
+    if (loaded) {
+      await this.applyKaartspotSync();
+    }
+  }
+
+  unlinkKaartspot(): void {
+    this.store.saveKaartspotConfig(undefined);
+    this.resetKaartspotDraft();
+    this.store.showToast('Kaartspot-koppeling verwijderd van dit profiel.', 'info');
+  }
+
+  async openKaartspotPublicDataTab(): Promise<void> {
+    const parsed = this.ksParsedInput();
+    if (!parsed) {
+      this.ksError.set('Vul eerst een geldige Kaartspot-link of @gebruikersnaam in.');
+      return;
+    }
+    await this.platform.openExternalUrl(parsed.apiUrl);
+  }
+
+  async jumpToScriptUpdate(): Promise<void> {
+    this.manualSetupOpen.set(true);
+    await this.copyLatestAppsScript();
+    this.scrollToSheetSetup();
   }
 }

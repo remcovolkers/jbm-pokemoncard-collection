@@ -1,6 +1,7 @@
 import { Injectable, computed, effect, inject, signal } from '@angular/core';
 import {
   buildTcgdexAssetUrl,
+  extractArtworkUrlFromNotes,
   getDisplaySetCode,
   inferCardIdFromSetAndNumber,
   resolveCardArtworkUrl,
@@ -11,12 +12,20 @@ import {
   roundCurrency,
 } from '../domain/card-math.utils';
 import {
+  KaartspotProfileData,
+  KaartspotSyncPlan,
+  ParsedKaartspotInput,
+  parseKaartspotInput,
+  parseKaartspotPublicPayload,
+} from '../domain/kaartspot-sync.utils';
+import {
   AppConnectionConfig,
   AppSnapshot,
   BinderSlotsPerPage,
   CatalogSetSummary,
   CollectionCard,
   DEFAULT_DROPDOWN_SETTINGS,
+  KaartspotProfileSyncState,
   PendingMutation,
   PokedexSlot,
   SetProgress,
@@ -167,6 +176,14 @@ export class CollectionStore {
     return this.sheetProfiles().find((p) => p.id === id) ?? null;
   });
 
+  readonly activeKaartspotConfig = computed<KaartspotProfileSyncState | null>(() => {
+    const prof = this.activeProfile();
+    if (!this.config().demoMode && prof) {
+      return prof.kaartspot ?? null;
+    }
+    return this.config().kaartspot ?? null;
+  });
+
   readonly syncStatus = computed<SyncStatus>(() => {
     if (this.isSyncing()) return 'syncing';
     if (this.config().demoMode) return 'demo';
@@ -295,6 +312,7 @@ export class CollectionStore {
         ...c,
         imageUrl:
           c.imageUrl ||
+          extractArtworkUrlFromNotes(c.notes) ||
           (c.cardId ? this.catalog.getCachedArtworkUrl(c.cardId) || resolveCardArtworkUrl(c.cardId, undefined, 'high') : undefined),
       })),
       wishlist: snap.wishlist.map((w) => {
@@ -313,6 +331,7 @@ export class CollectionStore {
 
         const resolvedImageUrl =
           w.imageUrl?.trim() ||
+          extractArtworkUrlFromNotes(w.notes) ||
           prevMatch?.imageUrl?.trim() ||
           cached?.imageUrl ||
           (resolvedCardId
@@ -473,6 +492,8 @@ export class CollectionStore {
     const prev = this.config();
     const list = [...(prev.profiles ?? [])];
     const cleanId = input.id?.trim() || `sheet-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const existingIdx = list.findIndex((p) => p.id === cleanId);
+    const existingKaartspot = existingIdx >= 0 ? list[existingIdx].kaartspot : undefined;
     const profile: SheetProfile = {
       id: cleanId,
       name: input.name.trim() || (input.role === 'test' ? 'Test Spreadsheet' : 'Live Spreadsheet'),
@@ -480,9 +501,13 @@ export class CollectionStore {
       webAppUrl: input.webAppUrl.trim(),
       apiToken: input.apiToken.trim(),
       monthlyBudget: input.monthlyBudget ?? prev.monthlyBudget,
+      ...(input.kaartspot !== undefined
+        ? { kaartspot: input.kaartspot }
+        : existingKaartspot
+          ? { kaartspot: existingKaartspot }
+          : {}),
     };
 
-    const existingIdx = list.findIndex((p) => p.id === profile.id);
     if (existingIdx >= 0) {
       list[existingIdx] = profile;
     } else {
@@ -818,6 +843,416 @@ export class CollectionStore {
 
   getEstimatedCacheKb(): number {
     return this.cache.getEstimatedCacheSizeKb();
+  }
+
+  // ==========================================================================
+  // KAARTSPOT BINDER SYNC (PER-PROFIEL CONFIG + SERVER-SIDE FETCH & BULK SYNC)
+  // ==========================================================================
+
+  saveKaartspotConfig(state: KaartspotProfileSyncState | undefined): void {
+    const prev = this.config();
+    if (!prev.demoMode && prev.activeProfileId) {
+      const updatedProfiles = (prev.profiles ?? []).map((p) =>
+        p.id === prev.activeProfileId ? { ...p, kaartspot: state } : p
+      );
+      this.config.set({
+        ...prev,
+        profiles: updatedProfiles,
+      });
+    } else {
+      this.config.set({
+        ...prev,
+        kaartspot: state,
+      });
+    }
+  }
+
+  private async ensureSetsCatalogLoaded(): Promise<CatalogSetSummary[]> {
+    if (this.setsCatalogCache.length > 0) {
+      return this.setsCatalogCache;
+    }
+    try {
+      const sets = this.catalog.listAllSets ? await this.catalog.listAllSets() : [];
+      if (Array.isArray(sets) && sets.length > 0) {
+        this.setsCatalogCache = sets;
+      }
+    } catch {
+      // Gebruik ingebouwde aliassen als de catalogus offline niet geladen kan worden
+    }
+    return this.setsCatalogCache;
+  }
+
+  async fetchKaartspotProfileData(
+    rawInput: string,
+    pastedJsonText?: string
+  ): Promise<{ input: ParsedKaartspotInput; profile: KaartspotProfileData }> {
+    const parsedInput = parseKaartspotInput(rawInput);
+    if (!parsedInput) {
+      throw new Error(
+        'Voer een geldige Kaartspot-link (bijv. kaartspot.nl/wrapped/...) of gebruikersnaam in.'
+      );
+    }
+
+    const setsCatalog = await this.ensureSetsCatalogLoaded();
+    const cleanPaste = (pastedJsonText || '').trim();
+
+    if (cleanPaste) {
+      let rawJson: unknown;
+      try {
+        rawJson = JSON.parse(cleanPaste);
+      } catch {
+        throw new Error(
+          'De geplakte tekst is geen geldige JSON. Kopieer alles vanaf "{" t/m "}" uit de geopende Kaartspot-data.'
+        );
+      }
+      const profile = parseKaartspotPublicPayload(rawJson, setsCatalog);
+      return { input: parsedInput, profile };
+    }
+
+    const cfg = this.config();
+    if (!cfg.demoMode && this.isSheetConfigured() && this.repo.fetchKaartspotProfile) {
+      if (!this.isOnline()) {
+        throw new Error('Offline: maak verbinding met internet om je Kaartspot-binder op te halen.');
+      }
+      try {
+        const rawJson = await this.repo.fetchKaartspotProfile(cfg, parsedInput.username);
+        const profile = parseKaartspotPublicPayload(rawJson, setsCatalog);
+        return { input: parsedInput, profile };
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (/Onbekende POST-actie:\s*fetchKaartspotProfile/i.test(msg)) {
+          throw new Error(
+            'SCRIPT_UPDATE_REQUIRED: Werk eerst eenmalig Code.gs bij naar v2.2.0 (zie "Eigen Google Sheet & Script-updates" hierboven) zodat Google Sheets je Kaartspot-link rechtstreeks kan ophalen — of plak de JSON handmatig hieronder.'
+          );
+        }
+        throw err instanceof Error ? err : new Error(msg);
+      }
+    }
+
+    // In Demo-modus (of zonder gekoppelde Google Sheet): probeer directe fetch en geef anders heldere JSON-instructie
+    try {
+      const directRes = await fetch(parsedInput.apiUrl, { cache: 'no-store' });
+      if (directRes.ok) {
+        const rawJson = (await directRes.json()) as unknown;
+        const profile = parseKaartspotPublicPayload(rawJson, setsCatalog);
+        return { input: parsedInput, profile };
+      }
+    } catch {
+      // Browser blokkeert cross-origin fetch zonder gekoppeld Apps Script
+    }
+
+    throw new Error(
+      'CORS_PASTE_NEEDED: In Demo-modus (zonder gekoppelde Google Sheet) blokkeert de browser directe toegang tot kaartspot.nl. Klik hieronder op "1. Open Kaartspot-data" en plak de JSON, óf koppel eerst je Google Sheet voor directe 1-klik sync.'
+    );
+  }
+
+  async executeKaartspotSync(
+    plan: KaartspotSyncPlan,
+    syncState: Omit<KaartspotProfileSyncState, 'lastSyncedAt'>
+  ): Promise<boolean> {
+    const savedState: KaartspotProfileSyncState = {
+      ...syncState,
+      lastSyncedAt: new Date().toISOString(),
+    };
+    this.saveKaartspotConfig(savedState);
+
+    // Bewaar eventuele niet-TCGdex afbeeldingen (bijv. Chinese ZHT of Trainer Kits) direct in lokale artwork-cache
+    if (plan.artworkCacheEntries.length > 0) {
+      const existingMap = this.cache.loadArtworkCache();
+      let changed = false;
+      for (const entry of plan.artworkCacheEntries) {
+        if (entry.cardId && entry.imageUrl && existingMap[entry.cardId] !== entry.imageUrl) {
+          existingMap[entry.cardId] = entry.imageUrl;
+          changed = true;
+        }
+      }
+      if (changed) {
+        this.cache.saveArtworkCache(existingMap);
+      }
+    }
+
+    for (const w of plan.wishlistToAdd) {
+      this.rememberWishlistArtwork({
+        cardName: w.cardName,
+        setName: w.setName,
+        cardNumber: w.cardNumber,
+        cardId: w.cardId,
+        imageUrl: w.imageUrl,
+      });
+    }
+
+    if (!plan.summary.hasAnyChanges) {
+      this.showToast(
+        `Alles is al synchroon met @${plan.username} — geen nieuwe of gewijzigde kaarten gevonden.`,
+        'info'
+      );
+      return true;
+    }
+
+    if (plan.targetSlotsPerPage !== null) {
+      this.deviceBinderLayout = plan.targetSlotsPerPage;
+      this.cache.saveBinderLayoutPreference(plan.targetSlotsPerPage);
+    }
+
+    const cfg = this.config();
+    const isLive = !cfg.demoMode && this.isSheetConfigured();
+
+    if (!isLive) {
+      this.applyKaartspotPlanLocally(plan);
+      this.showToast(this.formatKaartspotToast(plan), 'success');
+      return true;
+    }
+
+    if (!this.isOnline()) {
+      this.showToast(
+        'Offline: maak eerst verbinding met internet om Kaartspot naar Google Sheets te synchroniseren.',
+        'warning'
+      );
+      return false;
+    }
+
+    this.beginSync();
+    this.lastError.set(null);
+    try {
+      await this.waitForPendingSync();
+      if (this.pendingQueue().length > 0) {
+        await this.drainOutboxLoop(true);
+      }
+
+      const revBefore = this.localRevision;
+      if (this.repo.applyKaartspotSync) {
+        try {
+          const remoteRes = await this.repo.applyKaartspotSync(cfg, {
+            cardsToAdd: plan.cardsToAdd,
+            wishlistToAdd: plan.wishlistToAdd,
+            wishlistRowsToMarkFound: plan.wishlistRowsToMarkFound,
+            pokedexUpdates: plan.pokedexUpdates,
+            slotsPerPage: plan.targetSlotsPerPage,
+          });
+          this.applyDetectedScriptVersion(cfg.webAppUrl, remoteRes.snapshot.scriptVersion);
+          if (this.canApplyRemoteSnapshot(revBefore)) {
+            this.snapshot.set(this.reconcileRemoteSnapshot(remoteRes.snapshot));
+            this.persistStateImmediately();
+          }
+          this.showToast(this.formatKaartspotToast(plan), 'success');
+          return true;
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          if (!/Onbekende POST-actie:\s*applyKaartspotSync/i.test(msg) || !this.repo.batchMutations) {
+            throw err;
+          }
+          // Fallback voor oudere v2.1.0 scripts wanneer JSON handmatig is geplakt
+        }
+      }
+
+      if (this.repo.batchMutations) {
+        const allItems: BatchMutationItem[] = [];
+        let seq = 0;
+        if (plan.targetSlotsPerPage !== null) {
+          allItems.push({
+            id: `ks-spp-${++seq}`,
+            action: 'updatePokedexSlot',
+            payload: { slotsPerPage: plan.targetSlotsPerPage },
+          });
+        }
+        for (const rowIdx of plan.wishlistRowsToMarkFound) {
+          allItems.push({
+            id: `ks-found-${++seq}`,
+            action: 'markWishlistFound',
+            payload: { rowIndex: rowIdx, addToCollection: false },
+          });
+        }
+        for (const c of plan.cardsToAdd) {
+          allItems.push({
+            id: `ks-card-${++seq}`,
+            action: 'addCard',
+            payload: c as unknown as Record<string, unknown>,
+          });
+        }
+        for (const w of plan.wishlistToAdd) {
+          allItems.push({
+            id: `ks-wl-${++seq}`,
+            action: 'addWishlist',
+            payload: w as unknown as Record<string, unknown>,
+          });
+        }
+        for (const p of plan.pokedexUpdates) {
+          allItems.push({
+            id: `ks-dex-${++seq}`,
+            action: 'updatePokedexSlot',
+            payload: {
+              dexNumber: p.dexNumber,
+              inBinder: true,
+              selectedCard: p.selectedCard,
+            },
+          });
+        }
+
+        const CHUNK_SIZE = 100;
+        let finalSnap: AppSnapshot | undefined;
+        for (let i = 0; i < allItems.length; i += CHUNK_SIZE) {
+          const slice = allItems.slice(i, i + CHUNK_SIZE);
+          const isLast = i + CHUNK_SIZE >= allItems.length;
+          const chunkRes = await this.repo.batchMutations(cfg, slice, { skipBootstrap: !isLast });
+          if (chunkRes.snapshot) {
+            finalSnap = chunkRes.snapshot;
+          }
+        }
+        if (finalSnap && this.canApplyRemoteSnapshot(revBefore)) {
+          this.applyDetectedScriptVersion(cfg.webAppUrl, finalSnap.scriptVersion);
+          this.snapshot.set(this.reconcileRemoteSnapshot(finalSnap));
+          this.persistStateImmediately();
+        }
+        this.showToast(this.formatKaartspotToast(plan), 'success');
+        return true;
+      }
+
+      throw new Error('Werk eerst je Google Sheet Code.gs bij naar v2.2.0 om te synchroniseren.');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Kaartspot-synchronisatie mislukt.';
+      this.lastError.set(msg);
+      this.showToast(msg, 'error');
+      return false;
+    } finally {
+      this.endSync();
+    }
+  }
+
+  private applyKaartspotPlanLocally(plan: KaartspotSyncPlan): void {
+    const today = new Date().toISOString().slice(0, 10);
+    const current = this.snapshot();
+    const nextSpp = plan.targetSlotsPerPage ?? current.binderSlotsPerPage;
+
+    let nextColRow = this.getNextLocalRowIndex(
+      current.collection.map((c) => c.rowIndex),
+      2
+    );
+    const addedCards: CollectionCard[] = plan.cardsToAdd.map((c) => ({
+      rowIndex: nextColRow++,
+      cardId: c.cardId,
+      name: c.name,
+      setName: c.setName,
+      cardNumber: c.cardNumber,
+      language: c.language,
+      type: c.type || 'Colorless',
+      rarity: c.rarity,
+      variant: c.variant,
+      condition: c.condition,
+      grading: c.grading,
+      grade: c.grade,
+      quantity: c.quantity,
+      storageLocation: c.storageLocation,
+      binderDetail: c.binderDetail,
+      purchaseDate: today,
+      purchasePrice: c.purchasePrice,
+      marketPrice: c.marketPrice,
+      imageUrl:
+        c.imageUrl ||
+        extractArtworkUrlFromNotes(c.notes) ||
+        resolveCardArtworkUrl(c.cardId, undefined, 'high'),
+      forTrade: c.forTrade,
+      acquisitionMethod: c.acquisitionMethod,
+      notes: c.notes,
+    }));
+
+    const nextCollection = [...addedCards, ...current.collection];
+
+    const foundSet = new Set(plan.wishlistRowsToMarkFound);
+    let nextWlRow = this.getNextLocalRowIndex(
+      current.wishlist.map((w) => w.rowIndex),
+      2
+    );
+    const updatedExistingWishlist = current.wishlist.map((w) =>
+      foundSet.has(w.rowIndex) ? { ...w, found: true } : w
+    );
+    const addedWishlist: WishlistItem[] = plan.wishlistToAdd.map((w) => ({
+      rowIndex: nextWlRow++,
+      cardId: w.cardId,
+      cardName: w.cardName,
+      setName: w.setName,
+      cardNumber: w.cardNumber,
+      desiredVariant: w.desiredVariant,
+      minCondition: w.minCondition,
+      priority: w.priority,
+      maxBudget: w.maxBudget,
+      marketPrice: w.marketPrice,
+      notes: w.notes,
+      found: false,
+      imageUrl:
+        w.imageUrl ||
+        extractArtworkUrlFromNotes(w.notes) ||
+        resolveCardArtworkUrl(w.cardId, undefined, 'high'),
+    }));
+    const nextWishlist = [...addedWishlist, ...updatedExistingWishlist];
+
+    const setSeeds = current.setProgress.map((s) => ({
+      setName: s.setName,
+      setCode: s.setCode,
+      series: s.series,
+      totalCards: s.totalCards,
+    }));
+    for (const c of plan.cardsToAdd) {
+      if (
+        c.setName &&
+        c.setTotalCards > 0 &&
+        !setSeeds.some((s) => s.setName.toLowerCase() === c.setName.toLowerCase())
+      ) {
+        setSeeds.push({
+          setName: c.setName,
+          setCode: undefined,
+          series: c.seriesName || 'Pokémon TCG',
+          totalCards: c.setTotalCards,
+        });
+      }
+    }
+
+    const nextSetProgress = buildSetProgressFromCollection(nextCollection, setSeeds);
+    const basePokedex = buildPokedexFromCollection(nextCollection, nextSpp, {
+      existingSlots: current.pokedex,
+    });
+    const dexUpdateByNum = new Map(plan.pokedexUpdates.map((u) => [u.dexNumber, u]));
+    const nextPokedex = basePokedex.map((slot) => {
+      const upd = dexUpdateByNum.get(slot.dexNumber);
+      if (!upd) return slot;
+      return {
+        ...slot,
+        inBinder: true,
+        status: 'In Binder',
+        selectedCard: upd.selectedCard,
+      };
+    });
+
+    this.bumpLocalRevision();
+    this.snapshot.set({
+      ...current,
+      binderSlotsPerPage: nextSpp,
+      collection: nextCollection,
+      wishlist: nextWishlist,
+      setProgress: nextSetProgress,
+      pokedex: nextPokedex,
+      syncedAt: new Date().toISOString(),
+    });
+    this.persistStateImmediately();
+  }
+
+  private formatKaartspotToast(plan: KaartspotSyncPlan): string {
+    const parts: string[] = [];
+    if (plan.summary.newCollectionCount > 0) {
+      parts.push(`+${plan.summary.newCollectionCount} in Collectie`);
+    }
+    if (plan.summary.pokedexSlotsUpdatedCount > 0) {
+      parts.push(`${plan.summary.pokedexSlotsUpdatedCount} Pokédex-vakjes gekoppeld`);
+    }
+    if (plan.summary.newWishlistCount > 0) {
+      parts.push(`+${plan.summary.newWishlistCount} op Verlanglijst`);
+    }
+    if (plan.summary.promotedFromWishlistCount > 0) {
+      parts.push(`${plan.summary.promotedFromWishlistCount} wens(en) afgevinkt`);
+    }
+    if (parts.length === 0 && plan.targetSlotsPerPage !== null) {
+      parts.push(`Binder-indeling bijgewerkt naar ${plan.targetSlotsPerPage} vakjes`);
+    }
+    return `Kaartspot gesynchroniseerd: ${parts.join(' · ')}!`;
   }
 
   // ==========================================================================

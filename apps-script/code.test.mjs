@@ -318,11 +318,11 @@ describe('apps-script/Code.gs Backend API & Formule-integriteit', () => {
     const ping = JSON.parse(sandbox.doGet({ parameter: { action: 'ping', token: 'test-secret-token' } }).getContent());
     assert.equal(ping.ok, true);
     assert.equal(ping.spreadsheetName, 'Pokémon Kaartencollectie Tracker');
-    assert.equal(ping.scriptVersion, '2.1.0');
+    assert.equal(ping.scriptVersion, '2.2.0');
 
     const boot = JSON.parse(sandbox.doGet({ parameter: { action: 'bootstrap', token: 'test-secret-token' } }).getContent());
     assert.equal(boot.ok, true);
-    assert.equal(boot.data.scriptVersion, '2.1.0');
+    assert.equal(boot.data.scriptVersion, '2.2.0');
     assert.equal(boot.data.binderSlotsPerPage, 9);
     assert.equal(boot.data.pokedex.length, 4);
   });
@@ -331,7 +331,7 @@ describe('apps-script/Code.gs Backend API & Formule-integriteit', () => {
     const alerts = [];
     const menuItems = [];
     let manifestResponse = {
-      latestScriptVersion: '2.2.0',
+      latestScriptVersion: '2.3.0',
       scriptChangelog: 'Extra bulk opties',
     };
 
@@ -362,11 +362,11 @@ describe('apps-script/Code.gs Backend API & Formule-integriteit', () => {
 
     sandbox.checkScriptUpdateFromMenu();
     assert.equal(alerts.length, 1);
-    assert.match(alerts[0], /v2\.1\.0/);
     assert.match(alerts[0], /v2\.2\.0/);
+    assert.match(alerts[0], /v2\.3\.0/);
     assert.match(alerts[0], /Implementaties beheren/);
 
-    manifestResponse = { latestScriptVersion: '2.1.0' };
+    manifestResponse = { latestScriptVersion: '2.2.0' };
     sandbox.checkScriptUpdateFromMenu();
     assert.equal(alerts.length, 2);
     assert.match(alerts[1], /nieuwste PokéBinder Apps Script versie/);
@@ -1088,5 +1088,150 @@ describe('apps-script/Code.gs Backend API & Formule-integriteit', () => {
     assert.equal(sheets['Pokédex Binder']._stats.getDataValidationCalls, 1);
     assert.equal(sheets['Pokédex Binder']._grid[10][3], true); // Mew (#151) in binder
     assert.equal(sheets['Pokédex Binder']._grid[9][3], false); // Mewtwo (#150) onaangeroerd
+  });
+
+  it('fetchKaartspotProfile haalt publieke Kaartspot JSON op zonder bootstrap en valideert gebruikersnaam', () => {
+    let requestedUrl = '';
+    const { sandbox } = createGasEnvironment({
+      tcgdexMock: (url) => {
+        requestedUrl = url;
+        return {
+          getResponseCode: () => 200,
+          getContentText: () => JSON.stringify({ formaat: 2, eigenaar: { username: 'jellybeanmels' }, binders: [], items: [] }),
+        };
+      },
+    });
+
+    const okRes = JSON.parse(
+      sandbox.doPost({
+        postData: {
+          contents: JSON.stringify({
+            token: 'test-secret-token',
+            action: 'fetchKaartspotProfile',
+            skipBootstrap: true,
+            payload: { username: '@jellybeanmels' },
+          }),
+        },
+      }).getContent()
+    );
+
+    assert.equal(okRes.ok, true);
+    assert.equal(okRes.data, undefined);
+    assert.equal(requestedUrl, 'https://kaartspot.nl/api/binder-publiek/jellybeanmels');
+    assert.equal(okRes.result.profile.eigenaar.username, 'jellybeanmels');
+
+    const badRes = JSON.parse(
+      sandbox.doPost({
+        postData: {
+          contents: JSON.stringify({
+            token: 'test-secret-token',
+            action: 'fetchKaartspotProfile',
+            skipBootstrap: true,
+            payload: { username: 'https://evil.test/pad' },
+          }),
+        },
+      }).getContent()
+    );
+    assert.equal(badRes.ok, false);
+    assert.match(badRes.error, /Ongeldige Kaartspot-gebruikersnaam/);
+  });
+
+  it('applyKaartspotSync schrijft bulk naar Collectie, Verlanglijst, Set Voortgang en Pokédex Binder zonder formules aan te raken', () => {
+    const { sandbox, sheets } = createGasEnvironment();
+
+    const syncRes = JSON.parse(
+      sandbox.doPost({
+        postData: {
+          contents: JSON.stringify({
+            token: 'test-secret-token',
+            action: 'applyKaartspotSync',
+            payload: {
+              slotsPerPage: 20,
+              cardsToAdd: [
+                {
+                  cardId: 'sv07-143',
+                  name: 'Bulbasaur',
+                  setName: 'Stellar Crown',
+                  seriesName: 'Scarlet & Violet',
+                  setId: 'sv07',
+                  setTotalCards: 175,
+                  cardNumber: '143/142',
+                  language: 'EN',
+                  type: 'Grass',
+                  rarity: 'Illustration Rare',
+                  variant: 'Holo',
+                  condition: 'Near Mint (NM)',
+                  grading: 'Raw',
+                  grade: '',
+                  quantity: 1,
+                  storageLocation: 'Hoofdbinder',
+                  binderDetail: 'Kaartspot · Pokedex',
+                  purchasePrice: 0,
+                  marketPrice: 74.99,
+                  forTrade: false,
+                  acquisitionMethod: 'Kaartspot Sync',
+                  notes: 'Kaartspot sync (Pokedex) [KS:2c69167cdd1a]',
+                },
+              ],
+              wishlistToAdd: [
+                {
+                  cardId: 'mep-055',
+                  cardName: 'Treecko',
+                  setName: 'MEP Black Star Promos',
+                  cardNumber: '55',
+                  desiredVariant: 'Holo',
+                  minCondition: 'Near Mint (NM)',
+                  priority: 'Hoog',
+                  maxBudget: 11.02,
+                  marketPrice: 11.02,
+                  notes: 'Pokédex #0252 · Kaartspot target [KS:5fec1c84935a]',
+                },
+              ],
+              wishlistRowsToMarkFound: [],
+              pokedexUpdates: [
+                {
+                  dexNumber: 1,
+                  pokemonName: 'Bulbasaur',
+                  inBinder: true,
+                  selectedCard: 'sv07-143 | Stellar Crown (Holo)',
+                },
+              ],
+            },
+          }),
+        },
+      }).getContent()
+    );
+
+    assert.equal(syncRes.ok, true);
+    assert.equal(syncRes.result.addedCards, 1);
+    assert.equal(syncRes.result.addedWishlist, 1);
+    assert.equal(syncRes.data.binderSlotsPerPage, 20);
+
+    // Collectie rij 2: data geschreven, R:T formules 100% onaangeroerd, W = Kaartspot Sync
+    const colRow2 = sheets.Collectie._grid[1];
+    assert.equal(colRow2[0], 'sv07-143');
+    assert.equal(colRow2[1], 'Bulbasaur');
+    assert.equal(colRow2[16], 74.99);
+    assert.equal(colRow2[17], '=FORMULA_TOTAL_VAL');
+    assert.equal(colRow2[18], '=FORMULA_PROFIT');
+    assert.equal(colRow2[19], '=FORMULA_ROI');
+    assert.equal(colRow2[22], 'Kaartspot Sync');
+
+    // Verlanglijst rij 2: Treecko toegevoegd, I:J formules 100% onaangeroerd, M = mep-055
+    const wlRow2 = sheets.Verlanglijst._grid[1];
+    assert.equal(wlRow2[0], 'Treecko');
+    assert.equal(wlRow2[8], '=FORMULA_DIFF');
+    assert.equal(wlRow2[9], '=FORMULA_DEAL');
+    assert.equal(wlRow2[11], false);
+    assert.equal(wlRow2[12], 'mep-055');
+
+    // Pokédex Binder rij 8 (#1 Bulbasaur): D=true, E:H formules onaangeroerd, I=sv07-143 | Stellar Crown (Holo)
+    const dexRow8 = sheets['Pokédex Binder']._grid[7];
+    assert.equal(dexRow8[3], true);
+    assert.equal(dexRow8[4], '=E8');
+    assert.equal(dexRow8[5], '=F8');
+    assert.equal(dexRow8[6], '=G8');
+    assert.equal(dexRow8[7], '=H8');
+    assert.equal(dexRow8[8], 'sv07-143 | Stellar Crown (Holo)');
   });
 });

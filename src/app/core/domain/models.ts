@@ -215,6 +215,15 @@ export interface CatalogSetDetail extends CatalogSetSummary {
 
 export type SheetProfileRole = 'live' | 'test';
 
+export interface KaartspotProfileSyncState {
+  sourceInput: string;
+  username: string;
+  selectedBinderIds: string[];
+  wishlistWanted: boolean;
+  syncLayout: boolean;
+  lastSyncedAt?: string;
+}
+
 export interface SheetProfile {
   id: string;
   name: string;
@@ -222,6 +231,7 @@ export interface SheetProfile {
   webAppUrl: string;
   apiToken: string;
   monthlyBudget?: number;
+  kaartspot?: KaartspotProfileSyncState;
 }
 
 export interface AppConnectionConfig {
@@ -231,6 +241,7 @@ export interface AppConnectionConfig {
   monthlyBudget: number;
   activeProfileId?: string;
   profiles?: SheetProfile[];
+  kaartspot?: KaartspotProfileSyncState;
 }
 
 export interface PendingMutation {
