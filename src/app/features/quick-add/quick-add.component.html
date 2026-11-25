@@ -100,6 +100,21 @@
           }
         </select>
       </div>
+      @if (languageQuickPicks().length > 0) {
+        <div class="qa-lang-chips" role="group" aria-label="Snelkeuze kaarttaal">
+          @for (code of languageQuickPicks(); track code) {
+            <button
+              type="button"
+              class="pb-pill pb-pill--interactive qa-lang-chips__chip mono"
+              [class.is-active]="code === language()"
+              [attr.aria-pressed]="code === language()"
+              (click)="onLanguageChange(code)"
+            >
+              {{ code }}
+            </button>
+          }
+        </div>
+      }
     }
 
     <!-- Invoermodus 1: Code / ID -->
@@ -734,7 +749,7 @@
           <div>
             <strong>Deze kaart zit al in je collectie!</strong>
             <p class="mono">
-              {{ dup.name }} ({{ getDisplaySetCode(dup.cardId, dup.setName) }} #{{ dup.cardNumber }}) · {{ dup.quantity }}× · {{ dup.variant }} · {{ dup.storageLocation }}
+              {{ dup.name }} ({{ getCardSetCode(dup) }} #{{ dup.cardNumber }}) · {{ dup.quantity }}× · {{ dup.variant }} · {{ dup.storageLocation }}
             </p>
           </div>
         </div>

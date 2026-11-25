@@ -14,6 +14,9 @@ import {
   registerDynamicSetCodes,
   resetDynamicSetCodesForTests,
   resolveCardArtworkUrl,
+  extractSetCodeFromImagePath,
+  extractSetCodeFromNotes,
+  getCardSetCode,
   normalizeSetDisplayName,
   repairCorruptedCardNumber,
   resolveCardmarketUrl,
@@ -334,3 +337,22 @@ describe('Taal, Cardmarket & titel-herstel (feedback-ronde)', () => {
     expect(normalizeSetDisplayName('Jungle')).toBe('Jungle');
   });
 });
+
+describe('Echte setcode uit notities (Chinese sets)', () => {
+  it('leest [SET:CS4.5C] uit notities en prefereert die boven een afgeleide code', () => {
+    expect(extractSetCodeFromNotes('Kaartspot sync [SET:cs4.5c] [IMG:https://x.test/a.png]')).toBe('CS4.5C');
+    expect(extractSetCodeFromNotes('geen tag')).toBeNull();
+    expect(
+      getCardSetCode({ cardId: 'zht-final-flame-dance-38', setName: 'Final Flame Dance', notes: '[SET:CS4.5C]' })
+    ).toBe('CS4.5C');
+    expect(getCardSetCode({ cardId: 'zht-final-flame-dance-38', setName: 'Final Flame Dance' })).toBe('FFD');
+  });
+
+  it('leidt de setcode af uit een Pikaqian-pad', () => {
+    expect(extractSetCodeFromImagePath('cs4.5c/dragonite-v.png')).toBe('CS4.5C');
+    expect(extractSetCodeFromImagePath('cs3ac/x.png')).toBe('CS3AC');
+    expect(extractSetCodeFromImagePath('promo/x.png')).toBeNull();
+    expect(extractSetCodeFromImagePath('')).toBeNull();
+  });
+});
+

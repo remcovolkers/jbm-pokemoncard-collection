@@ -815,6 +815,24 @@ export function buildCardmarketSearchUrl(cardName: string, _setName?: string, ca
 
 const CORRUPTED_DATE_NUMBER_RE = /(?:GMT|UTC|Standard Time|Daylight Time|\d{4}-\d{2}-\d{2}T)/i;
 
+const MONTH_INDEX: Record<string, number> = {
+  jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12,
+};
+
+/**
+ * Leest dag/maand rechtstreeks uit de datumtekst (tijdzone-onafhankelijk):
+ * "Thu Nov 05 2026 00:00:00 GMT+0100" -> 5 / 11 en "2026-11-05T00:00:00.000Z" -> 5 / 11.
+ */
+function readDayMonthFromDateText(text: string): { day: number; month: number } {
+  const verbose = text.match(/([A-Za-z]{3})[a-z]*\s+(\d{1,2})\s+\d{4}/);
+  if (verbose && MONTH_INDEX[verbose[1].toLowerCase()]) {
+    return { day: Number(verbose[2]), month: MONTH_INDEX[verbose[1].toLowerCase()] };
+  }
+  const iso = text.match(/\d{4}-(\d{2})-(\d{2})T/);
+  if (iso) return { day: Number(iso[2]), month: Number(iso[1]) };
+  return { day: NaN, month: NaN };
+}
+
 /**
  * Herstelt kaartnummers die Google Sheets ooit als datum opsloeg ("5/11" -> "Thu Nov 05 2026 00:00:00 GMT+0100…").
  * Het echte nummer wordt uit dag/maand van de datum gehaald en met het kaartnummer uit het Kaart-ID gecontroleerd
@@ -824,10 +842,8 @@ export function repairCorruptedCardNumber(cardNumber: string | undefined | null,
   const raw = (cardNumber ?? '').trim();
   if (!raw || !CORRUPTED_DATE_NUMBER_RE.test(raw)) return raw;
 
-  const date = new Date(raw);
   const localFromId = (cardId ?? '').trim().split('-').pop()?.replace(/^0+(?=\d)/, '') ?? '';
-  const day = Number.isNaN(date.getTime()) ? NaN : date.getDate();
-  const month = Number.isNaN(date.getTime()) ? NaN : date.getMonth() + 1;
+  const { day, month } = readDayMonthFromDateText(raw);
 
   if (Number.isFinite(day) && Number.isFinite(month)) {
     if (localFromId && String(month) === localFromId && String(day) !== localFromId) {
@@ -841,4 +857,27 @@ export function repairCorruptedCardNumber(cardNumber: string | undefined | null,
 /** Corrigeert bekende titel-typfouten uit TCGdex (bijv. "DP trainer Kit (Lucario)" -> "DP Trainer Kit (Lucario)"). */
 export function normalizeSetDisplayName(setName: string | undefined | null): string {
   return (setName ?? '').replace(/\btrainer kit\b/i, 'Trainer Kit').trim();
+}
+
+/**
+ * Haalt een opgeslagen echte setcode (bijv. Chinese Pikaqian-code `CS4.5C`) uit de notities (`[SET:CS4.5C]`).
+ */
+export function extractSetCodeFromNotes(notes?: string | null): string | null {
+  const match = (notes ?? '').match(/\[SET:([A-Za-z0-9.\-]{2,12})\]/i);
+  return match ? match[1].toUpperCase() : null;
+}
+
+/**
+ * Leest de setcode uit het eerste pad-deel van een Pikaqian-afbeelding (`cs4.5c/dragonite-v.png` -> `CS4.5C`).
+ */
+export function extractSetCodeFromImagePath(imagePath?: string | null): string | null {
+  const first = (imagePath ?? '').trim().replace(/^\/+/, '').split('/')[0] ?? '';
+  return /^[A-Za-z][A-Za-z0-9.]{1,11}$/.test(first) && /\d/.test(first) ? first.toUpperCase() : null;
+}
+
+/**
+ * Beste setcode voor een kaart: opgeslagen echte code uit notities, anders afgeleid uit het Kaart-ID.
+ */
+export function getCardSetCode(card: { cardId: string; setName?: string; notes?: string }): string {
+  return extractSetCodeFromNotes(card.notes) ?? getDisplaySetCode(card.cardId, card.setName);
 }

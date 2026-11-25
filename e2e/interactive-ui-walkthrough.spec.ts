@@ -741,3 +741,59 @@ test('Collectie: scrollpositie blijft behouden na openen en terugkeren vanuit Ka
   const after = await page.evaluate(() => (document.querySelector('.shell__main') as HTMLElement).scrollTop);
   expect(Math.abs(after - before)).toBeLessThanOrEqual(8);
 });
+
+test('Pokédex kaartview: compacte header met icoon-stepper (44px) en badge "klaar voor binder" in de onderbalk', async ({ page }, testInfo) => {
+  const isMobile = testInfo.project.name === 'mobile';
+  await page.goto('/pokedex', { waitUntil: 'domcontentloaded' });
+  await page.locator('.pocket--filled').first().click();
+  await expect(page.locator('.dex-hero')).toBeVisible();
+
+  // Vorige/Volgende zitten naast de titel als 44px icoonknoppen, geen aparte stepper-rij meer
+  await expect(page.locator('.dex-stepper')).toHaveCount(0);
+  for (const label of ['Vorige Pokémon', 'Volgende Pokémon', 'Sluiten']) {
+    const btn = page.locator('.dex-card-header__actions').getByRole('button', { name: label });
+    await expect(btn).toBeVisible();
+    const box = await btn.boundingBox();
+    expect(box?.width ?? 0).toBeGreaterThanOrEqual(43.9);
+    expect(box?.height ?? 0).toBeGreaterThanOrEqual(43.9);
+  }
+  const headerBottom = await page.locator('.pb-sheet__top').evaluate((el) => el.getBoundingClientRect().height);
+  expect(headerBottom).toBeLessThan(isMobile ? 150 : 170);
+
+  await page.keyboard.press('Escape');
+  if (isMobile) {
+    await expect(page.locator('.bottom-nav__badge')).toBeVisible();
+  }
+});
+
+test('Verlanglijst: taal per wens (formulier, badge, Cardmarket-link met taalfilter)', async ({ page }) => {
+  const errors = attachErrorCollectors(page);
+  await page.goto('/meer/verlanglijst', { waitUntil: 'domcontentloaded' });
+  await page.locator('.wl-add-top-btn').click();
+  const lang = page.locator('#wl-lang');
+  await expect(lang).toBeVisible();
+  await page.locator('#wl-name').fill('Dracaufeu');
+  await page.locator('#wl-set').fill('Set de Base');
+  await lang.selectOption('FR');
+  await page.getByRole('button', { name: /Opslaan|Toevoegen aan/i }).last().click();
+
+  const card = page.locator('.wl-card', { hasText: 'Dracaufeu' }).first();
+  await expect(card).toBeVisible();
+  await expect(card.locator('.wl-card__lang')).toHaveText('FR');
+  const href = await card.getByRole('link', { name: /Cardmarket/i }).getAttribute('href');
+  expect(href).toContain('language=2');
+  expect(errors.pageErrors).toEqual([]);
+});
+
+test('Snel Toevoegen: recent gebruikte talen verschijnen als snelkeuze', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem('pokebinder_recent_languages', JSON.stringify(['CHS', 'FR']));
+  });
+  await page.goto('/toevoegen', { waitUntil: 'domcontentloaded' });
+  const chips = page.locator('.qa-lang-chips__chip');
+  await expect(chips).toHaveCount(3); // EN (actief) + CHS + FR
+  const box = await chips.first().boundingBox();
+  expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+  await page.locator('.qa-lang-chips__chip', { hasText: 'CHS' }).click();
+  await expect(page.locator('#qa-lang-top')).toHaveValue('CHS');
+});

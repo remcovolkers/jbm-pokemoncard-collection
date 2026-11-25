@@ -3,6 +3,7 @@ import {
   isKnownNoScanSet,
   parseCardIdInput,
   resolveCardArtworkUrl,
+  extractSetCodeFromImagePath,
 } from './card-id.utils';
 import { formatDexNumber, roundCurrency } from './card-math.utils';
 import {
@@ -57,6 +58,8 @@ export interface NormalizedKaartspotCard {
   setTotalCards: number;
   cardNumber: string;
   language: string;
+  /** Echte setcode uit de bron (bijv. Chinese `CS4.5C`), indien bekend. */
+  setCode?: string;
   rarity: string;
   variant: string;
   condition: string;
@@ -93,6 +96,7 @@ export interface KaartspotCardInsertPayload {
   setTotalCards: number;
   cardNumber: string;
   language: string;
+  setCode?: string;
   type: string;
   rarity: string;
   variant: string;
@@ -597,6 +601,9 @@ export function parseKaartspotPublicPayload(
     const highResSourceImage = upgradeKaartspotImageUrl(rawSourceImageUrl);
 
     const language = (readText(getField(row, 'taal')).trim().toUpperCase() || 'EN');
+    // Chinese Pikaqian-scans bevatten de echte setcode in het pad (cs4.5c/dragonite-v.png -> CS4.5C)
+    const sourceSetCode =
+      fotoPrefix.includes('pikaqian') ? (extractSetCodeFromImagePath(fotoRest) ?? undefined) : undefined;
 
     // 1. Probeer Kaart-ID af te leiden uit Scrydex pad (bijv. "sv7-143/small" -> set "sv07", nr "143")
     let resolvedSetId = '';
@@ -714,6 +721,7 @@ export function parseKaartspotPublicPayload(
       setTotalCards,
       cardNumber,
       language,
+      setCode: sourceSetCode,
       rarity,
       variant,
       condition,
@@ -859,6 +867,7 @@ export function computeKaartspotSyncPlan(
         if (item.needsEmbeddedImageNote && item.sourceImageUrl) {
           noteParts.push(`[IMG:${item.sourceImageUrl}]`);
         }
+        if (item.setCode) noteParts.push(`[SET:${item.setCode}]`);
         const insertPayload: KaartspotCardInsertPayload = {
           ksTag: item.ksTag,
           cardId: item.cardId,
@@ -869,6 +878,7 @@ export function computeKaartspotSyncPlan(
           setTotalCards: item.setTotalCards,
           cardNumber: item.cardNumber,
           language: item.language,
+          setCode: item.setCode,
           type: '',
           rarity: item.rarity,
           variant: item.variant,
@@ -949,6 +959,7 @@ export function computeKaartspotSyncPlan(
           if (item.needsEmbeddedImageNote && item.sourceImageUrl) {
             noteParts.push(`[IMG:${item.sourceImageUrl}]`);
           }
+          if (item.setCode) noteParts.push(`[SET:${item.setCode}]`);
           wishlistToAdd.push({
             ksTag: item.ksTag,
             cardId: item.cardId,

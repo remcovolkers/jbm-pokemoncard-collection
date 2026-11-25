@@ -95,4 +95,4 @@
 - **Snel Toevoegen:** Kaarttaal-kiezer (44 px) staat direct boven het zoekveld; Taal is uit "Meer opties" verwijderd (geen dubbel toegangspunt).
 - **Kaartdetail:** taal aanpasbaar, Cardmarket-link volgt de taal.
 - **Scrollbehoud:** terugkeren vanuit Kaartdetail herstelt de scrollpositie van de overzichtspagina.
-- **Open adviezen:** op mobiel nemen header + Vorige/Volgende in de kaartview ~25% van het scherm in (overweeg stepper naast de titel); de taalkiezer heeft nog geen "laatst gebruikte talen"-snelkeuze.
+- **Opgevolgd:** Vorige/Volgende zijn 44 px icoonknoppen naast de titel (artwork staat nu boven de vouw); Snel Toevoegen toont recent gebruikte talen als snelkeuze-chips; de Pokédex-tab in de onderbalk toont een badge met het aantal kaarten dat klaar is voor de binder; kaartafbeeldingen tonen een shimmer tijdens het laden; Verlanglijst heeft een taalveld met Cardmarket-knop.

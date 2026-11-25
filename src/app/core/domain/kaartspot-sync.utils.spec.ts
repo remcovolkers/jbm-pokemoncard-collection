@@ -184,6 +184,11 @@ describe('kaartspot-sync.utils', () => {
       'https://images.pikaqian.com/originals/cs4.5c/dragonite-v.png'
     );
 
+    // Echte Chinese setcode uit het Pikaqian-pad wordt bewaard (payload + notities)
+    expect(plan.cardsToAdd[2].setCode).toBe('CS4.5C');
+    expect(plan.cardsToAdd[2].notes).toContain('[SET:CS4.5C]');
+    expect(plan.cardsToAdd[0].setCode).toBeUndefined();
+
     // Pokédex slots: #1 Bulbasaur, #6 Charizard, #149 Dragonite — GEEN #252 Treecko!
     expect(plan.pokedexUpdates.map((u) => u.dexNumber)).toEqual([1, 6, 149]);
     expect(plan.targetSlotsPerPage).toBe(20);

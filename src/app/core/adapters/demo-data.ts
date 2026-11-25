@@ -1,3 +1,4 @@
+import { extractSetCodeFromNotes } from '../domain/card-id.utils';
 import { buildTcgdexAssetUrl } from '../domain/card-id.utils';
 import { calculateBinderPosition, roundCurrency, roundOneDecimal } from '../domain/card-math.utils';
 import {
@@ -882,7 +883,7 @@ export function buildSetProgressFromCollection(
 
     results.push({
       setName: def.setName,
-      setCode: def.setCode,
+      setCode: def.setCode ?? extractSetCodeFromNotes(cardsInSet.find((c) => extractSetCodeFromNotes(c.notes))?.notes) ?? undefined,
       series: def.series,
       totalCards,
       ownedUnique,

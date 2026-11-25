@@ -29,6 +29,8 @@ export interface ConnectionTestResult {
 export interface AddCardPayload extends Partial<CollectionCard> {
   seriesName?: string;
   setTotalCards?: number;
+  /** Echte bron-setcode (bijv. Chinese `CS4.5C`); wordt in Set Voortgang bewaard. */
+  setCode?: string;
 }
 
 export interface UpdatePokedexSlotPayload {

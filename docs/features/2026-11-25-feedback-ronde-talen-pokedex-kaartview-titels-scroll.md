@@ -95,6 +95,6 @@ We hebben alle 6 punten én Melli's 3 meegestuurde screenshots tegen de live dat
 - **Cardmarket:** `language=`-filter wordt bij het openen aan de link toegevoegd (Kaartdetail & Pokédex-kaartview); opgeslagen links in Sheets blijven taalloos.
 - **Chinese set-badge:** lange custom slugs (`ZHT-FINAL-FLAME-DANCE`) worden nu automatisch verkort tot een 2–4 letter afkorting (`FFD`). De echte Pikaqian-setcode (`CS4.5C`) wordt (nog) niet persistent opgeslagen — kandidaat voor een vervolgstap.
 - **`[DEX:xxxx]`-tags** zijn niet nodig gebleken door Optie B (Engelse naam blijft behouden).
-- **Verlanglijst:** heeft geen taalveld; taalkiezer/Cardmarket-taal is alleen op Kaartdetail toegevoegd.
-- **Code.gs v2.2.1:** kaartnummer-kolommen als platte tekst + zelfherstel van datum-verminkte nummers, Nidoran F/M-varianten, CHS/ZHT automatisch in de Taal-dropdown. Gebruikers moeten Code.gs eenmalig bijwerken.
+- **Verlanglijst:** heeft nu een taalveld (Sheets-kolom N "Taal"), een taalbadge en een Cardmarket-knop met taalfilter; de TCGdex-lookup gebruikt de gekozen taal.
+- **Code.gs v2.2.2 (was v2.2.1):** (aanvullend: Setcode-kolom in Set Voortgang, Taal-kolom op Verlanglijst) kaartnummer-kolommen als platte tekst + zelfherstel van datum-verminkte nummers, Nidoran F/M-varianten, CHS/ZHT automatisch in de Taal-dropdown. Gebruikers moeten Code.gs eenmalig bijwerken.
 

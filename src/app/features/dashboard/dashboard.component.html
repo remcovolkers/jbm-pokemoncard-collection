@@ -276,7 +276,7 @@
             <div class="top-card__meta">
               <h3 class="top-card__name">{{ card.name }}</h3>
               <p class="mono top-card__sub">
-                {{ card.setName }} {{ getDisplaySetCode(card.cardId, card.setName) }} · #{{ card.cardNumber }}
+                {{ card.setName }} {{ getCardSetCode(card) }} · #{{ card.cardNumber }}
               </p>
               <div class="top-card__price-row">
                 <span class="mono top-card__price">{{ formatEur(card.marketPrice) }}</span>

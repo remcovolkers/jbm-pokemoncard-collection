@@ -1,3 +1,5 @@
+import { getLanguageLabel, normalizeLanguageCode } from '../../core/domain/card-language.utils';
+import { extractArtworkUrlFromNotes, resolveCardmarketUrl } from '../../core/domain/card-id.utils';
 import { ChangeDetectionStrategy, Component, HostListener, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { formatEur } from '../../core/domain/card-math.utils';
@@ -70,6 +72,7 @@ export class WishlistComponent {
   readonly newMaxBudget = signal<number>(25);
   readonly newMarketPrice = signal<number>(0);
   readonly newNotes = signal('');
+  readonly newLanguage = signal('EN');
   readonly newImageUrl = signal<string | undefined>(undefined);
 
   readonly openItems = computed(() => this.store.wishlist().filter((w) => !w.found));
@@ -267,6 +270,7 @@ export class WishlistComponent {
     this.newMaxBudget.set(25);
     this.newMarketPrice.set(0);
     this.newNotes.set('');
+    this.newLanguage.set('EN');
     this.newImageUrl.set(undefined);
     this.showAddSheet.set(true);
   }
@@ -285,6 +289,7 @@ export class WishlistComponent {
     this.newMaxBudget.set(Number(item.maxBudget) || 0);
     this.newMarketPrice.set(Number(item.marketPrice) || 0);
     this.newNotes.set(item.notes || '');
+    this.newLanguage.set(normalizeLanguageCode(item.language));
     this.newImageUrl.set(item.imageUrl);
     this.showAddSheet.set(true);
   }
@@ -299,11 +304,12 @@ export class WishlistComponent {
     if (!q) return;
     this.isLookingUp.set(true);
     try {
-      let card = await this.catalog.lookupByCardId(q);
+      const lang = this.newLanguage();
+      let card = await this.catalog.lookupByCardId(q, lang);
       if (!card) {
-        const list = await this.catalog.searchByName(q, 1);
+        const list = await this.catalog.searchByName(q, 1, lang);
         if (list.length > 0) {
-          card = await this.catalog.getCardByExactId(list[0].id);
+          card = await this.catalog.getCardByExactId(list[0].id, lang);
         }
       }
       if (card) {
@@ -341,8 +347,9 @@ export class WishlistComponent {
       priority: this.newPriority(),
       maxBudget: Number(this.newMaxBudget()) || 0,
       marketPrice: Number(this.newMarketPrice()) || 0,
-      notes: this.newNotes().trim(),
+      notes: this.notesWithLocalizedImage(),
       imageUrl: this.newImageUrl(),
+      language: this.newLanguage() === 'EN' ? undefined : this.newLanguage(),
     };
 
     if (editing) {
@@ -387,5 +394,28 @@ export class WishlistComponent {
     if (this.showAddSheet()) {
       this.showAddSheet.set(false);
     }
+  }
+
+  /** Bewaart een anderstalige scan-URL als `[IMG:…]` in de notities zodat die ook na een sync zichtbaar blijft. */
+  private notesWithLocalizedImage(): string {
+    const notes = this.newNotes().trim();
+    const img = this.newImageUrl();
+    if (!img || normalizeLanguageCode(this.newLanguage()) === 'EN' || extractArtworkUrlFromNotes(notes)) return notes;
+    return [notes, `[IMG:${img}]`].filter(Boolean).join(' ');
+  }
+
+  readonly getLanguageLabel = getLanguageLabel;
+  readonly normalizeLanguageCode = normalizeLanguageCode;
+
+  /** Cardmarket-link voor een wens, gefilterd op de gewenste kaarttaal. */
+  cardmarketUrl(item: WishlistItem): string {
+    return resolveCardmarketUrl({
+      name: item.cardName,
+      setName: item.setName,
+      cardNumber: item.cardNumber,
+      cardmarketProductId: item.cardId ? this.catalog.getCachedCardmarketProductId?.(item.cardId) : undefined,
+      notes: item.notes,
+      language: item.language,
+    });
   }
 }

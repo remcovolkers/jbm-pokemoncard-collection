@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, input, linkedSignal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, input, linkedSignal, signal } from '@angular/core';
 import {
   buildLimitlessAssetUrl,
   buildPokemonTcgAssetUrl,
@@ -10,7 +10,7 @@ import {
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="art-frame" [class.art-frame--compact]="compact()">
+    <div class="art-frame" [class.art-frame--compact]="compact()" [class.art-frame--loading]="isLoading()">
       @if (!failed() && activeUrl()) {
         <img
           [src]="activeUrl()"
@@ -18,6 +18,7 @@ import {
           loading="lazy"
           decoding="async"
           draggable="false"
+          (load)="loadedUrl.set(activeUrl())"
           (error)="onImgError()"
         />
       } @else {
@@ -54,6 +55,37 @@ import {
           height: 100%;
           object-fit: cover;
           display: block;
+        }
+      }
+
+      // Laadstatus: zachte shimmer totdat de scan binnen is (geen lege grijze vlak)
+      .art-frame--loading::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background: linear-gradient(
+          110deg,
+          transparent 30%,
+          rgba(255, 255, 255, 0.07) 50%,
+          transparent 70%
+        );
+        background-size: 200% 100%;
+        animation: art-shimmer 1.3s linear infinite;
+      }
+
+      @keyframes art-shimmer {
+        from {
+          background-position: 200% 0;
+        }
+        to {
+          background-position: -200% 0;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .art-frame--loading::after {
+          animation: none;
         }
       }
 
@@ -145,6 +177,9 @@ export class CardArtworkComponent {
   });
 
   readonly activeUrl = computed(() => this.candidateUrls()[this.fallbackStep()] ?? '');
+  /** URL waarvan de `load`-gebeurtenis al is afgegaan (voor de laadstatus). */
+  readonly loadedUrl = signal('');
+  readonly isLoading = computed(() => Boolean(this.activeUrl()) && this.loadedUrl() !== this.activeUrl());
   readonly failed = computed(() => !this.activeUrl());
   readonly fallbackLabel = computed(() => this.cardId() || this.alt());
 

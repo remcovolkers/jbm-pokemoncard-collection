@@ -324,11 +324,11 @@ describe('apps-script/Code.gs Backend API & Formule-integriteit', () => {
     const ping = JSON.parse(sandbox.doGet({ parameter: { action: 'ping', token: 'test-secret-token' } }).getContent());
     assert.equal(ping.ok, true);
     assert.equal(ping.spreadsheetName, 'Pokémon Kaartencollectie Tracker');
-    assert.equal(ping.scriptVersion, '2.2.1');
+    assert.equal(ping.scriptVersion, '2.2.2');
 
     const boot = JSON.parse(sandbox.doGet({ parameter: { action: 'bootstrap', token: 'test-secret-token' } }).getContent());
     assert.equal(boot.ok, true);
-    assert.equal(boot.data.scriptVersion, '2.2.1');
+    assert.equal(boot.data.scriptVersion, '2.2.2');
     assert.equal(boot.data.binderSlotsPerPage, 9);
     assert.equal(boot.data.pokedex.length, 4);
   });
@@ -368,11 +368,11 @@ describe('apps-script/Code.gs Backend API & Formule-integriteit', () => {
 
     sandbox.checkScriptUpdateFromMenu();
     assert.equal(alerts.length, 1);
-    assert.match(alerts[0], /v2\.2\.1/);
+    assert.match(alerts[0], /v2\.2\.2/);
     assert.match(alerts[0], /v2\.3\.0/);
     assert.match(alerts[0], /Implementaties beheren/);
 
-    manifestResponse = { latestScriptVersion: '2.2.1' };
+    manifestResponse = { latestScriptVersion: '2.2.2' };
     sandbox.checkScriptUpdateFromMenu();
     assert.equal(alerts.length, 2);
     assert.match(alerts[1], /nieuwste PokéBinder Apps Script versie/);
@@ -430,6 +430,52 @@ describe('apps-script/Code.gs Backend API & Formule-integriteit', () => {
     assert.equal(mewRow[3], true);
     assert.match(mewRow[8], /^sv03\.5-151 \| 151/);
     assert.equal(mewRow[4], '=E11'); // formule-kolom E behouden
+  });
+
+  it('addCard bewaart de echte Chinese setcode in Set Voortgang kolom I en behoudt formules D:H', () => {
+    const { sandbox, sheets } = createGasEnvironment();
+
+    const res = JSON.parse(
+      sandbox.doPost({
+        postData: {
+          contents: JSON.stringify({
+            token: 'test-secret-token',
+            action: 'addCard',
+            payload: {
+              cardId: 'zht-final-flame-dance-38',
+              name: 'Dragonite V',
+              setName: 'Final Flame Dance',
+              cardNumber: '38',
+              language: 'ZHT',
+              setTotalCards: 0,
+              notes: 'Kaartspot sync [SET:CS4.5C]',
+            },
+          }),
+        },
+      }).getContent()
+    );
+
+    assert.equal(res.ok, true);
+    const setGrid = sheets['Set Voortgang']._grid;
+    assert.equal(setGrid[0][8], 'Setcode');
+    assert.equal(setGrid[1][0], 'Final Flame Dance');
+    assert.equal(setGrid[1][8], 'CS4.5C');
+    assert.equal(setGrid[1][3], '=FORMULA_OWNED');
+  });
+
+  it('herstelt als datum opgeslagen kaartnummers (5/11) bij lezen, tijdzone-onafhankelijk', () => {
+    const { sandbox, sheets } = createGasEnvironment();
+    sheets.Collectie._grid.push([
+      'tk-dp-l-5', 'Machop', 'DP Trainer Kit (Lucario)',
+      'Thu Nov 05 2026 00:00:00 GMT+0100 (Central European Standard Time)',
+      'EN', 'Fighting', 'Common', 'Normal', 'Near Mint (NM)', 'Raw', '', 1,
+      'Hoofdbinder', '', '2026-11-25', 0, 1, '=F', '=F', '=F', false, '',
+    ]);
+    const boot = JSON.parse(
+      sandbox.doGet({ parameter: { action: 'bootstrap', token: 'test-secret-token' } }).getContent()
+    );
+    const machop = boot.data.collection.find((c) => c.cardId === 'tk-dp-l-5');
+    assert.equal(machop.cardNumber, '5/11');
   });
 
   it('deleteCard wist alleen A:Q en U:V en laat R:T formules intact', () => {

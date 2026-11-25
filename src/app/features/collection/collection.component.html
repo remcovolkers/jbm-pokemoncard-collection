@@ -222,7 +222,7 @@
                 }
                 <div class="card-slab__top-badges">
                   <span class="overlay-pill mono">
-                    {{ getDisplaySetCode(card.cardId, card.setName) }} #{{ shortCardNumber(card.cardNumber) }}
+                    {{ getCardSetCode(card) }} #{{ shortCardNumber(card.cardNumber) }}
                   </span>
                   @if (card.quantity > 1) {
                     <span class="overlay-pill overlay-pill--qty is-multi mono">

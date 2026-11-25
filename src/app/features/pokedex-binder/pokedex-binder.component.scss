@@ -1246,3 +1246,38 @@
     inset: -10px -6px;
   }
 }
+
+// Compacte header: Vorige/Volgende/Sluiten als icoonknoppen naast de titel (bespaart ~45px schermhoogte op mobiel)
+.dex-card-header {
+  align-items: flex-start;
+  gap: 0.5rem;
+
+  .dex-sheet-head {
+    flex: 1 1 auto;
+    min-width: 0;
+
+    h2 {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      min-width: 0;
+    }
+  }
+
+  &__actions {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    flex: 0 0 auto;
+
+    .pb-btn--icon {
+      width: 44px;
+      height: 44px;
+
+      &:disabled {
+        opacity: 0.35;
+        pointer-events: none;
+      }
+    }
+  }
+}

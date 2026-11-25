@@ -213,6 +213,16 @@
                   >
                     <span class="material-symbols-outlined">edit</span>
                   </button>
+                  <a
+                    class="wl-card__tool-btn"
+                    [href]="cardmarketUrl(item)"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    [attr.aria-label]="'Bekijk ' + item.cardName + ' op Cardmarket'"
+                    title="Bekijk op Cardmarket"
+                  >
+                    <span class="material-symbols-outlined">open_in_new</span>
+                  </a>
                   <button
                     type="button"
                     class="wl-card__tool-btn wl-card__tool-btn--danger"
@@ -234,7 +244,12 @@
               } @else {
                 <h3 class="wl-card__name">{{ item.cardName }}</h3>
               }
-              <p class="wl-card__set">{{ item.setName }} {{ item.cardNumber ? '· ' + item.cardNumber : '' }}</p>
+              <p class="wl-card__set">
+                {{ item.setName }} {{ item.cardNumber ? '· ' + item.cardNumber : '' }}
+                @if (normalizeLanguageCode(item.language) !== 'EN') {
+                  <span class="pb-pill pb-pill--secondary mono wl-card__lang">{{ normalizeLanguageCode(item.language) }}</span>
+                }
+              </p>
               @if (item.notes) {
                 <p class="wl-card__notes">{{ item.notes }}</p>
               }
@@ -341,6 +356,20 @@
         <div class="pb-sheet__body">
           <div class="wl-form">
           <!-- Snelle TCGdex Lookup -->
+          <div class="pb-field">
+            <label class="pb-label" for="wl-lang">Kaarttaal (bepaalt scan &amp; Cardmarket-link)</label>
+            <select
+              id="wl-lang"
+              class="pb-select"
+              [ngModel]="newLanguage()"
+              (ngModelChange)="newLanguage.set($event)"
+            >
+              @for (lang of store.settings().languages; track lang) {
+                <option [value]="lang">{{ getLanguageLabel(lang) }}</option>
+              }
+            </select>
+          </div>
+
           <div class="pb-field">
             <label class="pb-label" for="wl-lookup">TCGdex Lookup (Code of Naam)</label>
             <div class="lookup-row">

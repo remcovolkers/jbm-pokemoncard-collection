@@ -71,7 +71,7 @@
                 <span class="mono trade-card__price">{{ formatEur(card.marketPrice) }}</span>
               </div>
               <p class="mono trade-card__sub">
-                {{ card.setName }} {{ getDisplaySetCode(card.cardId, card.setName) }} · #{{ card.cardNumber }}
+                {{ card.setName }} {{ getCardSetCode(card) }} · #{{ card.cardNumber }}
               </p>
               <div class="trade-card__foot">
                 <span class="pb-pill pb-pill--neutral">{{ card.storageLocation }}</span>

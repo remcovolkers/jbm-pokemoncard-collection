@@ -30,9 +30,9 @@ export const APP_VERSION: AppVersionInfo = {
     'https://github.com/remcovolkers/jbm-pokemoncard-collection/releases/latest/download/pokebinder-release.apk',
   defaultReleasePageUrl:
     'https://github.com/remcovolkers/jbm-pokemoncard-collection/releases/latest',
-  latestScriptVersion: '2.2.1',
+  latestScriptVersion: '2.2.2',
   scriptChangelog:
-    'Kaartspot Binder Sync (server-side ophalen zonder CORS & razendsnelle bulk-import), script-versiecontrole & batch-sync.',
+    'Kaartnummers als platte tekst (geen 5/11-datum meer) met zelfherstel, Chinese setcodes in Set Voortgang, taalkolom op Verlanglijst en CHS/ZHT in de taallijst.',
   scriptCodeUrl: 'https://remcovolkers.github.io/jbm-pokemoncard-collection/apps-script/Code.gs',
   scriptGithubUrl: 'https://github.com/remcovolkers/jbm-pokemoncard-collection/blob/main/apps-script/Code.gs',
 };

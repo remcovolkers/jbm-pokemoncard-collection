@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, HostListener, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
-import { getDisplaySetCode } from '../../core/domain/card-id.utils';
+import { getCardSetCode, getDisplaySetCode } from '../../core/domain/card-id.utils';
 import { calculateCardMetrics, formatEur, formatPercent, roundCurrency } from '../../core/domain/card-math.utils';
 import {
   ShowcaseCardViewModel,
@@ -43,6 +43,7 @@ export class CollectionComponent implements OnInit {
   readonly formatEur = formatEur;
   readonly formatPercent = formatPercent;
   readonly getDisplaySetCode = getDisplaySetCode;
+  readonly getCardSetCode = getCardSetCode;
 
   readonly searchQuery = this.viewState.searchQuery;
   readonly viewMode = this.viewState.viewMode;

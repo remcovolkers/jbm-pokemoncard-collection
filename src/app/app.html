@@ -303,7 +303,17 @@
           [replaceUrl]="true"
           routerLinkActive="is-active"
         >
-          <span class="material-symbols-outlined bottom-nav__icon">menu_book</span>
+          <span class="bottom-nav__icon-wrap">
+            <span class="material-symbols-outlined bottom-nav__icon">menu_book</span>
+            @if (store.pokedexStats().readyForBinder > 0) {
+              <span
+                class="bottom-nav__badge mono"
+                [attr.aria-label]="store.pokedexStats().readyForBinder + ' kaarten klaar voor je binder'"
+              >
+                {{ store.pokedexStats().readyForBinder > 99 ? '99+' : store.pokedexStats().readyForBinder }}
+              </span>
+            }
+          </span>
           <span class="bottom-nav__label">Pokédex</span>
         </a>
 

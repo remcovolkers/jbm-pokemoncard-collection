@@ -55,7 +55,7 @@
         <section class="pb-card hero-card" [class.pb-card--holo]="isHoloCard(draft)">
           <div class="hero-card__badges">
             <span class="pb-pill pb-pill--primary mono">
-              {{ getDisplaySetCode(draft.cardId, draft.setName) }} #{{ draft.cardNumber }}
+              {{ getCardSetCode(draft) }} #{{ draft.cardNumber }}
             </span>
             @if (draft.rarity) {
               <span class="mono hero-card__rarity">• {{ draft.rarity }}</span>

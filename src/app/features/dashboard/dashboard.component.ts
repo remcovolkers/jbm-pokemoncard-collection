@@ -1,6 +1,6 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
-import { getDisplaySetCode } from '../../core/domain/card-id.utils';
+import { getCardSetCode, getDisplaySetCode } from '../../core/domain/card-id.utils';
 import {
   calculateCardMetrics,
   formatEur,
@@ -35,6 +35,7 @@ export class DashboardComponent {
   readonly formatPercent = formatPercent;
   readonly formatInteger = formatInteger;
   readonly getDisplaySetCode = getDisplaySetCode;
+  readonly getCardSetCode = getCardSetCode;
 
   readonly showcaseCardKey = signal<string | null>(null);
 

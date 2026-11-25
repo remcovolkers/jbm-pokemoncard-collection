@@ -120,6 +120,8 @@ export interface WishlistItem {
   notes: string;
   found: boolean;
   imageUrl?: string;
+  /** Gewenste kaarttaal (EN, FR, CHS…); bepaalt scan, lookup en Cardmarket-taalfilter. */
+  language?: string;
 }
 
 export interface TradeEntry {

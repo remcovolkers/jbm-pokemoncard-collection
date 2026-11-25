@@ -1,8 +1,10 @@
-import { mergeLanguageOptions } from '../domain/card-language.utils';
+import { mergeLanguageOptions, normalizeLanguageCode } from '../domain/card-language.utils';
 import { Injectable, computed, effect, inject, signal } from '@angular/core';
 import {
   buildTcgdexAssetUrl,
   extractArtworkUrlFromNotes,
+  extractSetCodeFromNotes,
+  getCardSetCode,
   getDisplaySetCode,
   normalizeSetDisplayName,
   repairCorruptedCardNumber,
@@ -371,6 +373,7 @@ export class CollectionStore {
       const cardsInSet = collectionBySet.get(key) ?? [];
       const setCode =
         s.setCode ||
+        extractSetCodeFromNotes(cardsInSet.find((c) => extractSetCodeFromNotes(c.notes))?.notes) ||
         (cardsInSet[0]?.cardId ? getDisplaySetCode(cardsInSet[0].cardId, s.setName) : undefined);
 
       if (cardsInSet.length === 0) {
@@ -421,7 +424,7 @@ export class CollectionStore {
       );
       reconciled.push({
         setName: sample.setName.trim(),
-        setCode: sample.cardId ? getDisplaySetCode(sample.cardId, sample.setName) : undefined,
+        setCode: sample.cardId ? getCardSetCode(sample) : undefined,
         series: 'Pokémon TCG',
         totalCards,
         ownedUnique,
@@ -1647,7 +1650,7 @@ export class CollectionStore {
           name: item.cardName,
           setName: item.setName,
           cardNumber: item.cardNumber,
-          language: 'EN',
+          language: normalizeLanguageCode(item.language),
           type: 'Colorless',
           rarity: 'Rare',
           variant: item.desiredVariant || 'Normal',
@@ -1768,6 +1771,7 @@ export class CollectionStore {
       marketPrice: merged.marketPrice,
       notes: merged.notes,
       found: merged.found,
+      language: merged.language,
     };
 
     if (this.repo.updateWishlist || typeof this.repo.batchMutations === 'function') {

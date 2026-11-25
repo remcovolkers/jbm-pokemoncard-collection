@@ -1,12 +1,7 @@
 import { Component, ElementRef, HostListener, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import {
-  extractArtworkUrlFromNotes,
-  getDisplaySetCode,
-  isKnownNoScanSet,
-  parseCardIdInput,
-} from '../../core/domain/card-id.utils';
+import { extractArtworkUrlFromNotes, getCardSetCode, getDisplaySetCode, isKnownNoScanSet, parseCardIdInput } from '../../core/domain/card-id.utils';
 import { getLanguageLabel, normalizeLanguageCode } from '../../core/domain/card-language.utils';
 import { formatDexNumber, formatEur, formatPercent } from '../../core/domain/card-math.utils';
 import {
@@ -120,6 +115,7 @@ export class QuickAddComponent implements OnInit, OnDestroy {
   readonly formatPercent = formatPercent;
   readonly formatDexNumber = formatDexNumber;
   readonly getDisplaySetCode = getDisplaySetCode;
+  readonly getCardSetCode = getCardSetCode;
   readonly isKnownNoScanSet = isKnownNoScanSet;
   readonly getLanguageLabel = getLanguageLabel;
   readonly isNonEnglish = (lang: string): boolean => normalizeLanguageCode(lang) !== 'EN';
@@ -334,6 +330,8 @@ export class QuickAddComponent implements OnInit, OnDestroy {
   readonly storageLocation = signal(this.store.packDefaults().storageLocation || 'Hoofdbinder');
   readonly binderDetail = signal('');
   readonly language = signal(this.store.packDefaults().language || 'EN');
+  /** Laatst gebruikte kaarttalen (max 3) als snelkeuze naast de taalkiezer. */
+  readonly recentLanguages = signal<string[]>(this.loadRecentLanguages());
   readonly quantity = signal(1);
   readonly purchasePrice = signal<number>(0);
   readonly acquisitionMethod = signal<string>(
@@ -364,7 +362,7 @@ export class QuickAddComponent implements OnInit, OnDestroy {
     for (const c of this.storedRecentSetCodes()) pushCode(c);
     for (const card of this.store.collection()) {
       if (list.length >= 3) break;
-      pushCode(getDisplaySetCode(card.cardId, card.setName));
+      pushCode(getCardSetCode(card));
     }
     return list.slice(0, 3);
   });
@@ -1016,6 +1014,7 @@ export class QuickAddComponent implements OnInit, OnDestroy {
         acquisitionMethod: this.acquisitionMethod(),
       });
 
+      this.recordRecentLanguage(this.language());
       await this.store.addCardsBatch(commitItems);
       void this.haptics.success();
       this.selectedBatchCards.set([]);
@@ -1035,6 +1034,36 @@ export class QuickAddComponent implements OnInit, OnDestroy {
    * Wijzigt de kaarttaal: ververst direct de actieve zoekopdracht zodat resultaten, scans en
    * Cardmarket-link in de gekozen taal verschijnen (FR, DE, JP, CHS…).
    */
+  private loadRecentLanguages(): string[] {
+    try {
+      const raw = typeof window !== 'undefined' ? window.localStorage.getItem('pokebinder_recent_languages') : null;
+      const parsed = raw ? (JSON.parse(raw) as unknown) : [];
+      return Array.isArray(parsed)
+        ? parsed.filter((v): v is string => typeof v === 'string').map(normalizeLanguageCode).slice(0, 3)
+        : [];
+    } catch {
+      return [];
+    }
+  }
+
+  private recordRecentLanguage(lang: string): void {
+    const code = normalizeLanguageCode(lang);
+    const next = [code, ...this.recentLanguages().filter((l) => l !== code)].slice(0, 3);
+    this.recentLanguages.set(next);
+    try {
+      window.localStorage.setItem('pokebinder_recent_languages', JSON.stringify(next));
+    } catch {
+      // Opslag niet beschikbaar: snelkeuze blijft alleen in dit scherm
+    }
+  }
+
+  /** Snelkeuze-talen: recent gebruikt, aangevuld met de actieve taal (alleen tonen bij >= 2 verschillende). */
+  readonly languageQuickPicks = computed(() => {
+    const active = normalizeLanguageCode(this.language());
+    const list = [...new Set([active, ...this.recentLanguages()])].slice(0, 4);
+    return list.length >= 2 ? list : [];
+  });
+
   onLanguageChange(lang: string): void {
     if (normalizeLanguageCode(lang) === normalizeLanguageCode(this.language())) return;
     this.language.set(lang);
@@ -1086,7 +1115,7 @@ export class QuickAddComponent implements OnInit, OnDestroy {
     const existing = this.existingMatch();
     if (!existing) return;
     void this.haptics.success();
-    this.recordRecentSetCode(getDisplaySetCode(existing.cardId, existing.setName));
+    this.recordRecentSetCode(getCardSetCode(existing));
     await this.store.incrementExistingCard(existing, this.quantity());
     this.prepareNextCard(this.packMode());
   }
@@ -1123,6 +1152,7 @@ export class QuickAddComponent implements OnInit, OnDestroy {
         acquisitionMethod: this.acquisitionMethod(),
       });
 
+      this.recordRecentLanguage(this.language());
       await this.store.addCard({
         cardId: cardId || `manual-${Date.now()}`,
         name,

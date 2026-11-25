@@ -387,7 +387,7 @@
         <div class="pb-sheet__top">
           <div class="pb-sheet__handle"></div>
 
-          <div class="pb-sheet__header">
+          <div class="pb-sheet__header dex-card-header">
             <div class="dex-sheet-head">
               <div class="dex-sheet-head__row">
                 <span class="pb-pill pb-pill--secondary mono">{{ formatDexNumber(slot.dexNumber) }}</span>
@@ -395,46 +395,47 @@
               </div>
               @if (activeSlotPosition(); as pos) {
                 <p class="dex-sheet-head__sub">
-                  {{ slot.generation }} · Pagina {{ pos.page }}, Vakje {{ pos.slotInPage }} ({{ pos.label }})
+                  {{ slot.generation }} · Pagina {{ pos.page }}, Vakje {{ pos.slotInPage }}
+                  @if (navTotal() > 1 && navIndex() >= 0) {
+                    · <span class="mono">{{ navIndex() + 1 }}/{{ navTotal() }}</span>
+                  }
                 </p>
               }
             </div>
 
-            <button
-              type="button"
-              class="pb-btn pb-btn--icon"
-              aria-label="Sluiten"
-              (click)="closeSlotSheet()"
-            >
-              <span class="material-symbols-outlined">close</span>
-            </button>
-          </div>
-
-          @if (navTotal() > 1 && navIndex() >= 0) {
-            <div class="dex-stepper" role="group" aria-label="Blader door je Pokédex-kaarten">
+            <div class="dex-card-header__actions">
+              @if (navTotal() > 1 && navIndex() >= 0) {
+                <button
+                  type="button"
+                  class="pb-btn pb-btn--icon"
+                  [disabled]="prevNavDex() === null"
+                  (click)="goToSlot(prevNavDex())"
+                  aria-label="Vorige Pokémon"
+                  title="Vorige (←)"
+                >
+                  <span class="material-symbols-outlined">chevron_left</span>
+                </button>
+                <button
+                  type="button"
+                  class="pb-btn pb-btn--icon"
+                  [disabled]="nextNavDex() === null"
+                  (click)="goToSlot(nextNavDex())"
+                  aria-label="Volgende Pokémon"
+                  title="Volgende (→)"
+                >
+                  <span class="material-symbols-outlined">chevron_right</span>
+                </button>
+              }
               <button
                 type="button"
-                class="dex-stepper__btn"
-                [disabled]="prevNavDex() === null"
-                (click)="goToSlot(prevNavDex())"
-                aria-label="Vorige Pokémon"
+                class="pb-btn pb-btn--icon"
+                aria-label="Sluiten"
+                (click)="closeSlotSheet()"
               >
-                <span class="material-symbols-outlined">chevron_left</span>
-                <span>Vorige</span>
-              </button>
-              <span class="mono dex-stepper__count">{{ navIndex() + 1 }} / {{ navTotal() }}</span>
-              <button
-                type="button"
-                class="dex-stepper__btn"
-                [disabled]="nextNavDex() === null"
-                (click)="goToSlot(nextNavDex())"
-                aria-label="Volgende Pokémon"
-              >
-                <span>Volgende</span>
-                <span class="material-symbols-outlined">chevron_right</span>
+                <span class="material-symbols-outlined">close</span>
               </button>
             </div>
-          }
+          </div>
         </div>
 
         <div
@@ -450,7 +451,7 @@
             <section class="dex-hero" [class.dex-hero--holo]="isShowcaseEligible(card)">
               <div class="dex-hero__badges">
                 <span class="pb-pill pb-pill--primary mono">
-                  {{ getDisplaySetCode(card.cardId, card.setName) }} #{{ card.cardNumber }}
+                  {{ getCardSetCode(card) }} #{{ card.cardNumber }}
                 </span>
                 @if (card.rarity) {
                   <span class="mono dex-hero__rarity">• {{ card.rarity }}</span>
@@ -554,7 +555,7 @@
                       </span>
                       <span class="dex-version__info">
                         <strong>{{ rarityShort(option) }}</strong>
-                        <span class="mono">{{ getDisplaySetCode(option.cardId, option.setName) }} {{ option.cardNumber }}</span>
+                        <span class="mono">{{ getCardSetCode(option) }} {{ option.cardNumber }}</span>
                         <span class="mono dex-version__price">{{ formatEur(option.marketPrice) }}</span>
                       </span>
                       @if (isChoiceSelected(option)) {

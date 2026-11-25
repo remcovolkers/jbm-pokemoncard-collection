@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, HostListener, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { getDisplaySetCode, resolveCardmarketUrl } from '../../core/domain/card-id.utils';
+import { getCardSetCode, getDisplaySetCode, resolveCardmarketUrl } from '../../core/domain/card-id.utils';
 import { normalizeLanguageCode } from '../../core/domain/card-language.utils';
 import {
   calculateBinderPosition,
@@ -60,6 +60,7 @@ export class PokedexBinderComponent implements OnInit {
   readonly formatPercent = formatPercent;
   readonly normalizeLanguageCode = normalizeLanguageCode;
   readonly getDisplaySetCode = getDisplaySetCode;
+  readonly getCardSetCode = getCardSetCode;
 
   readonly selectedGen = signal<number>(1); // 0 = Alle, 1..9 = specifieke Gen
   readonly statusFilter = signal<StatusFilter>('all');
@@ -297,7 +298,7 @@ export class PokedexBinderComponent implements OnInit {
   shortChoiceLabel(slot: PokedexSlot): string {
     const card = this.getSlotCard(slot);
     if (card) {
-      const code = getDisplaySetCode(card.cardId, card.setName);
+      const code = getCardSetCode(card);
       const num = card.cardNumber.split('/')[0] || '';
       const shortRar =
         card.rarity === 'Special Illustration Rare'

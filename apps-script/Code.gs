@@ -33,7 +33,7 @@ var DEX_COUNT = 1025; // #0001 t/m #1025
 var TCGDEX_BASE_URL = 'https://api.tcgdex.net/v2/en';
 var TCGDEX_GRAPHQL_URL = 'https://api.tcgdex.net/v2/graphql';
 
-var SCRIPT_VERSION = '2.2.1';
+var SCRIPT_VERSION = '2.2.2';
 var SCRIPT_CHANGELOG = 'Kaartspot Binder Sync (server-side ophalen zonder CORS & razendsnelle bulk-import), script-versiecontrole & batch-sync.';
 var POKEBINDER_MANIFEST_URL = 'https://remcovolkers.github.io/jbm-pokemoncard-collection/version.json';
 var POKEBINDER_CODE_URL = 'https://github.com/remcovolkers/jbm-pokemoncard-collection/blob/main/apps-script/Code.gs';
@@ -901,7 +901,8 @@ function readSetProgress_(ss, collection) {
   if (sheet) {
     var lastRow = sheet.getLastRow();
     if (lastRow >= 2) {
-      var values = sheet.getRange(2, 1, lastRow - 1, 8).getValues();
+      var setCols = sheet.getMaxColumns ? Math.min(9, sheet.getMaxColumns()) : 9;
+      var values = sheet.getRange(2, 1, lastRow - 1, setCols).getValues();
       for (var i = 0; i < values.length; i++) {
         var row = values[i];
         var setName = String(row[0] || '').trim();
@@ -940,7 +941,8 @@ function readSetProgress_(ss, collection) {
           ownedUnique: ownedUnique,
           remaining: remaining,
           progressPercent: Math.round(progressPercent * 10) / 10,
-          totalSetValue: totalSetValue
+          totalSetValue: totalSetValue,
+          setCode: String(row[8] || '').trim() || undefined
         });
       }
     }
@@ -1010,8 +1012,10 @@ function readWishlist_(ss) {
   if (!sheet) return [];
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return [];
-  var hasCol13 = !sheet.getLastColumn || sheet.getLastColumn() >= 13;
-  var numCols = hasCol13 ? 13 : 12;
+  var wishLastCol = sheet.getLastColumn ? sheet.getLastColumn() : 14;
+  var hasCol13 = wishLastCol >= 13;
+  var hasCol14 = wishLastCol >= 14;
+  var numCols = hasCol14 ? 14 : (hasCol13 ? 13 : 12);
   var values = sheet.getRange(2, 1, lastRow - 1, numCols).getValues();
   var items = [];
 
@@ -1036,7 +1040,8 @@ function readWishlist_(ss) {
       difference: toNumber_(row[8], maxBudget - marketPrice),
       dealStatus: String(row[9] || '').trim(),
       notes: String(row[10] || '').trim(),
-      found: Boolean(row[11])
+      found: Boolean(row[11]),
+      language: hasCol14 ? (String(row[13] || '').trim() || undefined) : undefined
     });
   }
   return items;
@@ -1215,7 +1220,8 @@ function handleAddCard_(ss, payload, options) {
       cardData.setName,
       cardData.seriesName || '',
       toNumber_(cardData.setTotalCards, 0),
-      cardData.setId || ''
+      cardData.setId || '',
+      cardData.setCode || extractSetCodeFromNotes_(cardData.notes)
     );
   }
 
@@ -1406,6 +1412,16 @@ function ensureWishlistCardIdColumn_(sheet) {
   }
 }
 
+/** Kolom N (14) "Taal" op Verlanglijst: gewenste kaarttaal voor scan, lookup en Cardmarket-filter. */
+function ensureWishlistLanguageColumn_(sheet) {
+  if (sheet.getMaxColumns && sheet.getMaxColumns() < 14 && sheet.insertColumnsAfter) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), 14 - sheet.getMaxColumns());
+  }
+  if (!String(sheet.getRange(1, 14).getValue() || '').trim()) {
+    sheet.getRange(1, 14).setValue('Taal');
+  }
+}
+
 function handleAddWishlist_(ss, payload) {
   var sheet = ss.getSheetByName(SHEET_NAMES.WISHLIST);
   if (!sheet) throw new Error('Tabblad "' + SHEET_NAMES.WISHLIST + '" niet gevonden.');
@@ -1431,6 +1447,11 @@ function handleAddWishlist_(ss, payload) {
   if (cardId || alreadyHasCol13) {
     ensureWishlistCardIdColumn_(sheet);
     sheet.getRange(targetRow, 13).setValue(cardId);
+  }
+  var wishLang = String(payload.language || '').trim().toUpperCase();
+  if (wishLang && wishLang !== 'EN') {
+    ensureWishlistLanguageColumn_(sheet);
+    sheet.getRange(targetRow, 14).setValue(wishLang);
   }
   return { rowIndex: targetRow };
 }
@@ -1508,6 +1529,14 @@ function handleUpdateWishlist_(ss, payload) {
     if (cardId || alreadyHasCol13) {
       ensureWishlistCardIdColumn_(sheet);
       sheet.getRange(rowIndex, 13).setValue(cardId);
+    }
+  }
+  if (payload.language !== undefined) {
+    var updLang = String(payload.language || '').trim().toUpperCase();
+    var hasLangCol = sheet.getLastColumn ? sheet.getLastColumn() >= 14 : true;
+    if ((updLang && updLang !== 'EN') || hasLangCol) {
+      ensureWishlistLanguageColumn_(sheet);
+      sheet.getRange(rowIndex, 14).setValue(updLang === 'EN' ? '' : updLang);
     }
   }
   return { rowIndex: rowIndex, updated: true };
@@ -1806,7 +1835,8 @@ function handleApplyKaartspotSync_(ss, payload) {
             setName: setName,
             seriesName: String(item.seriesName || '').trim(),
             setTotalCards: toNumber_(item.setTotalCards, 0),
-            setId: String(item.setId || '').trim()
+            setId: String(item.setId || '').trim(),
+            setCode: String(item.setCode || extractSetCodeFromNotes_(item.notes) || '').trim()
           };
         }
       }
@@ -1822,7 +1852,7 @@ function handleApplyKaartspotSync_(ss, payload) {
     for (var sk in uniqueSets) {
       if (Object.prototype.hasOwnProperty.call(uniqueSets, sk)) {
         var sMeta = uniqueSets[sk];
-        ensureSetInProgress_(ss, sMeta.setName, sMeta.seriesName, sMeta.setTotalCards, sMeta.setId);
+        ensureSetInProgress_(ss, sMeta.setName, sMeta.seriesName, sMeta.setTotalCards, sMeta.setId, sMeta.setCode);
       }
     }
   }
@@ -2066,10 +2096,11 @@ function findFeedbackRowById_(sheet, id) {
 // SET VOORTGANG & POKÉDEX BINDER SYNC
 // ============================================================================
 
-function ensureSetInProgress_(ss, setName, seriesName, totalCards, setId) {
+function ensureSetInProgress_(ss, setName, seriesName, totalCards, setId, setCode) {
   if (!setName) return;
   var sheet = ss.getSheetByName(SHEET_NAMES.SET_PROGRESS);
   if (!sheet) return;
+  var cleanSetCode = String(setCode || '').trim().toUpperCase();
 
   var lastRow = sheet.getLastRow();
   if (lastRow >= 2) {
@@ -2077,7 +2108,9 @@ function ensureSetInProgress_(ss, setName, seriesName, totalCards, setId) {
     var target = String(setName).trim().toLowerCase();
     for (var i = 0; i < existing.length; i++) {
       if (String(existing[i][0] || '').trim().toLowerCase() === target) {
-        return; // Bestaat al
+        // Bestaat al: vul alleen een nog lege Setcode (kolom I) aan
+        if (cleanSetCode) writeSetCodeCell_(sheet, i + 2, cleanSetCode, false);
+        return;
       }
     }
   }
@@ -2112,6 +2145,7 @@ function ensureSetInProgress_(ss, setName, seriesName, totalCards, setId) {
     resolvedSeries,
     resolvedTotal
   ]]);
+  if (cleanSetCode) writeSetCodeCell_(sheet, nextRow, cleanSetCode, true);
 
   // Kopieer formules in D:H vanaf de bovenliggende rij als de nieuwe rij in D:H nog helemaal leeg is
   if (nextRow > 2) {
@@ -2140,6 +2174,29 @@ function ensureSetInProgress_(ss, setName, seriesName, totalCards, setId) {
       // Negeer als copyTo/getFormulas niet ondersteund wordt
     }
   }
+}
+
+/**
+ * Schrijft de echte setcode (bijv. Chinese CS4.5C) naar kolom I "Setcode" van Set Voortgang.
+ * Raakt de formules in D:H niet aan; bestaande codes worden alleen overschreven met overwrite=true.
+ */
+function writeSetCodeCell_(sheet, row, setCode, overwrite) {
+  if (sheet.getMaxColumns && sheet.getMaxColumns() < 9 && sheet.insertColumnsAfter) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), 9 - sheet.getMaxColumns());
+  }
+  if (!String(sheet.getRange(1, 9).getValue() || '').trim()) {
+    sheet.getRange(1, 9).setValue('Setcode');
+  }
+  var cell = sheet.getRange(row, 9);
+  if (overwrite || !String(cell.getValue() || '').trim()) {
+    cell.setValue(setCode);
+  }
+}
+
+/** Haalt een opgeslagen echte setcode uit notities: [SET:CS4.5C]. */
+function extractSetCodeFromNotes_(notes) {
+  var m = String(notes || '').match(/\[SET:([A-Za-z0-9.\-]{2,12})\]/i);
+  return m ? m[1].toUpperCase() : '';
 }
 
 /**
@@ -2632,13 +2689,27 @@ function repairCardNumberCell_(value, cardId) {
   var text = isDate ? '' : String(value === null || value === undefined ? '' : value).trim();
   if (!isDate && !/(GMT|UTC|Standard Time|Daylight Time)/i.test(text)) return text;
 
-  var date = isDate ? value : new Date(text);
   var parts = String(cardId || '').trim().split('-');
   var localFromId = String(parts[parts.length - 1] || '').replace(/^0+(?=\d)/, '');
-  if (isNaN(date.getTime())) return /^\d+$/.test(localFromId) ? localFromId : '';
-
-  var day = date.getDate();
-  var month = date.getMonth() + 1;
+  var day = NaN;
+  var month = NaN;
+  if (isDate) {
+    day = value.getDate();
+    month = value.getMonth() + 1;
+  } else {
+    // Tijdzone-onafhankelijk: lees dag/maand uit de tekst ("Thu Nov 05 2026 ..." of "2026-11-05T...")
+    var months = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
+    var verbose = text.match(/([A-Za-z]{3})[a-z]*\s+(\d{1,2})\s+\d{4}/);
+    var iso = text.match(/\d{4}-(\d{2})-(\d{2})T/);
+    if (verbose && months[verbose[1].toLowerCase()]) {
+      day = Number(verbose[2]);
+      month = months[verbose[1].toLowerCase()];
+    } else if (iso) {
+      day = Number(iso[2]);
+      month = Number(iso[1]);
+    }
+  }
+  if (isNaN(day) || isNaN(month)) return /^\d+$/.test(localFromId) ? localFromId : '';
   if (localFromId && String(month) === localFromId && String(day) !== localFromId) {
     return month + '/' + day;
   }

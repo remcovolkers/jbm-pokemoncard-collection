@@ -3,11 +3,7 @@ import { ChangeDetectionStrategy, Component, HostListener, computed, effect, inj
 import { toSignal } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import {
-  extractCardmarketUrlFromNotes,
-  getDisplaySetCode,
-  resolveCardmarketUrl,
-} from '../../core/domain/card-id.utils';
+import { extractCardmarketUrlFromNotes, getCardSetCode, getDisplaySetCode, resolveCardmarketUrl } from '../../core/domain/card-id.utils';
 import { calculateCardMetrics, formatEur, formatPercent } from '../../core/domain/card-math.utils';
 import {
   buildShowcaseFromCollectionCard,
@@ -44,6 +40,7 @@ export class CardDetailComponent {
   readonly formatEur = formatEur;
   readonly formatPercent = formatPercent;
   readonly getDisplaySetCode = getDisplaySetCode;
+  readonly getCardSetCode = getCardSetCode;
   readonly getLanguageLabel = getLanguageLabel;
   readonly normalizeLanguageCode = normalizeLanguageCode;
 
